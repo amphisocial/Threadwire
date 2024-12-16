@@ -1,0 +1,70 @@
+.calendar-container {
+    padding: 20px;
+  }
+  
+  .calendar-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  
+  .calendar-pagination button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    margin: 0 5px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  
+  .calendar-pagination button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+  
+  .calendar-grid {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto; /* Enables horizontal scrolling */
+  }
+  
+  .date-column {
+    background: #f5f5f5;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 10px;
+    width: 200px;
+    flex-shrink: 0; /* Prevents columns from resizing */
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .date-header {
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+  
+  .cards-container {
+    flex-grow: 1;
+    overflow-y: auto; /* Enables scrolling within the column */
+    margin-top: 10px;
+  }
+  
+  .cards-container .card {
+    margin-bottom: 10px;
+  }
+  
+  h3,
+  h4 {
+    margin: 0;
+    font-size: 14px;
+  }
