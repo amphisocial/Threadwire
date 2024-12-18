@@ -69,9 +69,6 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
 
-
-Here is a clean and professional README for the project, based on your implementation:
-
 Delivery Management Calendar
 
 This project is a web-based Delivery Management Calendar built with React. The application visually displays multiple days as columns, where each day includes relevant Card Components representing orders or deliveries associated with that date. The calendar allows users to navigate through sets of days using Next and Previous buttons, and only the calendar component scrolls horizontally to maintain a clean user experience.
