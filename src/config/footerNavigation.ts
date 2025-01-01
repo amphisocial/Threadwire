@@ -37,7 +37,7 @@ export const footerNavigationData: FooterData = {
 	footerAbout: {
 		title: 'ThreadwireAI.',
 		aboutText:
-			'Expertly made, responsive, accessible components in React and HTML ready to be used on your website or app. Just copy and paste them on your Tailwind CSS project.',
+			'Empowering businesses with seamless delivery, task, and order management. Streamline your workflow, enhance productivity, and gain real-time insights—all from one intuitive platform. Built for efficiency, designed for growth.',
 		logo: {
 			src: '/logo.svg',
 			alt: 'The tailwind astro theme',
@@ -55,18 +55,6 @@ export const footerNavigationData: FooterData = {
 				{
 					subCategory: 'FAQ',
 					subCategoryLink: '/faq'
-				},
-				{
-					subCategory: 'Pricing',
-					subCategoryLink: '/pricing'
-				},
-				{
-					subCategory: 'Changelog',
-					subCategoryLink: '/changelog'
-				},
-				{
-					subCategory: 'Terms',
-					subCategoryLink: '/terms'
 				}
 			]
 		},
@@ -76,14 +64,6 @@ export const footerNavigationData: FooterData = {
 				{
 					subCategory: 'About us',
 					subCategoryLink: '/'
-				},
-				{
-					subCategory: 'News',
-					subCategoryLink: '/blog'
-				},
-				{
-					subCategory: 'Careers',
-					subCategoryLink: '/blog'
 				}
 			]
 		},
@@ -93,19 +73,11 @@ export const footerNavigationData: FooterData = {
 				{
 					subCategory: 'Contact',
 					subCategoryLink: '/contact'
-				},
-				{
-					subCategory: 'Support',
-					subCategoryLink: '/contact'
-				},
-				{
-					subCategory: 'Join us',
-					subCategoryLink: '/contact'
 				}
 			]
 		}
 	],
 	subFooter: {
-		copywriteText: '© ThreadwireAI 2024.'
+		copywriteText: '© ThreadwireAI 2025.'
 	}
 }

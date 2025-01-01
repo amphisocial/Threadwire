@@ -1,22 +1,26 @@
 ---
 // Home page CTA Section
 // ------------
-// Description: A centered call to action section that contains: a title, text, a user review snippet, a button and a image.
+// Description: A centered call-to-action section with a smooth fading image carousel, title, text, button, and user avatars.
 
 // Components
 // - Layout
 import Section from '../../ui/Section.astro'
 import Row from '../../ui/Row.astro'
 import Col from '../../ui/Col.astro'
+
 // - UI
 import ChipNotification from '../../ui/ChipNotification.astro'
-import { Image } from 'astro:assets'
 import Button from '../../ui/Button.astro'
 import AvatarGroup from '../../ui/AvatarGroup.astro'
 
 // Content
-// - Hero Image
-import heroImage from '../../../assets/hero-01.png'
+// - Hero Images
+import heroImage1 from '../../../assets/thdw.png'
+import heroImage2 from '../../../assets/thdw2.png'
+import heroImage3 from '../../../assets/thdw.png'
+import heroImage4 from '../../../assets/thdw.png'
+
 // - Avatars
 import user1 from '../../../assets/avatars/avatar-01.webp'
 import user2 from '../../../assets/avatars/avatar-02.webp'
@@ -32,25 +36,106 @@ const avatars = [
 	<Row>
 		<Col span="2" />
 		<Col span="8" align="center">
-			<!-- <ChipNotification radius="rounded-full" classes="mb-6">
-				<strong>30K+</strong> satisfied customers
-				<AvatarGroup avatars={avatars} radius="rounded-full" slot="button" />
-			</ChipNotification> -->
 			<h1>Seamless Delivery, Task, and Order Management <strong>in One Platform</strong></h1>
-
 			<p class="pb-0 text-lg">Streamline your workflow effortlessly with our intelligent and intuitive platform.</p>
 			<Button size="lg" link="/">Get started TODAY</Button>
 		</Col>
 		<Col span="2" />
+
 		<Col span="2" />
 		<Col span="8">
-			<Image
-				src={heroImage}
-				alt="ThreadwireAI. The tailwind astro theme"
-				class="translate-y-8 shadow-2xl shadow-neutral-200 dark:shadow-neutral-950"
-				format="webp"
-			/></Col
-		>
+			<!-- Image Carousel Section with Fade Effect -->
+			<div class="carousel-container relative overflow-hidden rounded-lg shadow-2xl shadow-neutral-200 dark:shadow-neutral-950">
+				<img src={heroImage1.src} alt="Feature 1" class="carousel-image fade-in active" />
+				<img src={heroImage2.src} alt="Feature 2" class="carousel-image fade-in" />
+				<img src={heroImage3.src} alt="Feature 3" class="carousel-image fade-in" />
+				<img src={heroImage4.src} alt="Feature 4" class="carousel-image fade-in" />
+				
+				<!-- Navigation Controls -->
+				<button id="carousel-prev" class="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/30 text-white p-2 rounded-full z-10 hover:bg-black/50">
+					&#9664;
+				</button>
+				<button id="carousel-next" class="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/30 text-white p-2 rounded-full z-10 hover:bg-black/50">
+					&#9654;
+				</button>
+			</div>
+		</Col>
 		<Col span="2" />
 	</Row>
 </Section>
+
+<style>
+	.carousel-container {
+		width: 100%;
+		height: 400px;
+		position: relative;
+		overflow: hidden;
+	}
+
+	.carousel-image {
+		width: 100%;
+		height: 400px;
+		object-fit: cover;
+		position: absolute;
+		top: 0;
+		left: 0;
+		opacity: 0;
+		transition: opacity 1.5s ease-in-out;
+	}
+
+	.carousel-image.active {
+		opacity: 1;
+		z-index: 2;
+	}
+
+	/* Navigation Buttons */
+	#carousel-prev,
+	#carousel-next {
+		width: 40px;
+		height: 40px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+	}
+</style>
+
+<script>
+	document.addEventListener('DOMContentLoaded', () => {
+		const images = document.querySelectorAll('.carousel-image');
+		const prevBtn = document.getElementById('carousel-prev');
+		const nextBtn = document.getElementById('carousel-next');
+		let currentIndex = 0;
+
+		// Function to show the current image
+		function showImage(index: any) {
+			images.forEach((img, i) => {
+				img.classList.remove('active');
+				if (i === index) {
+					img.classList.add('active');
+				}
+			});
+		}
+
+		// Show initial image
+		showImage(currentIndex);
+
+		// Next Button
+		nextBtn?.addEventListener('click', () => {
+			currentIndex = (currentIndex + 1) % images.length;
+			showImage(currentIndex);
+		});
+
+		// Previous Button
+		prevBtn?.addEventListener('click', () => {
+			currentIndex = (currentIndex - 1 + images.length) % images.length;
+			showImage(currentIndex);
+		});
+
+		// Automatic transition every 5 seconds
+		setInterval(() => {
+			currentIndex = (currentIndex + 1) % images.length;
+			showImage(currentIndex);
+		}, 5000);
+	});
+</script>
