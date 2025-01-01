@@ -1,0 +1,83 @@
+---
+// Highlights Section
+// ------------
+// Description: A section with a multiple text and image rows.
+
+// Components
+// - UI
+import TextImage from '../basic/TextImage.astro'
+
+// Content
+import highlight01 from '../../../assets/highlights/highlight-01.svg'
+import highlight01mobile from '../../../assets/highlights/highlight-01-mobile.svg'
+import highlight02 from '../../../assets/highlights/highlight-02.svg'
+import highlight02mobile from '../../../assets/highlights/highlight-02-mobile.svg'
+import highlight03 from '../../../assets/highlights/highlight-03.svg'
+import highlight03mobile from '../../../assets/highlights/highlight-03-mobile.svg'
+import highlight04 from '../../../assets/highlights/highlight-04.svg'
+import highlight04mobile from '../../../assets/highlights/highlight-04-mobile.svg'
+
+type HighlightBlock = {
+	title: string
+	text: string
+	image: any
+	mobileImage?: any
+	imageWidth: number
+	imageHeight: number
+	imagePosition: 'left' | 'right'
+}
+const highlightBlocks: HighlightBlock[] = [
+	{
+		title: 'Centralized <strong>Delivery Tracking</strong>',
+		text: 'Monitor all your deliveries in one place with ThreadWire’s unified dashboard. Stay updated on delivery statuses, timelines, and potential delays with real-time insights.',
+		image: highlight01,
+		imageWidth: highlight01.width,
+		imageHeight: highlight01.height,
+		mobileImage: highlight01mobile,
+		imagePosition: 'right'
+	},
+	{
+		title: 'Effortless <strong>Task Scheduling</strong>',
+		text: 'Simplify task planning and execution with intuitive scheduling tools. ThreadWire helps you efficiently allocate resources, prioritize tasks, and keep your operations on track.',
+		image: highlight02,
+		mobileImage: highlight02mobile,
+		imageWidth: highlight02.width,
+		imageHeight: highlight02.height,
+		imagePosition: 'left'
+	},
+	{
+		title: '<strong>Seamless</strong> Order Management',
+		text: 'Manage orders with precision and clarity. ThreadWire ensures every order is accounted for, tracked, and updated in real time to avoid confusion or delays.',
+		image: highlight03,
+		mobileImage: highlight03mobile,
+		imageWidth: highlight03.width,
+		imageHeight: highlight03.height,
+		imagePosition: 'right'
+	},
+	{
+		title: 'Future-Ready <strong>Insights</strong>',
+		text: 'Gain actionable insights with comprehensive analytics tools. ThreadWire delivers data-driven reports to optimize your delivery, task, and order management strategies.',
+		image: highlight04,
+		mobileImage: highlight04mobile,
+		imageWidth: highlight04.width,
+		imageHeight: highlight04.height,
+		imagePosition: 'left'
+	}
+]
+---
+
+{
+	highlightBlocks.map((highlight, key) => (
+		<TextImage
+			id={`highlight-${key}`}
+			title={highlight.title}
+			text={highlight.text}
+			image={highlight.image}
+			imageWidth={highlight.imageWidth}
+			imageHeight={highlight.imageHeight}
+			mobileImage={highlight.mobileImage}
+			imagePosition={highlight.imagePosition}
+			classes={key === 0 ? '!pb-0' : key === highlightBlocks.length - 1 ? '!pt-0' : '!py-0'}
+		/>
+	))
+}
