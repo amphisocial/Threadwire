@@ -213,8 +213,6 @@ You can join our community on [Discord](https://discord.gg/YC5Eup8ZEx)!
 
 [![Hire Us](https://oxygenna-themes.b-cdn.net/ThreadwireAI-astro/hireus.png)](mailto:info@oxygenna.com,christos@oxygenna.com) -->
 
-Here’s a completely rewritten README tailored specifically for Threadwire, ensuring it looks original and avoids any references to it being a free template.
-
 🚀 Threadwire: The Ultimate Workflow Management Platform
 
 Threadwire is a powerful, intuitive platform designed to simplify and optimize delivery, task, and order management. With a focus on seamless scheduling, real-time updates, and user-friendly navigation, Threadwire ensures that managing daily operations becomes efficient and hassle-free.
@@ -397,5 +395,3 @@ Special thanks to all contributors and the open-source community for making this
 🚀 Start Simplifying Your Workflow with Threadwire Today!
 
 🔗 Visit Live Site | 📖 Documentation
-
-This README is now professional, tailored, and uniquely branded for Threadwire. Let me know if you’d like any more refinements! 🚀
