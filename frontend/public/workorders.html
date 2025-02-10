@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Work Orders</title>
+    <link rel="stylesheet" href="importstyle.css">
+    <link rel="stylesheet" href="importbop.css">
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="workorders.js"></script>
+    <script defer src="workordersBlockers.js"></script>
+    <script defer src="importworkorders.js"></script>
+    <script defer src="importpartbop.js"></script>
+    <script defer src="importexecution.js"></script>
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <nav class="navbar">
+    <button onclick="navigateTo('blockers')">Blockers</button>
+    <button onclick="navigateTo('salesorders')">Salesorders</button>
+    <button onclick="navigateTo('dashboard')">Dashboard</button>
+    <button onclick="navigateTo('parts')">Parts</button>
+    <button onclick="navigateTo('workorders')">Workorders</button>
+    <button onclick="navigateTo('graph')">Visualization</button>
+    <button onclick="navigateTo('logout')">Logout</button>
+  </nav>
+    <div class="container">
+        <div class="left-pane">
+	<!-- Import Workorders Button -->
+<button id="toggleImportWorkordersButton" class="import-button">Import Workorders</button>
+
+<!-- Hidden Import Container -->
+<div id="importContainer" class="import-container" style="display: none;">
+  <span id="closeImportModal" class="close-button">&times;</span>
+  <h3>Import Workorders Data</h3>
+  <input type="file" id="csvInputWorkorders" accept=".csv" />
+  <div id="progressBarContainer" style="margin-top: 10px;">
+    <progress id="progressBar" value="0" max="100" style="width: 100%;"></progress>
+  </div>
+  <div id="importStatus" style="margin-top: 20px;"></div>
+</div>
+
+	    <!-- Top Half: Work Orders Table -->
+        <div class="top-half">
+            <h3>Work Orders</h3>
+	    <!-- Add the two buttons for adding/editing a risk -->
+    <div style="margin-bottom: 1rem;">
+      <button id="btnAddRiskIssue" class="small-button">+ Add Risk/Issue</button>
+      <button id="btnEditRiskIssue" class="small-button">Edit Risk/Issue</button>
+    </div>
+            <table id="workordersTable">
+                <thead>
+                    <tr>
+                        <th>
+                            WorkOrder
+                            <input
+                                type="text"
+                                id="filterWorkOrder"
+                                placeholder="Search WorkOrder"
+                                oninput="filterWorkOrders()"
+                            />
+                        </th>
+                        <th>
+                            PartNumber
+                            <input
+                                type="text"
+                                id="filterPartNumber"
+                                placeholder="Search PartNumber"
+                                oninput="filterWorkOrders()"
+                            />
+                        </th>
+                        <th>SalesOrder</th>
+                        <th>Type</th>
+                        <th>Date Created</th>
+                        <th>Quantity</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Work order rows will be populated here dynamically -->
+                </tbody>
+            </table>
+        </div>
+	<!--
+    Same DIALOG / MODAL as your parts risk/issue approach.
+    We'll keep a single shared modal for creating/editing a blocker + action items.
+  -->
+  <div id="blockerModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeBlockerModal">&times;</span>
+      <h3 id="blockerModalTitle">Create / Edit Risk/Issue</h3>
+
+      <div>
+        <label>Title:</label><br />
+        <input type="text" id="blockerTitle" /><br /><br />
+
+        <label>Type:</label><br />
+        <select id="blockerType">
+          <option value="Issue">Issue</option>
+          <option value="Risk">Risk</option>
+        </select><br /><br />
+
+        <label>Status:</label><br />
+        <select id="blockerStatus">
+          <option value="Open">Open</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Closed">Closed</option>
+        </select><br /><br />
+
+        <label>Description:</label><br />
+        <textarea id="blockerDescription" rows="3" style="width: 100%"></textarea><br /><br />
+      </div>
+
+      <hr />
+      <h4>Action Items</h4>
+      <button id="btnAddActionItem" class="small-button">+ Add Action Item</button>
+      <table id="actionItemsTable" style="width: 100%; margin-top: 1rem;">
+        <thead>
+          <tr>
+            <th>Action Item</th>
+            <th>Assigned To</th>
+            <th>Status</th>
+            <th>Remark</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div style="margin-top: 1rem; text-align: right;">
+        <button id="btnSaveBlocker" class="small-button">Save</button>
+      </div>
+    </div>
+  </div>
+
+        <!-- Bottom Half: Part Bill of Process Table -->
+        <div class="bottom-half">
+            <h3>Part Bill of Process</h3>
+	    <!-- Import Part BoP Button -->
+	    <button id="toggleImportPartBoPButton" class="import-button">Import Part BoP</button>
+
+	    <!-- Hidden Import Container -->
+<div id="importPartBoPContainer" class="import-container" style="display: none;">
+  <span id="closeImportPartBoPModal" class="close-button">&times;</span>
+  <h3>Import Part BoP Data</h3>
+  <input type="file" id="csvInputPartBoP" accept=".csv" />
+  <div id="progressBarContainerPartBoP" style="margin-top: 10px;">
+    <progress id="progressBarPartBoP" value="0" max="100" style="width: 100%;"></progress>
+  </div>
+  <div id="importPartBoPStatus" style="margin-top: 20px;"></div>
+</div>
+
+	    <table id="partBopTable">
+        <thead>
+            <tr>
+                <th>Part Number</th>
+                <th>Operation</th>
+                <th>Sequence</th>
+                <th>OpCode</th>
+                <th>Planner</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Part BOP rows will be populated here dynamically -->
+        </tbody>
+    </table>
+        </div>
+        </div>
+        <div class="right-pane">
+            <h3>Execution Status</h3>
+	    <!-- Import Work Order Execution Button -->
+<button id="toggleImportExecutionButton" class="import-button">Import Execution</button>
+
+<!-- Hidden Import Container -->
+<div id="importExecutionContainer" class="import-container" style="display: none;">
+  <span id="closeImportExecutionModal" class="close-button">&times;</span>
+  <h3>Import Work Order Execution</h3>
+  <input type="file" id="csvInputExecution" accept=".csv" />
+  <div id="progressBarContainerExecution" style="margin-top: 10px;">
+    <progress id="progressBarExecution" value="0" max="100" style="width: 100%;"></progress>
+  </div>
+  <div id="importExecutionStatus" style="margin-top: 20px;"></div>
+</div>
+
+            <table id="executionStatusTable">
+                <thead>
+                    <tr>
+                        <th>SerialNumber</th>
+                        <th>Operation</th>
+                        <th>Operator</th>
+                        <th>Time In</th>
+                        <th>Time Out</th>
+                        <th>Status</th>
+                        <th>Location</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Execution status rows will be populated here dynamically -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

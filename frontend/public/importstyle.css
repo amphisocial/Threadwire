@@ -1,0 +1,106 @@
+/* Import Container Styling */
+#importContainer {
+    display: none; /* Hidden by default */
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translate(-50%, -20%);
+    z-index: 1000;
+    width: 50%;
+    background-color: white;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.3);
+    padding: 20px;
+    font-family: Arial, sans-serif;
+}
+
+/* Title Inside Import Container */
+#importContainer h3 {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    text-align: center;
+    color: #333;
+}
+
+/* Always visible Import Button */
+.import-button {
+    padding: 10px 20px;
+    font-size: 16px;
+    color: white;
+    background-color: #4CAF50;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    text-align: center;
+    margin: 10px;
+}
+
+.import-button:hover {
+    background-color: #45a049;
+}
+
+/* Close Button in Import Container */
+#closeImportModal {
+    float: right;
+    background-color: #FF5733;
+    font-size: 14px;
+    font-weight: bold;
+    color: white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    text-align: center;
+    line-height: 30px;
+    cursor: pointer;
+}
+
+#closeImportModal:hover {
+    background-color: #e0452d;
+}
+
+/* Progress Bar Styling */
+#progressBarContainer {
+    margin-top: 15px;
+    display: none;
+}
+
+#progressBar {
+    width: 100%;
+    height: 20px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    background-color: #f4f4f4;
+}
+
+#progressBar::-webkit-progress-bar {
+    background-color: #f4f4f4;
+}
+
+#progressBar::-webkit-progress-value {
+    background-color: #4CAF50;
+    border-radius: 10px;
+}
+
+/* Success and Error Messages */
+#importStatus {
+    margin-top: 20px;
+    font-size: 14px;
+}
+
+#importStatus p#successMessage {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+#importStatus ul#errorReport {
+    color: #FF5733;
+    list-style-type: disc;
+    margin-left: 20px;
+}
+
+#importStatus ul#errorReport li {
+    font-size: 14px;
+}
+

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <title>Threadwire User Login</title>
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: url('../img/IMG_6184.png') no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .form-container {
+            background-color: #ffffff;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+            width: 380px;
+            text-align: center;
+        }
+
+        .form-container h2 {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .form-container label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #555;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .form-container input,
+        .form-container select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        .form-container button {
+            display: block;
+            width: 100%;
+            margin-top: 10px;
+            padding: 8px 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .form-container button:hover {
+            background-color: #0056b3;
+        }
+
+        .form-inline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: -5px;
+        }
+
+        .form-inline span {
+            font-size: 12px;
+            color: #555;
+            margin-right: 10px;
+        }
+
+        .popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            width: 320px;
+        }
+
+        .popup h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .popup label {
+            display: block;
+            margin-top: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .popup input {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        .popup button {
+            width: 48%;
+            margin-top: 10px;
+            padding: 8px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .popup button:hover {
+            background-color: #0056b3;
+        }
+
+        .popup button:last-child {
+            background-color: #d9534f;
+        }
+
+        .popup button:last-child:hover {
+            background-color: #c9302c;
+        }
+    </style>
+</head>
+<body>
+    <header class="bg-blue-500 text-white py-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">ThreadWire</h1>
+            <nav class="space-x-4">
+                <a href="register.html" class="hover:underline">Register</a>
+                <a href="product.html" class="hover:underline">Products</a>
+                <a href="contact.html" class="hover:underline">Contact Us</a>
+            </nav>
+        </div>
+    </header>
+    <main class="container mx-auto py-10">
+        <div class="overlay">
+            <div id="root" class="form-container"></div>
+        </div>
+    </main>
+    <script type="text/babel">
+        const UserForm = () => {
+            const [isLogin, setIsLogin] = React.useState(true);
+            const [loginId, setLoginId] = React.useState('');
+            const [password, setPassword] = React.useState('');
+            const [errorMessage, setErrorMessage] = React.useState('');
+            const [successMessage, setSuccessMessage] = React.useState('');
+            const [userId, setUserId] = React.useState('');
+            const [userName, setUsername] = React.useState('');
+            const [email, setEmail] = React.useState('');
+            const [customerId, setCustomerId] = React.useState('');
+            const [customers, setCustomers] = React.useState([]);
+            const [showCustomerForm, setShowCustomerForm] = React.useState(false);
+            const [newCustomerName, setNewCustomerName] = React.useState('');
+            const [newCustomerAddress, setNewCustomerAddress] = React.useState('');
+
+            React.useEffect(() => {
+                if (!isLogin) {
+                    const fetchCustomers = async () => {
+                        try {
+                            const response = await fetch('/api/customers');
+                            if (!response.ok) throw new Error('Failed to fetch customers');
+                            const data = await response.json();
+                            setCustomers(data);
+                        } catch (error) {
+                            console.error('Error fetching customers:', error);
+                            setErrorMessage('Failed to load customers. Please try again.');
+                        }
+                    };
+                    fetchCustomers();
+                }
+            }, [isLogin]);
+
+            const handleLoginSubmit = async (e) => {
+                e.preventDefault();
+                setErrorMessage('');
+                try {
+                    const response = await fetch(`/api/users?loginId=${loginId}&password=${password}`);
+                    if (response.ok) {
+			sessionStorage.setItem('userId', loginId);
+                        window.location.href = 'landingPage.html';
+                    } else {
+                        setErrorMessage('Invalid login credentials. Please try again.');
+                    }
+                } catch (err) {
+                    setErrorMessage('Unable to connect to the server.');
+                }
+            };
+
+            const handleRegisterSubmit = async (e) => {
+                e.preventDefault();
+                setErrorMessage('');
+                setSuccessMessage('');
+                try {
+                    const response = await fetch('/api/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId, userName, password, email, customerId }),
+                    });
+                    if (response.ok) {
+                        setSuccessMessage('User registered successfully!');
+                        setIsLogin(true);
+                    } else {
+                        setErrorMessage('Failed to register. Please try again.');
+                    }
+                } catch (err) {
+                    setErrorMessage('Unable to connect to the server.');
+                }
+            };
+
+            const handleCustomerSubmit = async (e) => {
+                e.preventDefault();
+                setErrorMessage('');
+                setSuccessMessage('');
+                try {
+                    const response = await fetch('/api/customers', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customer_name: newCustomerName,
+                            address: newCustomerAddress,
+                        }),
+                    });
+                    if (response.ok) {
+                        const newCustomer = await response.json();
+                        setCustomers([...customers, newCustomer]);
+                        setNewCustomerName('');
+                        setNewCustomerAddress('');
+                        setShowCustomerForm(false);
+                    } else {
+                        setErrorMessage('Failed to create customer. Please try again.');
+                    }
+                } catch (err) {
+                    setErrorMessage('Unable to connect to the server.');
+                }
+            };
+
+            return (
+                <div>
+                    {isLogin ? (
+                        <form onSubmit={handleLoginSubmit}>
+                            <h2>User Login</h2>
+                            <label htmlFor="loginId">Login ID:</label>
+                            <input
+                                type="text"
+                                id="loginId"
+                                value={loginId}
+                                onChange={(e) => setLoginId(e.target.value)}
+                                required
+                            />
+                            <label htmlFor="password">Password:</label>
+                            <input
+                                type="password"
+                                id="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
+                            <button type="submit">Login</button>
+                            <p>
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setIsLogin(false);
+                                    }}
+                                >
+                                    Click here to register
+                                </a>
+                            </p>
+                        </form>
+                    ) : (
+                        <form onSubmit={handleRegisterSubmit}>
+                            <h2>User Registration</h2>
+                            <label htmlFor="userId">User ID:</label>
+                            <input
+                                type="text"
+                                id="userId"
+                                value={userId}
+                                onChange={(e) => setUserId(e.target.value)}
+                                required
+                            />
+                            <label htmlFor="userName">Name:</label>
+                            <input
+                                type="text"
+                                id="userName"
+                                value={userName}
+                                onChange={(e) => setUsername(e.target.value)}
+                                required
+                            />
+                            <label htmlFor="email">Email:</label>
+                            <input
+                                type="email"
+                                id="email"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                            />
+                            <label htmlFor="password">Password:</label>
+                            <input
+                                type="password"
+                                id="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
+                            <label htmlFor="customerId">Your Company Name:</label>
+                            <select
+                                id="customerId"
+                                value={customerId}
+                                onChange={(e) => setCustomerId(e.target.value)}
+                                required
+                            >
+                                <option value="">Select a Customer</option>
+                                {customers.map((customer) => (
+                                    <option key={customer._id} value={customer._id}>
+                                        {customer.customer_name}
+                                    </option>
+                                ))}
+                            </select>
+                            <div className="form-inline">
+                                <span>Don't see your company name?</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCustomerForm(true)}
+                                >
+                                    Create New Customer
+                                </button>
+                            </div>
+                            <button type="submit">Register</button>
+                            <p>
+                                <a
+                                    href="#"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        setIsLogin(true);
+                                    }}
+                                >
+                                    Back to login
+                                </a>
+                            </p>
+                        </form>
+                    )}
+                    {showCustomerForm && (
+                        <div className="popup">
+                            <h2>Create New Customer</h2>
+                            <form onSubmit={handleCustomerSubmit}>
+                                <label>Customer Name:</label>
+                                <input
+                                    type="text"
+                                    value={newCustomerName}
+                                    onChange={(e) => setNewCustomerName(e.target.value)}
+                                    required
+                                />
+                                <label>Address:</label>
+                                <input
+                                    type="text"
+                                    value={newCustomerAddress}
+                                    onChange={(e) => setNewCustomerAddress(e.target.value)}
+                                    required
+                                />
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <button type="submit">Create</button>
+                                    <button type="button" onClick={() => setShowCustomerForm(false)}>
+                                        Cancel
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<UserForm />, document.getElementById('root'));
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@700&family=Montserrat:wght@500&family=Roboto+Slab:wght@700&display=swap" rel="stylesheet">
+
+    <title>Graph View</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script defer src="graphview.js"></script>
+</head>
+<body>
+<!-- Top Navigation Bar -->
+  <nav class="navbar">
+    <button onclick="navigateTo('blockers')">Blockers</button>
+    <button onclick="navigateTo('salesorders')">Salesorders</button>
+    <button onclick="navigateTo('dashboard')">Dashboard</button>
+    <button onclick="navigateTo('program')">Program</button>
+    <button onclick="navigateTo('parts')">Parts</button>
+    <button onclick="navigateTo('workorders')">Workorders</button>
+    <button onclick="navigateTo('logout')">Logout</button>
+  </nav>
+    <div class="container-graph">
+        <!-- Search Bar -->
+        <div class="search-bar">
+            <input type="text" id="partNumberInput" placeholder="Enter Part Number">
+            <button id="searchButton">Search</button>
+        </div>
+
+        <!-- Graph Visualization -->
+        <div id="graphContainer"></div>
+    </div>
+</body>
+</html>
+

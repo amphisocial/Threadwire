@@ -1,0 +1,99 @@
+/* Style for the Import Button */
+.import-button {
+    background-color: #007bff; /* Blue color */
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 5px;
+    transition: background-color 0.3s ease-in-out;
+    display: block;
+    margin: 10px 0;
+}
+
+.import-button:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+}
+
+/* Modal Container */
+.import-container {
+    position: fixed;
+    top: 15%;
+    left: 50%;
+    transform: translate(-50%, 0);
+    background-color: white;
+    border: 1px solid #ccc;
+    box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.3);
+    padding: 20px;
+    z-index: 1000;
+    width: 450px;
+    text-align: center;
+    border-radius: 10px;
+}
+
+/* Close Button */
+.close-button {
+    font-size: 24px;
+    font-weight: bold;
+    color: #555;
+    float: right;
+    cursor: pointer;
+    transition: color 0.3s;
+}
+
+.close-button:hover {
+    color: #000;
+}
+
+/* File Input */
+input[type="file"] {
+    display: block;
+    margin: 15px auto;
+    font-size: 14px;
+}
+
+/* Progress Bar */
+progress {
+    width: 100%;
+    height: 20px;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+progress::-webkit-progress-bar {
+    background-color: #eee;
+    border-radius: 5px;
+}
+
+progress::-webkit-progress-value {
+    background-color: #007bff;
+    border-radius: 5px;
+}
+
+/* Status Messages */
+#importPartBoPStatus {
+    font-size: 14px;
+    color: #333;
+    margin-top: 10px;
+}
+
+/* Success Message */
+#successMessage {
+    color: green;
+    font-weight: bold;
+}
+
+/* Error Report */
+#errorReport {
+    color: red;
+    font-size: 14px;
+    list-style-type: none;
+    padding: 0;
+}
+
+#errorReport li {
+    margin-top: 5px;
+}
+

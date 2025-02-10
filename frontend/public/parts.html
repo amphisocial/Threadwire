@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Parts THREADWIRE</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="importstyle.css">
+  <!-- If you decide to use some icons, e.g. Material Icons, you could add them here -->
+  <script defer src="parts.js"></script>
+  <script defer src="importparts.js"></script>
+  <!-- Existing scripts. Then we add our new script for Risk/Issue: -->
+  <script defer src="partsBlockers.js"></script>
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <nav class="navbar">
+    <button onclick="navigateTo('blockers')">Blockers</button>
+    <button onclick="navigateTo('salesorders')">Salesorders</button>
+    <button onclick="navigateTo('dashboard')">Dashboard</button>
+    <button onclick="navigateTo('parts')">Parts</button>
+    <button onclick="navigateTo('workorders')">Workorders</button>
+    <button onclick="navigateTo('graph')">Visualization</button>
+    <button onclick="navigateTo('logout')">Logout</button>
+  </nav>
+  <div class="container">
+    <!-- Left Pane: Parts Table -->
+    <div class="left-pane">
+      <!-- Import Button -->
+      <button id="toggleImportButton" class="import-button">Import Parts</button>
+
+      <!-- Hidden Import Container -->
+      <div id="importContainer" class="import-container" style="display: none;">
+        <span id="closeImportModal" class="close-button">&times;</span>
+        <h3>Import Parts Data</h3>
+        <input type="file" id="csvInput" accept=".csv" />
+        <div id="progressBarContainer" style="margin-top: 10px;">
+          <progress id="progressBar" value="0" max="100" style="width: 100%;"></progress>
+        </div>
+        <div id="importStatus" style="margin-top: 20px;"></div>
+      </div>
+
+      <h2>Parts</h2>
+
+      <!-- ADD: Buttons to create/edit risk/issue -->
+      <div style="margin-bottom: 1rem;">
+        <button id="btnAddRiskIssue" class="small-button">+ Add Risk/Issue</button>
+        <button id="btnEditRiskIssue" class="small-button">Edit Risk/Issue</button>
+      </div>
+
+      <table id="partsTable">
+        <thead>
+          <tr>
+            <th>
+              Part Number
+              <input type="text" id="filterPartNumber" placeholder="Search Part #" oninput="filterParts()" />
+            </th>
+            <th>Revision</th>
+            <th>
+              Description
+              <input type="text" id="filterDescription" placeholder="Search Description" oninput="filterParts()" />
+            </th>
+            <th>
+              Type
+              <input type="text" id="filterType" placeholder="Search Type" oninput="filterParts()" />
+            </th>
+            <th>Category</th>
+            <th>Unit Price</th>
+            <th>Is BOM</th>
+            <th>Date Created</th>
+            <th>Date Modified</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Parts data will be dynamically added here -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Right Pane: Part Details -->
+    <div class="right-pane">
+      <h2>Part Details</h2>
+      <div id="partDetails">
+        <!-- Part details will be displayed here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 
+    MODAL for creating/updating a Blocker (risk/issue) and action items
+    We'll keep it simple. You can style it further in `styles.css`.
+  -->
+  <div id="blockerModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeBlockerModal">&times;</span>
+      <h3 id="blockerModalTitle">Create / Edit Risk/Issue</h3>
+      <div>
+        <label>Title:</label><br />
+        <input type="text" id="blockerTitle" /><br /><br />
+
+        <label>Type:</label><br />
+        <select id="blockerType">
+          <option value="Issue">Issue</option>
+          <option value="Risk">Risk</option>
+        </select><br /><br />
+
+        <label>Status:</label><br />
+        <select id="blockerStatus">
+          <option value="Open">Open</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Closed">Closed</option>
+        </select><br /><br />
+
+        <label>Description:</label><br />
+        <textarea id="blockerDescription" rows="3" style="width: 100%"></textarea><br /><br />
+      </div>
+
+      <hr />
+      <h4>Action Items</h4>
+      <button id="btnAddActionItem">+ Add Action Item</button>
+      <table id="actionItemsTable" style="width: 100%; margin-top: 1rem;">
+        <thead>
+          <tr>
+            <th>Action Item</th>
+            <th>Assigned To</th>
+            <th>Status</th>
+            <th>Remark</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div style="margin-top: 1rem; text-align: right;">
+        <button id="btnSaveBlocker" class="small-button">Save</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+

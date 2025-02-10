@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Threadwire Weekly Board</title>
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    /* Styles */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+    }
+
+    .tabs-container {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .tabs-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    .tab-button {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .tab-button.logout {
+      margin-left: auto;
+      background-color: #ff4d4f;
+    }
+
+    .filter-container {
+      display: flex;
+      gap: 10px;
+    }
+
+    .filter-dropdown,
+    .filter-input {
+      padding: 5px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    .date-navigation-container {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      position: relative;
+      background-color: #f5f5f5;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .date-box {
+      padding: 10px;
+      font-weight: bold;
+      border-right: 1px solid #ccc;
+    }
+
+    .left-arrow,
+    .right-arrow {
+      position: absolute;
+      top: 10px;
+      font-size: 20px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      color: #007bff;
+      font-weight: bold;
+    }
+
+    .left-arrow {
+      left: 5px;
+    }
+
+    .right-arrow {
+      right: 5px;
+    }
+
+    .cards-grid-container {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+    }
+
+    .card-container {
+      background-color: #ffffe0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+    }
+    .card-header {
+      font-size: 16px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .card-body {
+      display: flex;
+      flex-direction: column;
+      font-size: 12px;
+      gap: 5px;
+    }
+
+    .card-row {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .attribute-name {
+      font-weight: bold;
+    }
+
+    .blocked-button.add-icon,
+    .blocked-button.edit-icon {
+      background: none;
+      color: #007bff;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .blocked-button.add-icon:hover {
+      color: #28a745;
+    }
+
+    .blocked-button.edit-icon:hover {
+      color: #0056b3;
+    }
+
+    .modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 600px;
+  width: 90%;
+}
+     .action-items-modal {
+  position: fixed;
+  top: 10%;
+  right: 5%; /* Adjusted to make the dialog wider */
+  width: 50%; /* Increased width for larger dialog */
+  height: 70%; /* Adjusted height to make it larger */
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  z-index: 1100;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  overflow: hidden; /* Prevent overflow */
+  display: flex;
+  flex-direction: column;
+}
+
+.action-items-table-container {
+  flex: 1; /* Allows the table to expand and fill available space */
+  overflow: auto; /* Adds a scrollbar if content exceeds the dialog height */
+}
+
+.action-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.action-items-table th,
+.action-items-table td {
+  border: 1px solid #ccc;
+  padding: 10px;
+  text-align: left;
+  word-wrap: break-word; /* Ensure text wraps within cells */
+}
+
+.action-items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.modal-buttons {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+     .modal-header {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .modal-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .modal-form label {
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .modal-form input,
+    .modal-form select {
+      width: 100%;
+      padding: 5px;
+      font-size: 14px;
+    }
+
+    .modal-button {
+      padding: 10px 20px;
+      font-size: 14px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .modal-button.save {
+      background-color: #007bff;
+      color: white;
+    }
+
+    .modal-button.close {
+      background-color: #ccc;
+    }
+
+    .modal {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      width: 400px;
+      max-width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    function Tabs({ filters, onFilterChange }) {
+      const tabs = ["Visualization", "Blockers", "Sales Orders", "Work Orders", "Parts", "Dashboard"];
+      const isLoggedIn = sessionStorage.getItem("userId");
+
+      if (!isLoggedIn) {
+    // Redirect to threadwire.ai if not logged in
+    window.location.href = "https://threadwire.ai";
+    return null; // Prevent rendering the component
+  }
+
+      const handleLogout = () => {
+        sessionStorage.removeItem("userId");
+        window.location.href = "logout.html";
+      };
+
+      const handleTabClick = (tab) => {
+    switch (tab) {
+      case "Blockers":
+        window.location.href = "blockers.html";
+        break;
+      case "Visualization":
+        window.location.href = "graphview.html";
+        break;
+      case "Sales Orders":
+        window.location.href = "salesorders.html";
+        break;
+      case "Work Orders":
+        window.location.href = "workorders.html";
+        break;
+      case "Parts":
+        window.location.href = "parts.html";
+        break;
+      case "Dashboard":
+        window.location.href = "landingPage.html";
+        break;
+      default:
+        console.error(`Unknown tab: ${tab}`);
+    }
+  };
+
+      return (
+        <div className="tabs-container">
+          <div className="tabs-group">
+            {tabs.map((tab) => (
+              <button key={tab} className="tab-button" onClick={() => handleTabClick(tab)}>{tab}</button>
+            ))}
+          </div>
+          <div className="filter-container">
+            <select
+              className="filter-dropdown"
+              value={filters.shippingStatus}
+              onChange={(e) => onFilterChange("shippingStatus", e.target.value)}
+            >
+              <option value="None">Shipping Status</option>
+              <option value="Started">Started</option>
+              <option value="Not Started">Not Started</option>
+              <option value="Delivered">Delivered</option>
+            </select>
+            <input
+              type="text"
+              className="filter-input"
+              placeholder="Search by Part Number"
+              value={filters.partNumber === "Search by Part Number" ? "" : filters.partNumber}
+              onChange={(e) =>
+                onFilterChange("partNumber", e.target.value || "Search by Part Number")
+              }
+            />
+            <input
+              type="text"
+              className="filter-input"
+              placeholder="Search by Customer"
+              value={filters.customer === "Search by Customer" ? "" : filters.customer}
+              onChange={(e) =>
+                onFilterChange("customer", e.target.value || "Search by Customer")
+              }
+            />
+          </div>
+          {isLoggedIn && (
+            <button className="tab-button logout" onClick={handleLogout}>
+              Logout
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    function DateNavigation({ weekStart, onPrevWeek, onNextWeek }) {
+      const days = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(weekStart);
+        date.setDate(date.getDate() + index);
+        return date.toDateString().split(" ").slice(0, 3).join(" ");
+      });
+
+      return (
+        <div className="date-navigation-container">
+          <button className="left-arrow" onClick={onPrevWeek}>{"◀"}</button>
+          {days.map((day, idx) => (
+            <div key={idx} className="date-box">{day}</div>
+          ))}
+          <button className="right-arrow" onClick={onNextWeek}>{"▶"}</button>
+        </div>
+      );
+    }
+
+    function BlockModal({ show, onClose, salesOrder, partNumber, lineNumber }) {
+      const [blockers, setBlockers] = React.useState([]); // Store all blockers
+  const [currentIndex, setCurrentIndex] = React.useState(0); // Current blocker index
+  const [blockerTitle, setBlockerTitle] = React.useState("");
+  const [status, setStatus] = React.useState("Open");
+  const [category, setCategory] = React.useState("Schedule");
+  const [owner, setOwner] = React.useState("");
+  const [impact, setImpact] = React.useState("High");
+  const [probability, setProbability] = React.useState("Low");
+  const [actions, setActions] = React.useState([]); // Store action items for the current blocker
+  const [showActions, setShowActions] = React.useState(false); // Toggle Action Items dialog
+
+  // Fetch blockers for the current sales order and line number
+  React.useEffect(() => {
+    const fetchBlockers = async () => {
+      try {
+        const response = await fetch(
+          `/api/blockers?salesorder=${salesOrder}&linenumber=${lineNumber}`
+        );
+        const data = await response.json();
+        setBlockers(data);
+
+        // Initialize form fields with the first blocker, if available
+        if (data.length > 0) {
+          const firstBlocker = data[0];
+          setBlockerTitle(firstBlocker.title || "");
+          setStatus(firstBlocker.status || "Open");
+          setCategory(firstBlocker.category || "Schedule");
+          setOwner(firstBlocker.owner || "");
+          setImpact(firstBlocker.impact || "High");
+          setProbability(firstBlocker.probability || "Low");
+        }
+      } catch (error) {
+        console.error("Error fetching blockers:", error);
+      }
+    };
+
+    if (salesOrder && lineNumber) {
+      fetchBlockers();
+    }
+  }, [salesOrder, lineNumber]);
+
+  // Fetch actions for the current blocker
+  React.useEffect(() => {
+    const fetchActions = async () => {
+      try {
+        const currentBlocker = blockers[currentIndex];
+        if (!currentBlocker) return;
+
+        const response = await fetch(`/api/actions?blockerId=${currentBlocker._id}`);
+        const data = await response.json();
+        setActions(data);
+      } catch (error) {
+        console.error("Error fetching actions:", error);
+      }
+    };
+
+    if (blockers[currentIndex]) {
+      fetchActions();
+    }
+  }, [blockers, currentIndex]);
+
+  // Navigation handlers
+  const goToPrevious = () => {
+    const prevIndex = currentIndex > 0 ? currentIndex - 1 : blockers.length - 1;
+    setCurrentIndex(prevIndex);
+    updateFormFields(blockers[prevIndex]);
+  };
+
+  const goToNext = () => {
+    const nextIndex = currentIndex < blockers.length - 1 ? currentIndex + 1 : 0;
+    setCurrentIndex(nextIndex);
+    updateFormFields(blockers[nextIndex]);
+  };
+
+  const updateFormFields = (blocker) => {
+    if (blocker) {
+      setBlockerTitle(blocker.title || "");
+      setStatus(blocker.status || "Open");
+      setCategory(blocker.category || "Schedule");
+      setOwner(blocker.owner || "");
+      setImpact(blocker.impact || "High");
+      setProbability(blocker.probability || "Low");
+    }
+  };
+
+  // Add a new action item
+  const addNewAction = () => {
+    setActions((prev) => [
+      ...prev,
+      { actionItem: "", assignedTo: "", status: "Open", remark: "" },
+    ]);
+  };
+
+  // Update an action item
+  const updateAction = (index, field, value) => {
+    setActions((prev) =>
+      prev.map((action, i) => (i === index ? { ...action, [field]: value } : action))
+    );
+  };
+
+  // Save action items
+  const saveActions = async () => {
+  try {
+  const blockerId = blockers[currentIndex]?._id;
+    if (!blockerId) {
+      alert("No blocker selected to associate actions.");
+      return;
+    }
+    for (const action of actions) {
+      console.log("action in save : ",action);
+      const payload = { ...action, blockerId }; // Include blockerId in the payload
+      if (action._id) {
+        // Update existing action
+        const response = await fetch(`/api/actions/${action._id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to update action with ID ${action._id}`);
+        }
+      } else {
+        // Create new action
+        const response = await fetch("/api/actions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create new action");
+        }
+
+        const newAction = await response.json();
+        // Update local state with the newly created action's ID
+        setActions((prev) =>
+          prev.map((a) =>
+            a === action ? { ...a, _id: newAction._id } : a
+          )
+        );
+      }
+    }
+
+    alert("Actions saved successfully");
+    setShowActions(false); // Close the Action Items dialog
+  } catch (error) {
+    console.error("Error saving actions:", error);
+    alert("Failed to save all actions. Please try again.");
+  }
+  };
+
+  // Save current blocker
+  const handleSave = async () => {
+    try {
+      console.log(
+        "salesOrder: ",
+        salesOrder,
+        "linenumber:",
+        lineNumber,
+        "partnumber:",
+        partNumber,
+        "title:",
+        blockerTitle
+      );
+      const response = await fetch("/api/blockers", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          salesorder: salesOrder,
+          linenumber: lineNumber,
+          partnumber: partNumber,
+          title: blockerTitle,
+          status: status,
+          category: category,
+          owner: owner,
+          impact: impact,
+          probability: probability,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save blocker details.");
+      }
+      const result = await response.json();
+      alert("Blocker details saved successfully!");
+      onClose(); // Close the modal after a successful submission
+    } catch (error) {
+      console.error(
+        "Error saving blocker details:",
+        salesOrder,
+        lineNumber,
+        partNumber,
+        error
+      );
+      alert("Failed to save blocker details. Please try again.");
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal">
+        {/* Blocker Form */}
+        <div className="blocker-form-container">
+          <div className="modal-header">
+            <button className="arrow left" onClick={goToPrevious}>
+              &lt;
+            </button>
+            Blocker Details - Order: {salesOrder}, Line: {lineNumber}
+            <button className="arrow right" onClick={goToNext}>
+              &gt;
+            </button>
+          </div>
+          <form className="modal-form">
+            <label>Blocker Title</label>
+            <input
+              type="text"
+              value={blockerTitle}
+              onChange={(e) => setBlockerTitle(e.target.value)}
+            />
+
+            <label>Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option>Open</option>
+              <option>Closed</option>
+            </select>
+
+            <label>Category</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option>Schedule</option>
+              <option>Cost</option>
+              <option>Effort</option>
+              <option>Material</option>
+              <option>Defect</option>
+              <option>Design</option>
+              <option>Equipment</option>
+              <option>Others</option>
+            </select>
+
+            <label>Owner</label>
+            <input
+              type="text"
+              value={owner}
+              onChange={(e) => setOwner(e.target.value)}
+            />
+
+            <label>Impact</label>
+            <select value={impact} onChange={(e) => setImpact(e.target.value)}>
+              <option>High</option>
+              <option>Medium</option>
+              <option>Low</option>
+            </select>
+
+            <label>Probability</label>
+            <select
+              value={probability}
+              onChange={(e) => setProbability(e.target.value)}
+            >
+              <option>High</option>
+              <option>Medium</option>
+              <option>Low</option>
+            </select>
+
+            <div className="modal-buttons">
+              <button
+                type="button"
+                className="modal-button save"
+                onClick={handleSave}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                className="modal-button actions"
+                onClick={() => setShowActions(true)}
+              >
+                ACTIONS
+              </button>
+              <button type="button" onClick={onClose}>
+                Close
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Action Items Dialog */}
+      {showActions && (
+      <div className="action-items-modal">
+  <div className="action-items-header">
+    <h3>Action Items</h3>
+    <button type="button" onClick={addNewAction}>
+      +
+    </button>
+  </div>
+  <div className="action-items-table-container">
+    <table className="action-items-table">
+      <thead>
+        <tr>
+          <th>Action</th>
+          <th>Assigned To</th>
+          <th>Status</th>
+          <th>Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {actions.map((action, index) => (
+          <tr key={index}>
+            <td>
+              <input
+                type="text"
+                value={action.actionItem}
+                onChange={(e) =>
+                  updateAction(index, "actionItem", e.target.value)
+                }
+              />
+            </td>
+            <td>
+              <input
+                type="text"
+                value={action.assignedTo}
+                onChange={(e) =>
+                  updateAction(index, "assignedTo", e.target.value)
+                }
+              />
+            </td>
+            <td>
+              <select
+                value={action.status}
+                onChange={(e) =>
+                  updateAction(index, "status", e.target.value)
+                }
+              >
+                <option>Open</option>
+                <option>In Progress</option>
+                <option>Completed</option>
+              </select>
+            </td>
+            <td>
+              <input
+                type="text"
+                value={action.remark}
+                onChange={(e) =>
+                  updateAction(index, "remark", e.target.value)
+                }
+              />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  <div className="modal-buttons">
+    <button type="button" onClick={saveActions}>
+      Save
+    </button>
+    <button type="button" onClick={() => setShowActions(false)}>
+      Close
+    </button>
+  </div>
+</div>
+      )}
+    </div>
+  );
+    
+    }
+
+    function Card({ data, onBlockClick, onDangerClick }) {
+      const { ordernumber, partnumber, blockerTag, customer_name, shipping_status, 
+     	 order_status, quantity, amount, order_date, linenumber, shipping_date } = data;
+
+      return (
+        <div className="card-container"
+	style={{
+        backgroundColor: blockerTag === "Yes" ? "#ffcccc" : "#ffffe0", // Red for blocked cards, yellow for others
+        position: "relative", // For positioning the icon
+      }}
+    >
+      {/* Optional Danger Icon */}
+      {blockerTag === "Yes" && (
+        <div
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            fontSize: "20px",
+            color: "red",
+          }}
+        >
+          &#9762; {/* Unicode character for skeleton icon */}
+        </div>
+      )}
+          <div className="card-header">Order: {ordernumber}</div>
+	  <div className="card-body">
+          <div className="card-row">Part Number: {partnumber}</div>
+          <div className="card-row">Line Number: {linenumber}</div>
+          <div className="card-row">Customer Name: {customer_name}</div>
+          <div className="card-row">Quantity: {quantity}</div>
+          <div className="card-row">Amount: {amount}</div>
+          <div className="card-row">Order Status: {order_status}</div>
+          <div className="card-row">Shipping Status: {shipping_status}</div>
+          <div className="card-row">Order Date: {order_date}</div>
+          {blockerTag === "No" ? (
+            <button className="blocked-button add-icon" onClick={() => onDangerClick(ordernumber, linenumber)}>
+	    ➕
+            </button>
+          ) : (
+            <button className="blocked-button edit-icon" onClick={() => onBlockClick(ordernumber, partnumber, linenumber)}>
+            ✍ 
+            </button>
+          )}
+	  </div>
+        </div>
+      );
+    }
+
+    function CardsGrid({ weekStart, filters }) {
+      const [cardsData, setCardsData] = React.useState([]);
+      const [showModal, setShowModal] = React.useState(false);
+      const [selectedCard, setSelectedCard] = React.useState(null);
+      const [initialData, setInitialData] = React.useState(null); // State for initial data
+
+      const handleDangerClick = async (ordernumber, linenumber) => {
+        try {
+          const response = await fetch("/api/salesorders", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ ordernumber, linenumber }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to update sales order");
+          }
+
+          alert("Item blocked successfully.");
+        } catch (error) {
+          alert(`Error: ${error.message}`);
+        }
+      };
+
+      const handleBlockClick = async (ordernumber, partnumber, linenumber) => {
+        setSelectedCard({ ordernumber, partnumber, linenumber });
+        setShowModal(true);
+	 // Fetch initial data based on the selected card
+    try {
+      console.log("orderNumber is ",ordernumber,"linenumber",linenumber);
+      const response = await fetch(
+        `/api/blockers?salesorder=${ordernumber}&linenumber=${linenumber}&partnumber=${partnumber}`
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch initial data.");
+      }
+      const data = await response.json();
+      console.log("in handleblockclick with ",data[0]?.partnumber);
+    //  setInitialData(data); // Set the fetched data
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+    }
+  };
+
+      const handleCloseModal = () => {
+        setShowModal(false);
+        setSelectedCard(null);
+      };
+
+      React.useEffect(() => {
+        async function fetchCardsData() {
+          const response = await fetch("/api/salesorders");
+          const data = await response.json();
+          setCardsData(data);
+        }
+        fetchCardsData();
+      }, []);
+
+      const weekDays = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(weekStart);
+        date.setDate(date.getDate() + index);
+        return date.toISOString().split("T")[0];
+      });
+
+      const filteredCardsData = cardsData.filter((card) => {
+        const matchesShippingStatus =
+          filters.shippingStatus === "None" ||
+          card.shipping_status === filters.shippingStatus;
+        const matchesPartNumber =
+          filters.partNumber === "Search by Part Number" ||
+          card.partnumber?.toLowerCase().includes(filters.partNumber.toLowerCase());
+        const matchesCustomer =
+          filters.customer === "Search by Customer" ||
+          card.customer_name?.toLowerCase().includes(filters.customer.toLowerCase());
+
+        return matchesShippingStatus && matchesPartNumber && matchesCustomer;
+      });
+
+      return (
+        <div className="cards-grid-container">
+          {weekDays.map((day) => {
+            const cardsForDay = filteredCardsData.filter((card) => {
+              const shippingDate = new Date(card.shipping_date).toISOString().split("T")[0];
+              return shippingDate === day;
+            });
+
+            return (
+              <div key={day}>
+                {cardsForDay.map((card) => (
+                  <Card
+                    key={card.ordernumber}
+                    data={card}
+                    onBlockClick={handleBlockClick}
+                    onDangerClick={handleDangerClick}
+                  />
+                ))}
+              </div>
+            );
+          })}
+          {showModal && (
+            <BlockModal
+              show={showModal}
+              onClose={handleCloseModal}
+              salesOrder={selectedCard?.ordernumber}
+              partNumber={selectedCard?.partnumber}
+              lineNumber={selectedCard?.linenumber}
+            />
+          )}
+        </div>
+      );
+    }
+
+    function App() {
+      const [weekStart, setWeekStart] = React.useState(new Date());
+      const [filters, setFilters] = React.useState({
+        shippingStatus: "None",
+        partNumber: "Search by Part Number",
+        customer: "Search by Customer",
+      });
+
+      const handleFilterChange = (filterName, value) => {
+        setFilters((prev) => ({
+          ...prev,
+          [filterName]: value,
+        }));
+      };
+
+      const handlePrevWeek = () => {
+        setWeekStart((prev) => {
+          const newDate = new Date(prev);
+          newDate.setDate(newDate.getDate() - 7);
+          return newDate;
+        });
+      };
+
+      const handleNextWeek = () => {
+        setWeekStart((prev) => {
+          const newDate = new Date(prev);
+          newDate.setDate(newDate.getDate() + 7);
+          return newDate;
+        });
+      };
+
+      return (
+        <div className="app-container">
+          <Tabs filters={filters} onFilterChange={handleFilterChange} />
+          <DateNavigation
+            weekStart={weekStart}
+            onPrevWeek={handlePrevWeek}
+            onNextWeek={handleNextWeek}
+          />
+          <CardsGrid weekStart={weekStart} filters={filters} />
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById("root"));
+  </script>
+</body>
+</html>
+

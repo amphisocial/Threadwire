@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Orders</title>
+  <!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@700&family=Montserrat:wght@500&family=Roboto+Slab:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="importstyle.css">
+  <script defer src="salesorders.js"></script>
+  <script defer src="salesordersBlockers.js"></script>
+  <script defer src="importsales.js"></script>
+</head>
+<body>
+	  <!-- Top Navigation Bar -->
+  <nav class="navbar">
+    <button onclick="navigateTo('blockers')">Blockers</button>
+    <button onclick="navigateTo('salesorders')">Salesorders</button>
+    <button onclick="navigateTo('dashboard')">Dashboard</button>
+    <button onclick="navigateTo('parts')">Parts</button>
+    <button onclick="navigateTo('workorders')">Workorders</button>
+    <button onclick="navigateTo('graph')">Visualization</button>
+    <button onclick="navigateTo('logout')">Logout</button>
+  </nav>
+
+    <!-- Left Pane: Sales Orders List -->
+    <!-- <div class="left-pane"> -->
+      <h2>Sales Orders</h2>
+      <!-- Buttons for Risk/Issue -->
+    <div style="margin-bottom: 1rem;">
+      <button id="btnAddRiskIssue" class="small-button">+ Add Risk/Issue</button>
+      <button id="btnEditRiskIssue" class="small-button">Edit Risk/Issue</button>
+<button id="toggleImportButton" class="import-button">Import CSV</button>
+    </div>
+      <!-- Import Button -->
+      <!-- Always visible Import CSV button -->
+
+<!-- Hidden Import Container -->
+<div id="importContainer" class="import-container" style="display: none;">
+    <span id="closeImportModal" class="close-button">&times;</span>
+    <h3>Import Sales Orders</h3>
+    <input type="file" id="csvInput" accept=".csv" />
+    <div id="progressBarContainer" style="margin-top: 10px;">
+        <progress id="progressBar" value="0" max="100" style="width: 100%;"></progress>
+    </div>
+    <div id="importStatus" style="margin-top: 20px;"></div>
+</div>
+  <div class="container">
+      <table id="salesOrdersTable">
+  <thead>
+    <tr>
+      <th>Edit</th>
+      <th>
+        Order Number
+        <input
+          type="text"
+          id="filterOrderNumber"
+          placeholder="Search Order #"
+          oninput="filterSalesOrders()"
+        />
+      </th>
+      <th>Line Number</th>
+      <th>
+        Part Number
+        <input
+          type="text"
+          id="filterPartNumber"
+          placeholder="Search Part #"
+          oninput="filterSalesOrders()"
+        />
+      </th>
+      <th>Quantity</th>
+      <th>Amount</th>
+      <th>
+        Customer Name
+        <input
+          type="text"
+          id="filterCustomerName"
+          placeholder="Search Customer"
+          oninput="filterSalesOrders()"
+        />
+      </th>
+      <th>Shipping Date</th>
+      <th>
+        Shipping Status
+        <input
+          type="text"
+          id="filterShippingStatus"
+          placeholder="Search Status"
+          oninput="filterSalesOrders()"
+        />
+      </th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- Sales Orders data will be dynamically added here -->
+  </tbody>
+</table>
+</div>
+
+<!-- </div> -->
+    <!-- Right Pane: Blockers List -->
+<!--
+    <div class="right-pane">
+      <h2>Blockers</h2>
+      <table id="blockersTable">
+        <thead>
+          <tr>
+            <th>Edit</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Part Number</th>
+            <th>Category</th>
+            <th>Impact</th>
+            <th>Owner</th>
+            <th>Probability</th>
+          </tr>
+        </thead>
+        <tbody>
+        </tbody>
+      </table>
+    </div>
+    -->
+
+      <!--
+    Reuse the same modal you used for parts/workorders.
+    The HTML below is just a placeholder example.
+    If you're already including this in a shared file,
+    or your existing file already has the #blockerModal,
+    you can omit duplicating it here.
+  -->
+  <div id="blockerModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeBlockerModal">&times;</span>
+      <h3 id="blockerModalTitle">Create / Edit Risk/Issue</h3>
+
+      <label for="blockerTitle">Title:</label>
+      <input type="text" id="blockerTitle">
+      <br>
+      <br>
+      <label for="blockerType">Type:</label>
+      <select id="blockerType">
+        <option value="Issue">Issue</option>
+        <option value="Risk">Risk</option>
+      </select>
+      <br>
+      <br>
+      <label for="blockerStatus">Status:</label>
+      <select id="blockerStatus">
+        <option value="Open">Open</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Closed">Closed</option>
+      </select>
+      <br>
+      <br>
+      <label for="blockerDescription">Description:</label>
+      <textarea id="blockerDescription"></textarea>
+      <br>
+      <br>
+      <br>
+      <hr />
+      <h4>Action Items</h4>
+      <button id="btnAddActionItem" class="small-button">+ Add Action Item</button>
+      <table id="actionItemsTable">
+        <thead>
+          <tr>
+            <th>Action Item</th>
+            <th>Assigned To</th>
+            <th>Status</th>
+            <th>Remark</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div style="text-align: right;">
+        <button id="btnSaveBlocker" class="small-button">Save</button>
+      </div>
+    </div>
+  </div>
+
+
+</body>
+</html>
+

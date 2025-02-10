@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mermaid Diagram Toggle – Bill of Process</title>
+    <!-- Load React, ReactDOM, and Babel (for demo purposes) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Load Mermaid (UMD version) -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      // Initialize Mermaid with loose security (needed for dynamic diagrams)
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "default",
+        securityLevel: "loose"
+      });
+    </script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 1rem;
+      }
+      .mermaid {
+        text-align: center;
+        margin-top: 1rem;
+      }
+      button {
+        margin: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mermaid Diagram Toggle – Bill of Process</h1>
+    <div id="root"></div>
+    <script type="text/babel">
+      // Use React hooks
+      const { useState, useEffect, useRef } = React;
+      
+      function Diagram() {
+        // State for toggling the Bill of Process cluster.
+        // true = collapsed (the working version), false = expanded.
+        const [bopCollapsed, setBopCollapsed] = useState(true);
+        
+        // A ref for the container where Mermaid will render the SVG.
+        const containerRef = useRef(null);
+        
+        // Helper: generate the complete Mermaid diagram definition string.
+        function generateDiagramDefinition() {
+          // --- Sales Orders Cluster (unchanged) ---
+          const salesDefinition = `
+            subgraph Sales_Orders["Sales Orders"]
+              SO0101[SO0101]
+              SO0102[SO0102]
+              SO0103[SO0103]
+              SO0104[SO0104]
+              SO0105[SO0105]
+              SO0106[SO0106]
+              SO0107[SO0107]
+              SO0108[SO0108]
+              SO0109[SO0109]
+              SO0110[SO0110]
+              SO0111[SO0111]
+              SO0112[SO0112]
+            end
+          `;
+          
+          // --- Product Cluster (unchanged) ---
+          const productDefinition = `
+            subgraph Product["Final Bicycle Product"]
+              TOP[BICYCLE-TOP-0001]
+            end
+          `;
+          
+          // --- Bicycle Parts Cluster (unchanged) ---
+          const partsDefinition = `
+            subgraph Parts["Bicycle Parts"]
+              FRM["BIC-FRM-001\\n(Frame - Aluminum)"]
+              WHL2["BIC-WHL-002\\n(Front Wheel - 700C)"]
+              WHL3["BIC-WHL-003\\n(Rear Wheel - 700C)"]
+              TIR["BIC-TIR-004\\n(Tire - Road)"]
+              TUB["BIC-TUB-005\\n(Inner Tube)"]
+              HDL["BIC-HDL-006\\n(Handlebar)"]
+              STEM["BIC-STEM-007\\n(Stem)"]
+              SAD["BIC-SAD-008\\n(Saddle)"]
+              PED["BIC-PED-009\\n(Pedals)"]
+              DRT["BIC-DRT-010\\n(Derailleur)"]
+              DRV["BIC-DRV-011\\n(Crankset)"]
+              CAS["BIC-CAS-012\\n(Cassette)"]
+              BRK["BIC-BRK-013\\n(Brakes)"]
+              CBL["BIC-CBL-014\\n(Brake Cables)"]
+              FRK["BIC-FRK-015\\n(Fork)"]
+              CHN["BIC-CHN-016\\n(Chain)"]
+              GRP["BIC-GRP-017\\n(Handlebar Grips)"]
+              RIM["BIC-RIM-018\\n(Rim Tape)"]
+              BTL["BIC-BTL-019\\n(Bottle Cage)"]
+              LGH["BIC-LGH-020\\n(Front Light)"]
+            end
+          `;
+          
+          // --- Bill of Process Cluster: definition depends on bopCollapsed ---
+          const bopDefinition = bopCollapsed
+            ? `
+                subgraph BOP["Bill of Process (collapsed)"]
+                  BOPNode["Bill of Process"]
+                end
+              `
+            : `
+                subgraph BOP["Bill of Process"]
+                  OP1["Frame Assembly\\n(OP-FRM-001)\\nStep: 1\\nJohn Doe"]
+                  OP2["Wheel Installation\\n(OP-WHL-002)\\nStep: 2\\nJane Smith"]
+                  OP3["Tire Installation\\n(OP-TIR-003)\\nStep: 3\\nJohn Doe"]
+                  OP4["Handlebar Assembly\\n(OP-HDL-004)\\nStep: 4\\nAlice Johnson"]
+                  OP5["Saddle Installation\\n(OP-SAD-005)\\nStep: 5\\nJane Smith"]
+                  OP6["Drivetrain Assembly\\n(OP-DRV-006)\\nStep: 6\\nBob Brown"]
+                  OP7["Brake Installation\\n(OP-BRK-007)\\nStep: 7\\nAlice Johnson"]
+                  OP8["Quality Inspection\\n(OP-QI-008)\\nStep: 8\\nJohn Doe"]
+                  OP9["Packaging\\n(OP-PKG-009)\\nStep: 9\\nJane Smith"]
+                end
+              `;
+          
+          // --- Edges: Most edges remain unchanged. The final edge from TOP depends on BOP ---
+          const salesEdges = bopCollapsed
+            ? `
+                SO0101 --> TOP
+                SO0102 --> TOP
+                SO0103 --> TOP
+                SO0104 --> TOP
+                SO0105 --> TOP
+                SO0106 --> TOP
+                SO0107 --> TOP
+                SO0108 --> TOP
+                SO0109 --> TOP
+                SO0110 --> TOP
+                SO0111 --> TOP
+                SO0112 --> TOP
+              `
+            : `
+                SO0101 --> TOP
+                SO0102 --> TOP
+                SO0103 --> TOP
+                SO0104 --> TOP
+                SO0105 --> TOP
+                SO0106 --> TOP
+                SO0107 --> TOP
+                SO0108 --> TOP
+                SO0109 --> TOP
+                SO0110 --> TOP
+                SO0111 --> TOP
+                SO0112 --> TOP
+              `;
+          const partsEdges = bopCollapsed
+            ? `
+                TOP --> FRM
+                TOP --> WHL2
+                TOP --> WHL3
+                TOP --> TIR
+                TOP --> TUB
+                TOP --> HDL
+                TOP --> STEM
+                TOP --> SAD
+                TOP --> PED
+                TOP --> DRT
+                TOP --> DRV
+                TOP --> CAS
+                TOP --> BRK
+                TOP --> CBL
+                TOP --> FRK
+                TOP --> CHN
+                TOP --> GRP
+                TOP --> RIM
+                TOP --> BTL
+                TOP --> LGH
+              `
+            : `
+                TOP --> FRM
+                TOP --> WHL2
+                TOP --> WHL3
+                TOP --> TIR
+                TOP --> TUB
+                TOP --> HDL
+                TOP --> STEM
+                TOP --> SAD
+                TOP --> PED
+                TOP --> DRT
+                TOP --> DRV
+                TOP --> CAS
+                TOP --> BRK
+                TOP --> CBL
+                TOP --> FRK
+                TOP --> CHN
+                TOP --> GRP
+                TOP --> RIM
+                TOP --> BTL
+                TOP --> LGH
+              `;
+          const bopEdge = bopCollapsed ? "TOP --> BOPNode" : "TOP --> OP1";
+          
+          // --- Assemble the complete diagram definition ---
+          const definition = `
+            graph LR
+              ${salesDefinition}
+              ${productDefinition}
+              ${partsDefinition}
+              ${bopDefinition}
+              ${salesEdges}
+              ${partsEdges}
+              ${bopEdge}
+          `;
+          return definition;
+        }
+        
+        // When bopCollapsed changes, re-render the diagram.
+        useEffect(() => {
+          const diagramDef = generateDiagramDefinition();
+          // Use mermaid.render with a unique id to force a fresh render.
+          const uniqueId = "mermaidGraph" + Date.now();
+          mermaid.render(uniqueId, diagramDef, (svgCode) => {
+            if (containerRef.current) {
+              containerRef.current.innerHTML = svgCode;
+            }
+          });
+        }, [bopCollapsed]);
+        
+        return (
+          <div>
+            <button onClick={() => setBopCollapsed(!bopCollapsed)}>
+              {bopCollapsed ? "Expand Bill of Process" : "Collapse Bill of Process"}
+            </button>
+            <div className="mermaid" ref={containerRef}></div>
+          </div>
+        );
+      }
+      
+      ReactDOM.createRoot(document.getElementById("root")).render(<Diagram />);
+    </script>
+  </body>
+</html>
+
