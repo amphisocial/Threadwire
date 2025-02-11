@@ -7,7 +7,7 @@ async function generateAndInsertDocuments() {
   try {
     await client.connect();
     const database = client.db("threadwire"); // Replace with your database name
-    const collection = database.collection("User"); // Replace with your collection name
+    const collection = database.collection("salesorder"); // Replace with your collection name
 
     // Sample document template
     const baseDocument = {
