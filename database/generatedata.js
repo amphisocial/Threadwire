@@ -1,13 +1,13 @@
 const { MongoClient } = require("mongodb");
 
 async function generateAndInsertDocuments() {
-  const uri = "mongodb://localhost:27017"; // Replace with your MongoDB connection string
+  const uri = "mongodb://localhost:27017/"; // Replace with your MongoDB connection string
   const client = new MongoClient(uri);
 
   try {
     await client.connect();
     const database = client.db("threadwire"); // Replace with your database name
-    const collection = database.collection("salesorder"); // Replace with your collection name
+    const collection = database.collection("User"); // Replace with your collection name
 
     // Sample document template
     const baseDocument = {
