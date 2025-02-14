@@ -1,107 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sales Orders</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      background-color: #f4f4f4;
-    }
-    .header {
-      text-align: center;
-      padding: 10px;
-      background-color: #007acc;
-      color: white;
-      font-size: 24px;
-    }
-    .date-container {
-      display: flex;
-      justify-content: space-around;
-      padding: 10px;
-      background-color: #fff;
-      margin: 10px auto;
-      border-radius: 5px;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    }
-    .card {
-      border: 1px solid #ddd;
-      padding: 10px;
-      border-radius: 5px;
-      background-color: #ffffe0;
-      margin: 10px;
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-      text-align: center;
-    }
-    .card h3 {
-      margin: 0;
-      font-size: 18px;
-      color: #007acc;
-    }
-    .card p {
-      margin: 5px 0;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">Sales Orders</div>
-  <div id="sales-orders"></div>
-
-  <script>
-    async function fetchSalesOrders() {
-      try {
-        const response = await fetch('/api/salesorders');
-        const data = await response.json();
-
-        // Group orders by due date
-        const groupedOrders = data.reduce((acc, order) => {
-          if (!acc[order.dueDate]) acc[order.dueDate] = [];
-          acc[order.dueDate].push(order);
-          return acc;
-        }, {});
-
-        // Render grouped orders
-        const container = document.getElementById('sales-orders');
-        Object.keys(groupedOrders).forEach(date => {
-          // Create a date container
-          const dateContainer = document.createElement('div');
-          dateContainer.className = 'date-container';
-
-          // Add a title for the date
-          const dateTitle = document.createElement('h2');
-          dateTitle.textContent = new Date(date).toDateString();
-          dateContainer.appendChild(dateTitle);
-
-          // Create cards for each order
-          groupedOrders[date].forEach(order => {
-            const card = document.createElement('div');
-            card.className = 'card';
-
-            card.innerHTML = `
-              <h3>${order.salesOrder}</h3>
-              <p>Program: ${order.program}</p>
-              <p>Qty: ${order.qty}</p>
-              <p>Location: ${order.location}</p>
-              <p>Status: ${order.status}</p>
-              <p>Customer: ${order.customer}</p>
-              <p>Line: ${order.line}</p>
-            `;
-
-            dateContainer.appendChild(card);
-          });
-
-          container.appendChild(dateContainer);
-        });
-      } catch (error) {
-        console.error('Error fetching sales orders:', error);
-      }
-    }
-
-    fetchSalesOrders();
-  </script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>React App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
 </html>
-

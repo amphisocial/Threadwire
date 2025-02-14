@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ThreadWire - Data Flow Visualization</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+    }
+    header {
+      background-color: #f0f0f0;
+      padding: 20px;
+      text-align: center;
+    }
+    h1 {
+      margin: 0;
+    }
+    .slider-container {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      height: 400px; /* Adjust as needed */
+    }
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .slide {
+	  /* ... existing styles ... */
+	  transition: opacity 0.5s ease-in-out; /* Add transition for opacity */
+    }
+    .slide.active { /* Add active class to the visible slide */
+ 	 opacity: 1;
+    }
+    .slide:not(.active) { /* Hide other slides */
+       opacity: 0;
+    }
+    .slide img {
+      max-width: 100%;
+      max-height: 100%;
+    }
+    .prev, .next {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background-color: rgba(0, 0, 0, 0.5);
+      color: white;
+      padding: 10px;
+      cursor: pointer;
+    }
+    .prev {
+      left: 20px;
+    }
+    .next {
+      right: 20px;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <header class="bg-blue-500 text-white py-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">ThreadWire</h1>
+	    <nav id="nav-links" class="space-x-4">
+    <!-- The links will be dynamically replaced by JavaScript -->
+</nav>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const userId = sessionStorage.getItem('userId'); // Retrieve userId from sessionStorage
+        const navLinks = document.getElementById('nav-links'); // Reference to the <nav> element
+
+        if (userId) {
+            // User is logged in
+            navLinks.innerHTML = `
+                <a href="/app/logout.html" class="hover:underline">Logout</a>
+                <a href="product.html" class="hover:underline">Products</a>
+                <a href="contact.html" class="hover:underline">Contact Us</a>
+            `;
+        } else {
+            // User is not logged in
+            navLinks.innerHTML = `
+                <a href="/app/newuser.html" class="hover:underline">Login</a>
+                <a href="product.html" class="hover:underline">Products</a>
+                <a href="contact.html" class="hover:underline">Contact Us</a>
+            `;
+        }
+    });
+</script>
+        </div>
+    </header>
+    <main class="container mx-auto py-10">
+        <section class="text-center mb-10">
+	    <div class="slider-container">
+    <div class="slide">
+      <img src="https://threadwire.ai/img/IMG_6181.png" width=1470 alt="Slide 1">
+    </div>
+    <div class="slide">
+      <img src="https://threadwire.ai/img/IMG_6182.png" width=1470 alt="Slide 2">
+    </div>
+    <div class="slide">
+      <img src="https://threadwire.ai/img/IMG_6183.png" width=1470 alt="Slide 3">
+    </div>
+    <div class="slide">
+      <img src="https://threadwire.ai/img/IMG_6184.png" width=1470 alt="Slide 4">
+    </div>
+    <div class="prev">&#10094;</div>
+    <div class="next">&#10095;</div>
+  </div>
+  <script>
+	  const slides = document.querySelectorAll('.slide');
+	  const prevBtn = document.querySelector('.prev');
+	  const nextBtn = document.querySelector('.next');
+	  let currentSlide = 0;
+	  function showSlide(n) {
+          slides.forEach(slide => slide.classList.remove('active')); // Remove active class from all slides
+          slides[n].classList.add('active'); // Add active class to the current slide
+          slides[n].style.display = 'flex';
+  	  //slides.forEach(slide => slide.style.display = 'none');
+  	  //slides[n].style.display = 'flex';
+	  }
+	  function nextSlide() {
+  	  currentSlide = (currentSlide + 1) % slides.length;
+  	  showSlide(currentSlide);
+	  }
+	  function prevSlide() {
+  	  currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+  	  showSlide(currentSlide);
+	  }
+	  showSlide(currentSlide);
+	  nextBtn.addEventListener('click', nextSlide);
+	  prevBtn.addEventListener('click', prevSlide);
+	  // Add automatic sliding
+	  let slideInterval = setInterval(nextSlide, 3000); // Change 3000 to adjust the slide interval (in milliseconds)
+  </script>
+            <p class="text-lg mt-6">Visualize data seamlessly from leads to cash. Experience end-to-end traceability for every part and product across your organization.</p>
+        </section>
+        <section>
+            <h2 class="text-2xl font-bold mb-4 text-center">Features</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="p-4 bg-white shadow rounded text-center">
+                    <h3 class="font-bold">Leads to Programs</h3>
+                </div>
+                <div class="p-4 bg-white shadow rounded text-center">
+                    <h3 class="font-bold">Programs to Contracts</h3>
+                </div>
+                <div class="p-4 bg-white shadow rounded text-center">
+                    <h3 class="font-bold">Contracts to Product Definition</h3>
+                </div>
+                <div class="p-4 bg-white shadow rounded text-center">
+                    <h3 class="font-bold">Supply Chain Management</h3>
+                </div>
+                <div class="p-4 bg-white shadow rounded text-center">
+                    <h3 class="font-bold">Manufacturing Execution</h3>
+                </div>
+                <div class="p-4 bg-white shadow rounded text-center">
+                    <h3 class="font-bold">Shipment & Invoicing</h3>
+                </div>
+                <div class="p-4 bg-white shadow rounded text-center">
+                    <h3 class="font-bold">End-to-End Traceability</h3>
+                </div>
+            </div>
+        </section>
+    </main>
+    <footer class="bg-gray-800 text-white py-4 text-center">
+        <p>&copy; 2024 ThreadWire. All rights reserved.</p>
+    </footer>
+</body>
+</html>
+
+

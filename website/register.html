@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - ThreadWire</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <header class="bg-blue-500 text-white py-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">ThreadWire</h1>
+            <nav class="space-x-4">
+                <a href="index.html" class="hover:underline">Home</a>
+                <a href="product.html" class="hover:underline">Products</a>
+                <a href="contact.html" class="hover:underline">Contact Us</a>
+            </nav>
+        </div>
+    </header>
+    <main class="container mx-auto py-10 max-w-lg">
+        <h2 class="text-2xl font-bold text-center mb-6">Register</h2>
+        <form action="/register" method="post" class="bg-white shadow p-6 rounded">
+            <label for="username" class="block font-bold mb-2">Username</label>
+            <input type="text" id="username" name="username" class="w-full mb-4 p-2 border border-gray-300 rounded" required>
+	            <label for="email" class="block font-bold mb-2">Email</label>
+        <input type="email" id="email" name="email" class="w-full mb-4 p-2 border border-gray-300 rounded" required>
+
+        <label for="password" class="block font-bold mb-2">Password</label>
+        <input type="password" id="password" name="password" class="w-full mb-6 p-2 border border-gray-300 rounded" required>
+
+        <button type="submit" class="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600">Register</button>
+    </form>
+    <p class="text-center mt-4">Already have an account? <a href="/login" class="text-blue-500 hover:underline">Login here</a></p>
+</main>
+<footer class="bg-gray-800 text-white py-4 text-center">
+    <p>&copy; 2024 ThreadWire. All rights reserved.</p>
+</footer>
+</body> </html>
+

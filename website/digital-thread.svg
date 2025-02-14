@@ -1,0 +1,45 @@
+<svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+    <!-- Background -->
+    <rect width="800" height="400" fill="#f8fafc"/>
+    
+    <!-- Connection Lines -->
+    <path d="M 150,200 C 250,100 350,300 450,200 S 650,100 750,200" 
+          stroke="#4f46e5" 
+          stroke-width="3" 
+          fill="none"
+          stroke-dasharray="10,5"/>
+    
+    <!-- System Nodes -->
+    <!-- PLM -->
+    <circle cx="150" cy="200" r="40" fill="#818cf8"/>
+    <text x="150" y="205" text-anchor="middle" fill="white" font-family="Arial" font-size="14">PLM</text>
+    
+    <!-- ERP -->
+    <circle cx="350" cy="200" r="40" fill="#6366f1"/>
+    <text x="350" y="205" text-anchor="middle" fill="white" font-family="Arial" font-size="14">ERP</text>
+    
+    <!-- CRM -->
+    <circle cx="550" cy="200" r="40" fill="#4f46e5"/>
+    <text x="550" y="205" text-anchor="middle" fill="white" font-family="Arial" font-size="14">CRM</text>
+    
+    <!-- MES -->
+    <circle cx="750" cy="200" r="40" fill="#4338ca"/>
+    <text x="750" y="205" text-anchor="middle" fill="white" font-family="Arial" font-size="14">MES</text>
+    
+    <!-- Data Flow Particles -->
+    <circle cx="250" cy="150" r="5" fill="#4f46e5">
+        <animate attributeName="cx" values="150;350;550;750" dur="3s" repeatCount="indefinite"/>
+        <animate attributeName="cy" values="200;150;250;200" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    
+    <circle cx="450" cy="250" r="5" fill="#818cf8">
+        <animate attributeName="cx" values="750;550;350;150" dur="3s" repeatCount="indefinite"/>
+        <animate attributeName="cy" values="200;250;150;200" dur="3s" repeatCount="indefinite"/>
+    </circle>
+    
+    <!-- Labels -->
+    <text x="150" y="260" text-anchor="middle" fill="#1e293b" font-family="Arial" font-size="12">Product Design</text>
+    <text x="350" y="260" text-anchor="middle" fill="#1e293b" font-family="Arial" font-size="12">Inventory</text>
+    <text x="550" y="260" text-anchor="middle" fill="#1e293b" font-family="Arial" font-size="12">Sales</text>
+    <text x="750" y="260" text-anchor="middle" fill="#1e293b" font-family="Arial" font-size="12">Manufacturing</text>
+</svg>
