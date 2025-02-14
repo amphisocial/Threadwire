@@ -23,6 +23,7 @@
 //   createUser,
 // };
 const userService = require('../services/userServices');
+const Company = require('../models/Company');
 
 const registerUser = async (req, res) => {
   try {
@@ -35,7 +36,11 @@ const registerUser = async (req, res) => {
 
 const loginUser = async (req, res) => {
   try {
-    const result = await userService.loginUser(req.body);
+    const { email, password, otp } = req.body;
+
+    // Pass OTP to the service function
+    const result = await userService.loginUser({ email, password, otp });
+
     res.status(200).json(result);
   } catch (error) {
     res.status(401).json({ error: error.message });
@@ -51,9 +56,42 @@ const getUserById = async (req, res) => {
   }
 };
 
+const enableMFA = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await userService.enableMFA(userId);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+
+const disableMFA = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await userService.disableMFA(userId);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+const getAllCompanies = async (req, res) => {
+  try {
+    const companies = await Company.find({}, 'name _id companyId');
+    res.json(companies);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
-  getUserById
+  getUserById,
+  enableMFA,
+  disableMFA,
+  getAllCompanies
 };
 

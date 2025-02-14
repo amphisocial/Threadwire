@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const speakeasy = require('speakeasy');
+const qrcode = require('qrcode');
 
 const registerUser = async ({ firstName, lastName, userName, email, phone, password, confirmPassword, customerId }) => {
     try {
@@ -46,7 +48,7 @@ const registerUser = async ({ firstName, lastName, userName, email, phone, passw
     }
 };
 
-const loginUser = async ({ email, password }) => {
+const loginUser = async ({ email, password, otp }) => {
     // Find user by email only
     const user = await User.findOne({ email });
     if (!user) {
@@ -59,10 +61,22 @@ const loginUser = async ({ email, password }) => {
         throw new Error('Invalid email or password');
     }
 
+    if (user.mfaEnabled) {
+        console.log("MFA is enabled, checking OTP...");
+        if (!otp) {
+            console.log("OTP not provided");
+            throw new Error('OTP is required');
+        }
+
+        console.log("OTP provided:", otp);
+        await verifyMFA(user._id, otp);
+    }
+
+
     // Generate JWT token
     const token = jwt.sign(
         { userId: user._id, email: user.email, username: user.userName },
-        process.env.JWT_SECRET,
+        '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
         { expiresIn: '1h' }
     );
 
@@ -77,8 +91,64 @@ const getUserById = async (userId) => {
     return user;
 };
 
+const enableMFA = async (userId) => {
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    // Generate a new MFA secret
+    const secret = speakeasy.generateSecret({ length: 20 });
+
+    // Store the secret in the database
+    user.mfaSecret = secret.base32;
+    user.mfaEnabled = true;
+
+    await user.save();
+
+    // Generate a QR code for the user to scan
+    const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url);
+
+    return { qrCodeUrl };
+};
+
+const disableMFA = async (userId) => {
+    const user = await User.findById(userId);
+    if (!user) {
+        throw new Error('User not found');
+    }
+
+    user.mfaEnabled = false;
+    user.mfaSecret = null;
+    await user.save();
+
+    return { message: 'MFA disabled successfully' };
+};
+
+
+const verifyMFA = async (userId, token) => {
+    const user = await User.findById(userId);
+    if (!user || !user.mfaEnabled) {
+        throw new Error('MFA not enabled for this user');
+    }
+
+    // Verify the OTP using speakeasy
+    const isValid = speakeasy.totp.verify({
+        secret: user.mfaSecret,
+        encoding: 'base32',
+        token,
+    });
+
+    if (!isValid) {
+        throw new Error('Invalid MFA Token');
+    }
+
+    return { message: 'MFA verified successfully' };
+};
+
 module.exports = {
     registerUser,
     loginUser,
-    getUserById
+    getUserById,
+    enableMFA,
+    disableMFA,
+    verifyMFA
 };
