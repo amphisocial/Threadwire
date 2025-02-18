@@ -271,11 +271,11 @@
       const tabs = ["Visualization", "Blockers", "Sales Orders", "Work Orders", "Parts", "Dashboard"];
       const isLoggedIn = sessionStorage.getItem("userId");
 
-      if (!isLoggedIn) {
-    // Redirect to threadwire.ai if not logged in
-    window.location.href = "https://threadwire.ai";
-    return null; // Prevent rendering the component
-  }
+  //     if (!isLoggedIn) {
+  //   // Redirect to threadwire.ai if not logged in
+  //   window.location.href = "https://threadwire.ai";
+  //   return null; // Prevent rendering the component
+  // }
 
       const handleLogout = () => {
         sessionStorage.removeItem("userId");

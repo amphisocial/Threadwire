@@ -32,7 +32,7 @@ const LoginForm = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('/api/user/login', {
+            const response = await fetch('http://localhost:5000/user/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -66,7 +66,7 @@ const LoginForm = () => {
 
     const handleGoogleSuccess = async (response) => {
         try {
-            const res = await fetch("/api/auth/google", {
+            const res = await fetch("http://localhost:5000/auth/google", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ token: response.credential }),
