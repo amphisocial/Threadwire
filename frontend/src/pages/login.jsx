@@ -32,7 +32,7 @@ const LoginForm = () => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('http://localhost:5000/user/login', {
+            const response = await fetch('/api/user/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -66,7 +66,7 @@ const LoginForm = () => {
 
     const handleGoogleSuccess = async (response) => {
         try {
-            const res = await fetch("http://localhost:5000/auth/google", {
+            const res = await fetch("/api/auth/google", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ token: response.credential }),
@@ -79,8 +79,10 @@ const LoginForm = () => {
             } else {
                 showToast('success', 'Google login successful!');
                 if (data.token) {
-                    localStorage.setItem('authToken', data.token);
-                    navigate('/landing');
+                    login(data.token);
+                    setTimeout(() => {
+                            navigate('/home');
+                          }, 1000);
                 }
             }
         } catch (error) {
@@ -153,7 +155,7 @@ const LoginForm = () => {
                 </GoogleOAuthProvider>
 
                 <div className="register-link">
-                    Don't have an account? <a href="/register">Register here</a>
+                    Don't have an account? <a href="/app/register">Register here</a>
                 </div>
             </div>
 

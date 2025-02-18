@@ -2,8 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { useNavigate } from 'react-router-dom';
 import './register.css';
+import { useAuth } from '../context/authContext';
+
 
 const RegistrationForm = () => {
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -59,7 +62,7 @@ const RegistrationForm = () => {
   useEffect(() => {
     const fetchCompanies = async () => {
       try {
-        const response = await fetch('http://localhost:5000/user/companies');
+        const response = await fetch('/api/user/companies');
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         setCompanies(data);
@@ -102,7 +105,7 @@ const RegistrationForm = () => {
         ...formData,
         phone: `${countryCode}${formData.phone}`
       };
-      const response = await fetch('http://localhost:5000/user/register', {
+      const response = await fetch('/api/user/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formDataWithCountryCode),
@@ -135,7 +138,7 @@ const RegistrationForm = () => {
 
   const handleSuccess = async (response) => {
     try {
-      const res = await fetch("http://localhost:5000/auth/google", {
+      const res = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: response.credential }),
@@ -152,8 +155,10 @@ const RegistrationForm = () => {
       } else {
         showToast('success', 'Google login successful!');
         if (data.token) {
-          localStorage.setItem('authToken', data.token);
-          navigate('/landing');
+          login(data.token);
+          setTimeout(() => {
+                            navigate('/home');
+                          }, 1000);
         }
       }
     } catch (error) {
@@ -281,7 +286,7 @@ const RegistrationForm = () => {
         </GoogleOAuthProvider>
 
         <div className="register-link">
-          Already have an account? <a href="/login">Login</a>
+          Already have an account? <a href="/app/login">Login</a>
         </div>
       </div>
       
