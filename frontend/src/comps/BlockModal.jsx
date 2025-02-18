@@ -184,13 +184,7 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
       <div className="modal">
         <div className="blocker-form-container">
           <div className="modal-header">
-            <button className="arrow left" onClick={goToPrevious}>
-              &lt;
-            </button>
             Blocker Details - Order: {salesOrder}, Line: {lineNumber}
-            <button className="arrow right" onClick={goToNext}>
-              &gt;
-            </button>
           </div>
           <form className="modal-form">
             <label>Blocker Title</label>
@@ -244,9 +238,9 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
                 className="modal-button actions"
                 onClick={() => setShowActions(true)}
               >
-                ACTIONS
+                Actions
               </button>
-              <button type="button" onClick={onClose}>
+              <button type="button" className="modal-button close" onClick={onClose}>
                 Close
               </button>
             </div>
@@ -258,7 +252,7 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
         <div className="action-items-modal">
           <div className="action-items-header">
             <h3>Action Items</h3>
-            <button type="button" onClick={addNewAction}>
+            <button type="button add" onClick={addNewAction}>
               +
             </button>
           </div>
@@ -312,10 +306,10 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
             </table>
           </div>
           <div className="modal-buttons">
-            <button type="button" onClick={saveActions}>
+            <button type="button save" onClick={saveActions}>
               Save
             </button>
-            <button type="button" onClick={() => setShowActions(false)}>
+            <button type="button close" onClick={() => setShowActions(false)}>
               Close
             </button>
           </div>
