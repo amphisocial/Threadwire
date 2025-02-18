@@ -1,35 +1,9 @@
-// import React from 'react';
-// import { useAuth } from '../context/authContext';
-// import { useNavigate } from 'react-router-dom';
-
-// const LandingPage = () => {
-//   const { logout } = useAuth();
-//   const navigate = useNavigate();
-
-//   const handleLogout = () => {
-//     logout();
-//     navigate('/login');
-//   };
-
-//   return (
-//     <div>
-//       <header>
-//         <h1>Landing Page</h1>
-//         <button onClick={handleLogout}>Logout</button>
-//       </header>
-//     </div>
-//   );
-// };
-
-// export default LandingPage;
-
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
-import Tabs from '../components/Tabs';
-import DateNavigation from '../components/DateNavigation';
-import CardsGrid from '../components/CardsGrid';
+import Tabs from '../comps/Tabs';
+import DateNavigation from '../comps/DateNavigation';
+import CardsGrid from '../comps/CardsGrid';
 import './landingPage.css';
 
 const LandingPage = () => {
