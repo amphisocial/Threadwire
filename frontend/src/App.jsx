@@ -6,6 +6,8 @@ import ProtectedRoute from './context/ProtectedRoute';
 import RegistrationForm from "./pages/register";
 import LoginForm from "./pages/login";
 import LandingPage from "./pages/landingPage";
+import SalesOrdersApp from "./pages/salesOrders.jsx";
+
 
 function App() {
   return (
@@ -21,6 +23,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <LandingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/salesorders"
+            element={
+              <ProtectedRoute>
+                <SalesOrdersApp />
               </ProtectedRoute>
             }
           />

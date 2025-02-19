@@ -33,7 +33,7 @@ const Tabs = ({ filters, onFilterChange }) => {
         navigate('/parts');
         break;
       case 'Dashboard':
-        navigate('/dashboard');
+        navigate('/home');
         break;
       default:
         console.error(`Unknown tab: ${tab}`);
