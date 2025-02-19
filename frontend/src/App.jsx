@@ -7,6 +7,7 @@ import RegistrationForm from "./pages/register";
 import LoginForm from "./pages/login";
 import LandingPage from "./pages/landingPage";
 import SalesOrdersApp from "./pages/salesOrders.jsx";
+import BlockersApp from "./pages/blockers.jsx";
 
 
 function App() {
@@ -31,6 +32,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <SalesOrdersApp />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/blockers"
+            element={
+              <ProtectedRoute>
+                <BlockersApp />
               </ProtectedRoute>
             }
           />

@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken } = require('../services/authToken')
 
 const actionItemController = require('../controllers/actionItemController');
 
-router.post('/', actionItemController.createActionItem);
-router.get('/', actionItemController.getActionItems);
-router.get('/blocker/:blockerId', actionItemController.getActionItemsByBlockerId);
-router.get('/:id', actionItemController.getActionItemById);
-router.put('/:id', actionItemController.updateActionItem);
-router.delete('/:id', actionItemController.deleteActionItem);
+router.post('/',authenticateToken, actionItemController.createActionItem);
+router.get('/',authenticateToken, actionItemController.getActionItems);
+router.get('/blocker/:blockerId',authenticateToken, actionItemController.getActionItemsByBlockerId);
+router.get('/:id',authenticateToken, actionItemController.getActionItemById);
+router.put('/:id',authenticateToken, actionItemController.updateActionItem);
+router.delete('/:id',authenticateToken, actionItemController.deleteActionItem);
 
 module.exports = router;
