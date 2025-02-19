@@ -68,7 +68,9 @@ const LoginForm = () => {
         try {
             const res = await fetch("/api/auth/google", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+		"Auth-Type": "google",	
+                "Content-Type": "application/json" },
                 body: JSON.stringify({ token: response.credential }),
             });
 
@@ -79,7 +81,7 @@ const LoginForm = () => {
             } else {
                 showToast('success', 'Google login successful!');
                 if (data.token) {
-                    login(data.token);
+                    login(data.token, true);
                     setTimeout(() => {
                             navigate('/home');
                           }, 1000);

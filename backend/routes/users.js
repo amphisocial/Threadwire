@@ -11,15 +11,6 @@ router.post('/login', userController.loginUser);
 
 router.get('/companies', userController.getAllCompanies);
 
-
-// Get User by ID
-router.get('/:id', userController.getUserById);
-
-router.post('/enable-mfa/:userId', userController.enableMFA);
-
-// Disable MFA for a user
-router.post('/disable-mfa/:userId', userController.disableMFA);
-
 router.get('/verify-token', authenticateToken, (req, res) => {
     try {
         res.status(200).json({
@@ -34,5 +25,12 @@ router.get('/verify-token', authenticateToken, (req, res) => {
       }
     });
 
+// Get User by ID
+router.get('/:id', userController.getUserById);
+
+router.post('/enable-mfa/:userId', userController.enableMFA);
+
+// Disable MFA for a user
+router.post('/disable-mfa/:userId', userController.disableMFA);
 
 module.exports = router;

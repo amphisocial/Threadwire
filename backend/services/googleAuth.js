@@ -3,13 +3,13 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const client = new OAuth2Client('597032685964-tstm86dpp6ds4j9qiknm8enhiigt6j6r.apps.googleusercontent.com');
 
 const verifyGoogleToken = async (token) => {
   try {
     const ticket = await client.verifyIdToken({
       idToken: token,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: '597032685964-tstm86dpp6ds4j9qiknm8enhiigt6j6r.apps.googleusercontent.com',
     });
 
     return ticket.getPayload();

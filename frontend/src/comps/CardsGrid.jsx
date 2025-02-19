@@ -9,9 +9,11 @@ const CardsGrid = ({ weekStart, filters }) => {
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('authToken');
+    const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
     return {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...(isGoogleAuth && { 'Auth-Type': 'google' }),
     };
   };
 
@@ -62,7 +64,8 @@ const CardsGrid = ({ weekStart, filters }) => {
   const fetchCardsData = async () => {
     try {
       const response = await fetch('/api/salesorders', {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+	
       });
       if (!response.ok) {
         throw new Error('Failed to fetch sales orders');

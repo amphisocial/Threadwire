@@ -48,7 +48,7 @@ app.use('/partgraph', graphRoutes);
 app.use('/user', userRoutes);
 app.use('/auth', authRoutes);
 
-mongoose.connect('mongodb://127.0.0.1:27017/Threadwire', { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect('mongodb://127.0.0.1:27017/threadwire', { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
     console.log('MongoDB Connected');
     app.listen(5000, () => console.log('Server running on port 5000'));
