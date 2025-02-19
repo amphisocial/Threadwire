@@ -1,0 +1,119 @@
+.sales-table-container {
+    width: 100%;
+    overflow-x: auto;
+    background-color: white;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin-top: 20px;
+  }
+  
+  .sales-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  
+  .sales-table thead th {
+    background-color: #004080;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  
+  .sales-table tbody td {
+    padding: 12px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  
+  .table-filter {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    margin-top: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  
+  .table-row {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+  
+  .table-row:hover {
+    background-color: #f5f5f5;
+  }
+  
+  .row-selected {
+    background-color: #fff3cd !important;
+    font-weight: bold;
+  }
+  
+  .row-has-blocker {
+    background-color: #ffdada !important;
+  }
+  
+  .edit-column {
+    width: 50px;
+  }
+  
+  .edit-cell {
+    text-align: center;
+  }
+  
+  .edit-button {
+    background: none;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+  }
+  
+  .edit-button:hover {
+    background-color: #e0e0e0;
+  }
+  
+  .status-select {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+  }
+  
+  /* Alternating row colors */
+  .sales-table tbody tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+  
+  .sales-table tbody tr:nth-child(odd) {
+    background-color: white;
+  }
+  
+  /* Responsive styles */
+  @media screen and (max-width: 768px) {
+    .sales-table {
+      font-size: 12px;
+    }
+  
+    .sales-table thead th,
+    .sales-table tbody td {
+      padding: 8px;
+    }
+  
+    .table-filter {
+      padding: 4px;
+      font-size: 11px;
+    }
+  
+    .edit-button {
+      font-size: 14px;
+      padding: 2px 6px;
+    }
+  }

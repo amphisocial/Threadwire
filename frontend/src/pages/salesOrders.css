@@ -1,0 +1,285 @@
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@700&family=Montserrat:wght@500&family=Roboto+Slab:wght@700&display=swap');
+
+/* Reset and base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  background-color: #f9f9f9;
+  line-height: 1.6;
+}
+
+/* App Container */
+.app-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-container {
+  padding: 20px;
+  flex: 1;
+}
+
+/* Navigation */
+.navbar {
+  background-color: #004080;
+  padding: 10px 20px;
+  display: flex;
+  gap: 15px;
+}
+
+.navbar button {
+  background-color: #0074cc;
+  border: none;
+  color: white;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.navbar button:hover {
+  background-color: #005c99;
+}
+
+/* Headers */
+h2 {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.8rem;
+  color: #333;
+  margin-bottom: 15px;
+  text-transform: uppercase;
+  border-bottom: 2px solid #004080;
+  padding-bottom: 5px;
+}
+
+/* Buttons */
+.button-group {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s ease;
+}
+
+.btn-primary {
+  background-color: #0074cc;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #005c99;
+}
+
+.btn-success {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.btn-success:hover {
+  background-color: #45a049;
+}
+
+/* Table Styles */
+.table-container {
+  width: 100%;
+  overflow-x: auto;
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+  font-size: 14px;
+  text-align: left;
+}
+
+thead th {
+  background-color: #004080;
+  color: white;
+  padding: 12px;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+tbody tr:nth-child(odd) {
+  background-color: #f9f9f9;
+}
+
+tbody tr:nth-child(even) {
+  background-color: #ffffff;
+}
+
+tbody td {
+  padding: 12px;
+  border: 1px solid #ddd;
+  vertical-align: middle;
+}
+
+/* Table Filters */
+.filter-input {
+  width: 90%;
+  padding: 6px;
+  margin-top: 5px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+/* Row States */
+.highlighted-row {
+  background-color: #f4d03f !important;
+  font-weight: bold;
+}
+
+.has-blocker {
+  background-color: #ffdada !important;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+}
+
+.close-button:hover {
+  color: #333;
+}
+
+/* Form Styles */
+.form-group {
+  margin-bottom: 15px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.form-textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Import Modal Specific */
+.import-container {
+  padding: 20px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background-color: #eee;
+  border-radius: 2px;
+  margin: 10px 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #0074cc;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.import-status {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.status-success {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-error {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .navbar {
+    flex-wrap: wrap;
+  }
+  
+  .button-group {
+    flex-direction: column;
+  }
+  
+  .modal-content {
+    width: 95%;
+    margin: 10px;
+  }
+  
+  .table-container {
+    font-size: 12px;
+  }
+  
+  thead th {
+    padding: 8px;
+  }
+  
+  tbody td {
+    padding: 8px;
+  }
+}

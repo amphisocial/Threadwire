@@ -1,0 +1,103 @@
+.navbar {
+    background-color: #004080;
+    padding: 10px 20px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  
+  .navbar button {
+    background-color: #0074cc;
+    border: none;
+    color: white;
+    padding: 10px 15px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    min-width: 100px;
+    text-align: center;
+  }
+  
+  .navbar button:hover {
+    background-color: #005c99;
+    transform: translateY(-1px);
+  }
+  
+  .navbar button:active {
+    transform: translateY(0);
+  }
+  
+  /* Active state for the current page */
+  .navbar button.active {
+    background-color: #003366;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Logout button specific styling */
+  .navbar button:last-child {
+    margin-left: auto;
+    background-color: #dc3545;
+  }
+  
+  .navbar button:last-child:hover {
+    background-color: #c82333;
+  }
+  
+  /* Responsive styles */
+  @media screen and (max-width: 1024px) {
+    .navbar {
+      padding: 8px 15px;
+      gap: 10px;
+    }
+  
+    .navbar button {
+      padding: 8px 12px;
+      font-size: 13px;
+      min-width: 90px;
+    }
+  }
+  
+  @media screen and (max-width: 768px) {
+    .navbar {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px;
+    }
+  
+    .navbar button {
+      padding: 8px 10px;
+      font-size: 12px;
+      min-width: auto;
+      flex: 1;
+      max-width: 150px;
+    }
+  
+    /* Logout button in mobile view */
+    .navbar button:last-child {
+      margin-left: 0;
+      order: -1;
+      width: 100%;
+      max-width: 100%;
+    }
+  }
+  
+  @media screen and (max-width: 480px) {
+    .navbar {
+      padding: 5px;
+    }
+  
+    .navbar button {
+      font-size: 11px;
+      padding: 6px 8px;
+      flex-basis: calc(50% - 8px);
+      max-width: none;
+    }
+  }
