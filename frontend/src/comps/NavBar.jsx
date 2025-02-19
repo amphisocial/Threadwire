@@ -1,11 +1,12 @@
 import React from 'react';
 import './NavBar.css';
 import { useAuth } from '../context/authContext';
+import { useNavigate } from 'react-router-dom';
 
 
 const Navbar = () => {
   const { logout } = useAuth();
-    
+  const navigate = useNavigate();  
   const getCurrentPage = () => {
     const path = window.location.pathname;
     return path.substring(1).split('.')[0] || 'dashboard';
@@ -17,10 +18,10 @@ const Navbar = () => {
         window.location.href = "blockers.html";
         break;
       case "salesorders":
-        window.location.href = "/salesorders";
+        navigate('/salesorders');
         break;
       case "dashboard":
-        window.location.href = "/home";
+        navigate('/home');
         break;
       case "graph":
         window.location.href = "graphview.html";
