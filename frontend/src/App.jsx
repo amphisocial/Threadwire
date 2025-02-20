@@ -9,6 +9,7 @@ import LandingPage from "./pages/landingPage";
 import SalesOrdersApp from "./pages/salesOrders.jsx";
 import BlockersApp from "./pages/blockers.jsx";
 import GraphView from "./pages/graphView.jsx";
+import PartsPage from "./pages/partsPage.jsx";
 
 
 function App() {
@@ -49,6 +50,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <GraphView />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/parts"
+            element={
+              <ProtectedRoute>
+                <PartsPage />
               </ProtectedRoute>
             }
           />
