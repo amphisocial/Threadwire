@@ -21,7 +21,7 @@ const Tabs = ({ filters, onFilterChange }) => {
         navigate('/blockers');
         break;
       case 'Visualization':
-        navigate('/graphview');
+        navigate('/visualization');
         break;
       case 'Sales Orders':
         navigate('/salesorders');
