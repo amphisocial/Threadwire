@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import NavBar from '../comps/NavBar';
 import PartsTable from '../comps/PartsTable';
-import PartDetails from '../comps/PartDetails';
+import PartDetailsModal from '../comps/PartDetailsModal';
 import ImportPartModal from '../comps/ImportPartModal';
 import BlockerPartsModal from '../comps/BlockerPartsModal';
 
@@ -11,72 +11,67 @@ const PartsPage = () => {
     const [selectedPart, setSelectedPart] = useState(null);
     const [showImportPartModal, setShowImportPartModal] = useState(false);
     const [showBlockerPartsModal, setShowBlockerPartsModal] = useState(false);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [isEditingBlocker, setIsEditingBlocker] = useState(false);
+
+    const handlePartSelect = (part) => {
+        setSelectedPart(part);
+        setShowDetailsModal(true);
+      };
+    
+      const handleBlockerAction = (isEditing) => {
+        setIsEditingBlocker(isEditing);
+        setShowBlockerPartsModal(true);
+        setShowDetailsModal(false);
+      };
+    
+      const handleBlockerClose = () => {
+        setShowBlockerPartsModal(false);
+        setShowDetailsModal(true);
+      };
 
     return (
         <div className="pm-container">
             <NavBar />
-            <div className="pm-left-pane">
-                <button
-                    className="pm-small-button"
-                    onClick={() => setShowImportPartModal(true)}
-                >
-                    Import Parts
-                </button>
+            <div className="pm-header">
+        <h1>Parts Management</h1>
+        <button 
+          className="pm-import-button"
+          onClick={() => setShowImportPartModal(true)}
+        >
+          Import Parts
+        </button>
+      </div>
 
-                <div style={{ marginBottom: '1rem' }}>
-                    <button
-                        className="pm-small-button"
-                        onClick={() => {
-                            if (!selectedPart) {
-                                alert('Please select a part first');
-                                return;
-                            }
-                            setIsEditingBlocker(false);
-                            setShowBlockerPartsModal(true);
-                        }}
-                    >
-                        + Add Risk/Issue
-                    </button>
-                    <button
-                        className="pm-small-button"
-                        onClick={() => {
-                            if (!selectedPart) {
-                                alert('Please select a part first');
-                                return;
-                            }
-                            setIsEditingBlocker(true);
-                            setShowBlockerPartsModal(true);
-                        }}
-                    >
-                        Edit Risk/Issue
-                    </button>
-                </div>
+      <PartsTable 
+        selectedPart={selectedPart}
+        onSelectPart={handlePartSelect}
+      />
 
-                <PartsTable
-                    selectedPart={selectedPart}
-                    onSelectPart={setSelectedPart}
-                />
-            </div>
+      {showDetailsModal && (
+        <PartDetailsModal
+          part={selectedPart}
+          onClose={() => setShowDetailsModal(false)}
+          onAddBlocker={() => handleBlockerAction(false)}
+          onEditBlocker={() => handleBlockerAction(true)}
+        />
+      )}
 
-            <div className="pm-right-pane">
-                <h2>Part Details</h2>
-                <PartDetails part={selectedPart} />
-            </div>
+      {showImportPartModal && (
+        <ImportPartModal 
+          onClose={() => setShowImportPartModal(false)} 
+        />
+      )}
 
-            {showImportPartModal && (
-                <ImportPartModal onClose={() => setShowImportPartModal(false)} />
-            )}
-
-            {showBlockerPartsModal && (
-                <BlockerPartsModal
-                    isEditing={isEditingBlocker}
-                    part={selectedPart}
-                    onClose={() => setShowBlockerPartsModal(false)}
-                />
-            )}
-        </div>
-    );
+      {showBlockerPartsModal && (
+        <BlockerPartsModal 
+          isEditing={isEditingBlocker}
+          part={selectedPart}
+          onClose={handleBlockerClose}
+        />
+      )}
+    </div>
+  );
 };
 
 export default PartsPage;

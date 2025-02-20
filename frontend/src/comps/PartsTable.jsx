@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import './parts-table.css';
 
 const PartsTable = ({ selectedPart, onSelectPart }) => {
     const [parts, setParts] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [filters, setFilters] = useState({
         partNumber: '',
         description: '',
@@ -24,15 +27,25 @@ const PartsTable = ({ selectedPart, onSelectPart }) => {
 
     const loadParts = async () => {
         try {
+            setIsLoading(true);
+            setError(null);
             const response = await fetch('/api/parts', {
                 method: 'GET',
                 headers: getAuthHeaders(),
             });
+            
+            if (!response.ok) {
+                throw new Error('Failed to load parts');
+            }
+            
             const data = await response.json();
             setParts(data || []);
         } catch (error) {
             console.error('Error loading parts:', error);
+            setError('Failed to load parts. Please try again later.');
             setParts([]);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -46,7 +59,7 @@ const PartsTable = ({ selectedPart, onSelectPart }) => {
     };
 
     const filteredParts = parts.filter(part => {
-        if (!part) return false; // Skip null/undefined parts
+        if (!part) return false;
 
         const matchesPartNumber = safeIncludes(part.partnumber, filters.partNumber);
         const matchesDescription = safeIncludes(part.description, filters.description);
@@ -55,16 +68,46 @@ const PartsTable = ({ selectedPart, onSelectPart }) => {
         return matchesPartNumber && matchesDescription && matchesType;
     });
 
+    if (isLoading) {
+        return (
+            <div className="pm-table-container">
+                <div className="pm-table-loading">
+                    Loading parts...
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="pm-table-container">
+                <div className="pm-table-error">
+                    {error}
+                </div>
+            </div>
+        );
+    }
+
+    if (!filteredParts.length) {
+        return (
+            <div className="pm-table-container">
+                <div className="pm-table-empty">
+                    No parts found. {filters.partNumber || filters.description || filters.type ? 'Try adjusting your filters.' : ''}
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div>
-            <h2>Parts</h2>
-            <table id="partsTable">
+        <div className="pm-table-container">
+            <table className="pm-parts-table">
                 <thead>
                     <tr>
                         <th>
                             Part Number
                             <input
                                 type="text"
+                                className="pm-filter-input"
                                 placeholder="Search Part #"
                                 value={filters.partNumber}
                                 onChange={e => setFilters(prev => ({ ...prev, partNumber: e.target.value }))}
@@ -75,6 +118,7 @@ const PartsTable = ({ selectedPart, onSelectPart }) => {
                             Description
                             <input
                                 type="text"
+                                className="pm-filter-input"
                                 placeholder="Search Description"
                                 value={filters.description}
                                 onChange={e => setFilters(prev => ({ ...prev, description: e.target.value }))}
@@ -84,6 +128,7 @@ const PartsTable = ({ selectedPart, onSelectPart }) => {
                             Type
                             <input
                                 type="text"
+                                className="pm-filter-input"
                                 placeholder="Search Type"
                                 value={filters.type}
                                 onChange={e => setFilters(prev => ({ ...prev, type: e.target.value }))}
@@ -102,9 +147,10 @@ const PartsTable = ({ selectedPart, onSelectPart }) => {
                             key={part._id || Math.random()}
                             onClick={() => handleRowClick(part)}
                             className={`
-                                ${selectedPart?._id === part._id ? 'pm-highlighted' : ''}
+                                pm-table-row
+                                ${selectedPart?._id === part._id ? 'pm-selected' : ''}
                                 ${part.blockerTag > 0 ? 'pm-has-blocker' : ''}
-                        `}
+                            `}
                         >
                             <td>{part.partnumber}</td>
                             <td>{part.revision}</td>
