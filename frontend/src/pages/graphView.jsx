@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import NavBar from '../comps/NavBar';
-import './salesOrders.css';
+import './graphView.css';
 
 const GraphView = () => {
   const graphRef = useRef(null);
@@ -224,7 +224,7 @@ const GraphView = () => {
   };
 
   return (
-    <div className="container">
+    <div className="app-container">
       <NavBar />
       
       <div className="main-content">
