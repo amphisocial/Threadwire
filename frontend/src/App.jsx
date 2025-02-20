@@ -8,6 +8,7 @@ import LoginForm from "./pages/login";
 import LandingPage from "./pages/landingPage";
 import SalesOrdersApp from "./pages/salesOrders.jsx";
 import BlockersApp from "./pages/blockers.jsx";
+import GraphView from "./pages/graphView.jsx";
 
 
 function App() {
@@ -40,6 +41,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <BlockersApp />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/visualization"
+            element={
+              <ProtectedRoute>
+                <GraphView />
               </ProtectedRoute>
             }
           />

@@ -66,7 +66,10 @@ const SalesOrdersApp = () => {
     }
 
     try {
-      const res = await fetch(`/api/blockers?relatedSalesOrders=${selectedSalesOrder.salesOrderId}`);
+      const res = await fetch(`/api/blockers?relatedSalesOrders=${selectedSalesOrder.salesOrderId}`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
       const blockers = await res.json();
 
       if (!blockers || blockers.length === 0) {

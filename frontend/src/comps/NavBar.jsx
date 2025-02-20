@@ -24,7 +24,7 @@ const Navbar = () => {
         navigate('/home');
         break;
       case "graph":
-        window.location.href = "graphview.html";
+        navigate('/visualization');
         break;
       case "parts":
         window.location.href = "parts.html";
