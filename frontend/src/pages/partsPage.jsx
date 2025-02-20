@@ -34,7 +34,7 @@ const PartsPage = () => {
         <div className="pm-container">
             <NavBar />
             <div className="pm-header">
-        <h1>Parts Management</h1>
+        <h2>Parts Management</h2>
         <button 
           className="pm-import-button"
           onClick={() => setShowImportPartModal(true)}

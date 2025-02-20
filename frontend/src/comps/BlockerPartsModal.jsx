@@ -210,10 +210,10 @@ const BlockerPartsModal = ({ isEditing, part, onClose }) => {
   };
 
   return (
-    <div className="pb-blocker-modal-overlay">
+    <div className="pb-modal-overlay">
       <div className="pb-modal">
-        <div className="pb-header">
-          <h3 className="pb-title">
+        <div className="pb-modal-header">
+          <h3 className="pb-modal-title">
             {isEditing ? 'Edit Risk/Issue' : 'Create Risk/Issue'}
           </h3>
           <button 

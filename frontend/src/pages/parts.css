@@ -22,27 +22,10 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
   
-  /* Navigation Styles */
-  .pm-navbar {
-    background-color: #333;
-    padding: 10px 20px;
-    display: flex;
-    gap: 10px;
-  }
-  
-  .pm-navbar button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    background-color: #555;
-    color: white;
-    cursor: pointer;
-  }
-  
-  .pm-navbar button:hover {
-    background-color: #666;
-  }
-  
+ .pm-import-button {
+	width: 15%
+}  
+
   /* Table Container and Layout */
   .pm-table-container {
     width: 100%;
@@ -213,11 +196,9 @@
     cursor: pointer;
     padding: 0;
     line-height: 1;
+    width: fit-content;
   }
-  
-  .pm-close-button:hover {
-    color: #333;
-  }
+ 
   
   .pm-details-grid {
     display: grid;
@@ -402,12 +383,10 @@
     font-size: 24px;
     cursor: pointer;
     color: #666;
+    width: fit-content;
   }
   
-  .pb-close-button:hover {
-    color: #333;
-  }
-  
+    
   .pb-form-group {
     margin-bottom: 16px;
   }
@@ -449,6 +428,7 @@
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    width: fit-content;
   }
   
   .pb-add-button:hover {
@@ -465,6 +445,7 @@
   .pb-action-items-table td {
     border: 1px solid #ddd;
     padding: 8px;
+    color: #000;
   }
   
   .pb-action-items-table th {

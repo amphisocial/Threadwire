@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import './parts-table.css';
+
 
 const PartsTable = ({ selectedPart, onSelectPart }) => {
     const [parts, setParts] = useState([]);
