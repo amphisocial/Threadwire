@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../comps/NavBar';
 import BlockersTable from '../comps/BlockersTable';
-import ActionItemsTable from '../compsa/ActionItemsTable';
-import './blockers.css';
+import ActionItemsTable from '../comps/ActionItemsTable';
+import './salesOrders.css';
 
 const BlockersApp = () => {
   const [blockers, setBlockers] = useState([]);
@@ -115,7 +115,7 @@ const BlockersApp = () => {
   return (
     <div className="app-container">
       <Navbar />
-      <div className="container">
+      <div className="blocker-container">
         <div className="left-pane">
           <h2>Blockers</h2>
           {error && (

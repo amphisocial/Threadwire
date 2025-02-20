@@ -15,7 +15,7 @@ const Navbar = () => {
   const handleNavigation = (page) => {
     switch (page) {
       case "blockers":
-        window.location.href = "blockers.html";
+        navigate('/blockers');
         break;
       case "salesorders":
         navigate('/salesorders');

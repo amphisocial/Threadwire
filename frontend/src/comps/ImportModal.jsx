@@ -7,6 +7,16 @@ const ImportModal = ({ onClose, onImportComplete }) => {
   const [errors, setErrors] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('authToken');
+    const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+    };
+  };
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -43,9 +53,7 @@ const ImportModal = ({ onClose, onImportComplete }) => {
               try {
                 const response = await fetch("/api/salesorders/import", {
                   method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
+                  headers: getAuthHeaders(),
                   body: JSON.stringify(row),
                 });
 

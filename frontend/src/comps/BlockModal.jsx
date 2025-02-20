@@ -11,13 +11,26 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
   const [probability, setProbability] = useState('Low');
   const [actions, setActions] = useState([]);
   const [showActions, setShowActions] = useState(false);
+ 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('authToken');
+    const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+    };
+  };
 
   useEffect(() => {
     const fetchBlockers = async () => {
       try {
         const response = await fetch(
-          `/api/blockers?salesorder=${salesOrder}&linenumber=${lineNumber}`
-        );
+          `/api/blockers?salesorder=${salesOrder}&linenumber=${lineNumber}`,
+        {
+          headers: getAuthHeaders()
+        }
+      );
         const data = await response.json();
         setBlockers(data);
 
@@ -46,7 +59,11 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
         const currentBlocker = blockers[currentIndex];
         if (!currentBlocker) return;
 
-        const response = await fetch(`/api/actions?blockerId=${currentBlocker._id}`);
+        const response = await fetch(`/api/actions?blockerId=${currentBlocker._id}`,
+        {
+          headers: getAuthHeaders()
+        }
+      );
         const data = await response.json();
         setActions(data);
       } catch (error) {
@@ -108,9 +125,7 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
         if (action._id) {
           const response = await fetch(`/api/actions/${action._id}`, {
             method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payload),
           });
 
@@ -120,9 +135,7 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
         } else {
           const response = await fetch('/api/actions', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: getAuthHeaders(),
             body: JSON.stringify(payload),
           });
 
@@ -149,9 +162,7 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
     try {
       const response = await fetch('/api/blockers', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           salesorder: salesOrder,
           linenumber: lineNumber,

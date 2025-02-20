@@ -10,6 +10,16 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
   });
   const [actionItems, setActionItems] = useState([]);
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('authToken');
+    const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+    };
+  };
+
   useEffect(() => {
     if (blockerId) {
       loadBlockerData();
@@ -18,7 +28,10 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
 
   const loadBlockerData = async () => {
     try {
-      const resBlocker = await fetch(`/api/blockers/${blockerId}`);
+      const resBlocker = await fetch(`/api/blockers/${blockerId}`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
       const blocker = await resBlocker.json();
       
       setFormData({
@@ -28,7 +41,11 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
         description: blocker.description || ''
       });
 
-      const resAI = await fetch(`/api/action-items/blocker/${blockerId}`);
+      const resAI = await fetch(`/api/action-items/blocker/${blockerId}`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
       const items = await resAI.json();
       setActionItems(items);
     } catch (err) {
@@ -70,7 +87,7 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
       if (blockerId) {
         await fetch(`/api/blockers/${blockerId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify(formData),
         });
 
@@ -78,7 +95,7 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
           if (ai._id.startsWith('temp')) {
             await fetch(`/api/action-items`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: getAuthHeaders(),
               body: JSON.stringify({
                 blockerId,
                 ...ai
@@ -87,7 +104,7 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
           } else {
             await fetch(`/api/action-items/${ai._id}`, {
               method: "PUT",
-              headers: { "Content-Type": "application/json" },
+              headers: getAuthHeaders(),
               body: JSON.stringify(ai),
             });
           }
@@ -95,7 +112,7 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
       } else {
         const resCreate = await fetch(`/api/blockers`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             ...formData,
             relatedSalesOrders: [salesOrderId],
@@ -106,7 +123,7 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
         for (const ai of actionItems) {
           await fetch(`/api/action-items`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: getAuthHeaders(),
             body: JSON.stringify({
               blockerId: newBlocker._id,
               actionItem: ai.actionItem,
