@@ -27,7 +27,7 @@ const Navbar = () => {
         navigate('/visualization');
         break;
       case "parts":
-        window.location.href = "parts.html";
+        navigate('/parts');
         break;
       case "workorders":
         window.location.href = "workorders.html";
