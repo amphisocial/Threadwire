@@ -10,6 +10,7 @@ import SalesOrdersApp from "./pages/salesOrders.jsx";
 import BlockersApp from "./pages/blockers.jsx";
 import GraphView from "./pages/graphView.jsx";
 import PartsPage from "./pages/partsPage.jsx";
+import WorkOrders from "./pages/workOrders.jsx";
 
 
 function App() {
@@ -58,6 +59,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <PartsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workorders"
+            element={
+              <ProtectedRoute>
+                <WorkOrders />
               </ProtectedRoute>
             }
           />
