@@ -72,24 +72,30 @@ const ImportExecution = () => {
     };
   
     return (
-      <div>
-        <button className="import-button" onClick={() => setShowImport(true)}>
+        <div>
+        <button className="wo-import-button" onClick={() => setShowImport(true)}>
           Import Execution
         </button>
   
         {showImport && (
-          <div className="import-container">
-            <span className="close-button" onClick={() => setShowImport(false)}>&times;</span>
-            <h3>Import Work Order Execution</h3>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleFileUpload}
-            />
-            <div className="mt-4">
-              <progress value={progress} max="100" className="w-full" />
+          <div className="wo-import-modal">
+            <div className="wo-import-modal-content">
+              <button className="wo-close-button" onClick={() => setShowImport(false)}>&times;</button>
+              <h3 className="wo-modal-title">Import Work Order Execution</h3>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleFileUpload}
+                className="wo-file-input"
+              />
+              {progress > 0 && (
+                <div className="wo-progress-container">
+                  <progress className="wo-progress" value={progress} max="100" />
+                  <div className="wo-progress-text">{Math.round(progress)}%</div>
+                </div>
+              )}
+              {status && <div className="wo-import-status">{status}</div>}
             </div>
-            {status && <div className="mt-4">{status}</div>}
           </div>
         )}
       </div>

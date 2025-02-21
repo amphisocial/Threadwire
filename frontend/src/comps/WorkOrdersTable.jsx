@@ -20,32 +20,34 @@ const WorkOrdersTable = ({ workOrders, selectedWorkOrder, onWorkOrderSelect }) =
   });
 
   return (
-    <table id="workordersTable">
+    <table className="wo-table">
       <thead>
         <tr>
           <th>
-            WorkOrder
+            WORKORDER
             <input
               type="text"
               placeholder="Search WorkOrder"
               value={filters.workOrder}
               onChange={(e) => handleFilterChange('workOrder', e.target.value)}
+              className="wo-search-input"
             />
           </th>
           <th>
-            PartNumber
+            PARTNUMBER
             <input
               type="text"
               placeholder="Search PartNumber"
               value={filters.partNumber}
               onChange={(e) => handleFilterChange('partNumber', e.target.value)}
+              className="wo-search-input"
             />
           </th>
-          <th>SalesOrder</th>
-          <th>Type</th>
-          <th>Date Created</th>
-          <th>Quantity</th>
-          <th>Status</th>
+          <th>SALESORDER</th>
+          <th>TYPE</th>
+          <th>DATE CREATED</th>
+          <th>QUANTITY</th>
+          <th>STATUS</th>
         </tr>
       </thead>
       <tbody>
@@ -53,8 +55,8 @@ const WorkOrdersTable = ({ workOrders, selectedWorkOrder, onWorkOrderSelect }) =
           <tr
             key={workOrder._id}
             className={`
-              ${selectedWorkOrder?._id === workOrder._id ? 'highlighted' : ''}
-              ${workOrder.blockerTag > 0 ? 'has-blocker' : ''}
+              ${selectedWorkOrder?._id === workOrder._id ? 'wo-row-highlighted' : ''}
+              ${workOrder.blockerTag > 0 ? 'wo-row-has-blocker' : ''}
             `}
             onClick={() => onWorkOrderSelect(workOrder)}
           >
