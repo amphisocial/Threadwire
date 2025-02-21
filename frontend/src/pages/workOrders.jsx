@@ -9,6 +9,8 @@ import WorkOrdersTable from '../comps/WorkOrdersTable';
 import PartBoPTable from '../comps/PartBoPTable';
 import ExecutionTable from '../comps/ExecutionTable';
 import './workOrders.css'
+import './salesOrders.css';
+
 
 const WorkOrders = () => {
     const [selectedWorkOrder, setSelectedWorkOrder] = useState(null);
