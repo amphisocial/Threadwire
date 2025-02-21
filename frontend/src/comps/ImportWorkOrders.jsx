@@ -10,11 +10,11 @@ const ImportWorkOrders = ({ onImportComplete }) => {
         const token = localStorage.getItem('authToken');
         const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
         return {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...(isGoogleAuth && { 'Auth-Type': 'google' }),
         };
-      };
+    };
 
     const handleFileUpload = async (event) => {
         const file = event.target.files[0];
@@ -80,23 +80,29 @@ const ImportWorkOrders = ({ onImportComplete }) => {
 
     return (
         <div>
-            <button className="import-button" onClick={() => setShowImport(true)}>
+            <button className="wo-import-button" onClick={() => setShowImport(true)}>
                 Import Workorders
             </button>
 
             {showImport && (
-                <div className="import-container">
-                    <span className="close-button" onClick={() => setShowImport(false)}>&times;</span>
-                    <h3>Import Workorders Data</h3>
-                    <input
-                        type="file"
-                        accept=".csv"
-                        onChange={handleFileUpload}
-                    />
-                    <div className="mt-4">
-                        <progress value={progress} max="100" className="w-full" />
+                <div className="wo-import-modal">
+                    <div className="wo-import-modal-content">
+                        <button className="wo-close-button" onClick={() => setShowImport(false)}>&times;</button>
+                        <h3 className="wo-modal-title">Import Workorders Data</h3>
+                        <input
+                            type="file"
+                            accept=".csv"
+                            onChange={handleFileUpload}
+                            className="wo-file-input"
+                        />
+                        {progress > 0 && (
+                            <div className="wo-progress-container">
+                                <progress className="wo-progress" value={progress} max="100" />
+                                <div className="wo-progress-text">{Math.round(progress)}%</div>
+                            </div>
+                        )}
+                        {status && <div className="wo-import-status">{status}</div>}
                     </div>
-                    {status && <div className="mt-4">{status}</div>}
                 </div>
             )}
         </div>

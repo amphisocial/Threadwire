@@ -8,32 +8,37 @@ const ExecutionTable = ({ executionData }) => {
     });
 
     return (
-        <table id="executionStatusTable">
-            <thead>
-                <tr>
-                    <th>SerialNumber</th>
-                    <th>Operation</th>
-                    <th>Operator</th>
-                    <th>Time In</th>
-                    <th>Time Out</th>
-                    <th>Status</th>
-                    <th>Location</th>
-                </tr>
-            </thead>
-            <tbody>
-                {sortedExecutions.map((exec, index) => (
-                    <tr key={`${exec.serialNumber}-${exec.timeIn}-${index}`}>
-                        <td>{exec.serialNumber}</td>
-                        <td>{exec.operation}</td>
-                        <td>{exec.operator}</td>
-                        <td>{exec.timeIn}</td>
-                        <td>{exec.timeOut || '-'}</td>
-                        <td>{exec.status}</td>
-                        <td>{exec.location}</td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
+        <table className="wo-table">
+      <thead>
+        <tr>
+          <th>SERIALNUMBER</th>
+          <th>OPERATION</th>
+          <th>OPERATOR</th>
+          <th>TIME IN</th>
+          <th>TIME OUT</th>
+          <th>STATUS</th>
+          <th>LOCATION</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sortedExecutions.map((exec, index) => (
+          <tr key={`${exec.serialNumber}-${exec.timeIn}-${index}`}>
+            <td>{exec.serialNumber}</td>
+            <td>{exec.operation}</td>
+            <td>{exec.operator}</td>
+            <td>{exec.timeIn}</td>
+            <td>{exec.timeOut || '-'}</td>
+            <td>{exec.status}</td>
+            <td>{exec.location}</td>
+          </tr>
+        ))}
+        {sortedExecutions.length === 0 && (
+          <tr>
+            <td colSpan="7" className="wo-no-data">No execution data available</td>
+          </tr>
+        )}
+      </tbody>
+    </table>
     );
 };
 
