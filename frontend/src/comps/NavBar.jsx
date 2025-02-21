@@ -30,7 +30,7 @@ const Navbar = () => {
         navigate('/parts');
         break;
       case "workorders":
-        window.location.href = "workorders.html";
+        navigate('/workorders');
         break;
       default:
         console.error(`Unknown page: ${page}`);

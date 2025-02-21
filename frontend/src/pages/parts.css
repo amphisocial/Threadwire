@@ -4,52 +4,52 @@
 .pm-container {
     padding: 20px;
     gap: 20px;
-  }
-  
-  .pm-left-pane {
+}
+
+.pm-left-pane {
     flex: 2;
     padding: 20px;
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  .pm-right-pane {
+}
+
+.pm-right-pane {
     flex: 1;
     padding: 20px;
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
- .pm-import-button {
-	width: 15%
-}  
+}
 
-  /* Table Container and Layout */
-  .pm-table-container {
+.pm-import-button {
+    width: 15%
+}
+
+/* Table Container and Layout */
+.pm-table-container {
     width: 100%;
     overflow-x: auto;
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     margin-top: 20px;
-  }
-  
-  .pm-parts-table {
+}
+
+.pm-parts-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
     font-size: 14px;
     min-width: 1200px;
-  }
-  
-  /* Table Header Styles */
-  .pm-parts-table thead {
+}
+
+/* Table Header Styles */
+.pm-parts-table thead {
     background-color: #f8f9fa;
-  }
-  
-  .pm-parts-table th {
+}
+
+.pm-parts-table th {
     position: sticky;
     top: 0;
     background-color: #f5f5f5;
@@ -59,10 +59,10 @@
     font-weight: 600;
     border-bottom: 2px solid #dee2e6;
     white-space: nowrap;
-  }
-  
-  /* Filter Input Styles */
-  .pm-filter-input {
+}
+
+/* Filter Input Styles */
+.pm-filter-input {
     display: block;
     width: 100%;
     margin-top: 8px;
@@ -71,20 +71,20 @@
     border-radius: 4px;
     font-size: 13px;
     transition: border-color 0.2s ease;
-  }
-  
-  .pm-filter-input:focus {
+}
+
+.pm-filter-input:focus {
     outline: none;
     border-color: #80bdff;
     box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
-  }
-  
-  .pm-filter-input::placeholder {
+}
+
+.pm-filter-input::placeholder {
     color: #adb5bd;
-  }
-  
-  /* Table Body and Row Styles */
-  .pm-parts-table td {
+}
+
+/* Table Body and Row Styles */
+.pm-parts-table td {
     padding: 12px 16px;
     border-bottom: 1px solid #dee2e6;
     color: #212529;
@@ -92,60 +92,60 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  
-  .pm-table-row {
+}
+
+.pm-table-row {
     transition: background-color 0.2s ease;
     cursor: pointer;
-  }
-  
-  .pm-table-row:hover {
+}
+
+.pm-table-row:hover {
     background-color: #f5f5f5;
-  }
-  
-  .pm-table-row.pm-selected {
+}
+
+.pm-table-row.pm-selected {
     background-color: #e3f2fd;
-  }
-  
-  .pm-table-row.pm-selected:hover {
+}
+
+.pm-table-row.pm-selected:hover {
     background-color: #bbdefb;
-  }
-  
-  .pm-table-row.pm-has-blocker {
+}
+
+.pm-table-row.pm-has-blocker {
     background-color: #fff3cd;
-  }
-  
-  .pm-table-row.pm-has-blocker:hover {
+}
+
+.pm-table-row.pm-has-blocker:hover {
     background-color: #ffeeba;
-  }
-  
-  /* Table States */
-  .pm-table-loading {
+}
+
+/* Table States */
+.pm-table-loading {
     min-height: 200px;
     display: flex;
     align-items: center;
     justify-content: center;
     background-color: rgba(255, 255, 255, 0.8);
-  }
-  
-  .pm-table-empty {
+}
+
+.pm-table-empty {
     padding: 40px;
     text-align: center;
     color: #6c757d;
     font-style: italic;
-  }
-  
-  .pm-table-error {
+}
+
+.pm-table-error {
     padding: 20px;
     text-align: center;
     color: #dc3545;
     background-color: #f8d7da;
     border-radius: 4px;
     margin: 20px 0;
-  }
-  
-  /* Parts Details Modal Styles */
-  .pm-modal-overlay {
+}
+
+/* Parts Details Modal Styles */
+.pm-modal-overlay {
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.5);
@@ -153,9 +153,9 @@
     align-items: center;
     justify-content: center;
     z-index: 1000;
-  }
-  
-  .pm-details-modal {
+}
+
+.pm-details-modal {
     background: white;
     border-radius: 8px;
     padding: 24px;
@@ -166,29 +166,30 @@
     position: relative;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     animation: modalFadeIn 0.3s ease-out;
-  }
-  
-  @keyframes modalFadeIn {
+}
+
+@keyframes modalFadeIn {
     from {
-      opacity: 0;
-      transform: translateY(-20px);
+        opacity: 0;
+        transform: translateY(-20px);
     }
+
     to {
-      opacity: 1;
-      transform: translateY(0);
+        opacity: 1;
+        transform: translateY(0);
     }
-  }
-  
-  .pm-modal-header {
+}
+
+.pm-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
     padding-bottom: 10px;
     border-bottom: 1px solid #eee;
-  }
-  
-  .pm-close-button {
+}
+
+.pm-close-button {
     background: none;
     border: none;
     font-size: 24px;
@@ -197,40 +198,40 @@
     padding: 0;
     line-height: 1;
     width: fit-content;
-  }
- 
-  
-  .pm-details-grid {
+}
+
+
+.pm-details-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 16px;
-  }
-  
-  .pm-detail-item {
+}
+
+.pm-detail-item {
     padding: 12px;
     border-radius: 6px;
     background-color: #f8f9fa;
     transition: background-color 0.2s ease;
-  }
-  
-  .pm-detail-item:hover {
+}
+
+.pm-detail-item:hover {
     background-color: #e9ecef;
-  }
-  
-  .pm-detail-item strong {
+}
+
+.pm-detail-item strong {
     display: block;
     margin-bottom: 4px;
     color: #495057;
     font-size: 0.9rem;
-  }
-  
-  .pm-detail-item span {
+}
+
+.pm-detail-item span {
     color: #212529;
     font-size: 1rem;
-  }
-  
-  /* Import Modal Styles */
-  .pm-modal {
+}
+
+/* Import Modal Styles */
+.pm-modal {
     position: fixed;
     top: 0;
     left: 0;
@@ -241,44 +242,44 @@
     justify-content: center;
     align-items: center;
     z-index: 1000;
-  }
-  
-  .pm-modal-content {
+}
+
+.pm-modal-content {
     background-color: white;
     padding: 20px;
     border-radius: 8px;
     width: 80%;
     max-width: 600px;
     position: relative;
-  }
-  
-  .pm-progress-container {
+}
+
+.pm-progress-container {
     margin-top: 20px;
-  }
-  
-  .pm-progress-container progress {
+}
+
+.pm-progress-container progress {
     width: 100%;
     height: 20px;
-  }
-  
-  .pm-status-message {
+}
+
+.pm-status-message {
     margin-top: 20px;
     padding: 10px;
     border-radius: 4px;
-  }
-  
-  .pm-status-message.success {
+}
+
+.pm-status-message.success {
     background-color: #d4edda;
     color: #155724;
-  }
-  
-  .pm-status-message.error {
+}
+
+.pm-status-message.error {
     background-color: #f8d7da;
     color: #721c24;
-  }
-  
-  /* Action Buttons */
-  .pm-small-button {
+}
+
+/* Action Buttons */
+.pm-small-button {
     padding: 6px 12px;
     margin-right: 8px;
     border: none;
@@ -286,67 +287,67 @@
     background-color: #007bff;
     color: white;
     cursor: pointer;
-  }
-  
-  .pm-small-button:hover {
+}
+
+.pm-small-button:hover {
     background-color: #0056b3;
-  }
-  
-  .pm-details-buttons {
+}
+
+.pm-details-buttons {
     display: flex;
     gap: 10px;
     margin-bottom: 20px;
-  }
-  
-  .pm-action-button {
+}
+
+.pm-action-button {
     padding: 8px 16px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-weight: 500;
     transition: background-color 0.2s ease;
-  }
-  
-  .pm-add-button {
+}
+
+.pm-add-button {
     background-color: #28a745;
     color: white;
-  }
-  
-  .pm-add-button:hover {
+}
+
+.pm-add-button:hover {
     background-color: #218838;
-  }
-  
-  .pm-edit-button {
+}
+
+.pm-edit-button {
     background-color: #007bff;
     color: white;
-  }
-  
-  .pm-edit-button:hover {
+}
+
+.pm-edit-button:hover {
     background-color: #0056b3;
-  }
-  
-  /* Responsive Design */
-  @media (max-width: 1400px) {
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
     .pm-table-container {
-      margin: 20px -16px;
-      border-radius: 0;
+        margin: 20px -16px;
+        border-radius: 0;
     }
-    
+
     .pm-details-grid {
-      grid-template-columns: 1fr;
+        grid-template-columns: 1fr;
     }
-    
+
     .pm-details-buttons {
-      flex-direction: column;
+        flex-direction: column;
     }
-    
+
     .pm-action-button {
-      width: 100%;
+        width: 100%;
     }
-  }
-  
-  /* Blocker Modal Styles */
-  .pb-modal-overlay {
+}
+
+/* Blocker Modal Styles */
+.pb-modal-overlay {
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.5);
@@ -354,74 +355,74 @@
     align-items: center;
     justify-content: center;
     z-index: 1000;
-  }
-  
-  .pb-modal {
+}
+
+.pb-modal {
     background-color: white;
     border-radius: 8px;
     padding: 24px;
     width: 75%;
     max-height: 90vh;
     overflow-y: auto;
-  }
-  
-  .pb-modal-header {
+}
+
+.pb-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 16px;
-  }
-  
-  .pb-modal-title {
+}
+
+.pb-modal-title {
     font-size: 20px;
     font-weight: bold;
-  }
-  
-  .pb-close-button {
+}
+
+.pb-close-button {
     background: none;
     border: none;
     font-size: 24px;
     cursor: pointer;
     color: #666;
     width: fit-content;
-  }
-  
-    
-  .pb-form-group {
+}
+
+
+.pb-form-group {
     margin-bottom: 16px;
-  }
-  
-  .pb-form-group label {
+}
+
+.pb-form-group label {
     display: block;
     margin-bottom: 4px;
-  }
-  
-  .pb-input-field,
-  .pb-select-field,
-  .pb-textarea-field {
+}
+
+.pb-input-field,
+.pb-select-field,
+.pb-textarea-field {
     width: 100%;
     padding: 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
     font-size: 14px;
-  }
-  
-  .pb-textarea-field {
+}
+
+.pb-textarea-field {
     resize: vertical;
-  }
-  
-  .pb-action-items-section {
+}
+
+.pb-action-items-section {
     margin-top: 24px;
-  }
-  
-  .pb-section-header {
+}
+
+.pb-section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
-  }
-  
-  .pb-add-button {
+}
+
+.pb-add-button {
     padding: 6px 12px;
     background-color: #007bff;
     color: white;
@@ -429,72 +430,72 @@
     border-radius: 4px;
     cursor: pointer;
     width: fit-content;
-  }
-  
-  .pb-add-button:hover {
+}
+
+.pb-add-button:hover {
     background-color: #0056b3;
-  }
-  
-  .pb-action-items-table {
+}
+
+.pb-action-items-table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 8px;
-  }
-  
-  .pb-action-items-table th,
-  .pb-action-items-table td {
+}
+
+.pb-action-items-table th,
+.pb-action-items-table td {
     border: 1px solid #ddd;
     padding: 8px;
     color: #000;
-  }
-  
-  .pb-action-items-table th {
+}
+
+.pb-action-items-table th {
     background-color: #f5f5f5;
     text-align: left;
-  }
-  
-  .pb-delete-button {
+}
+
+.pb-delete-button {
     background-color: #dc3545;
     color: white;
     border: none;
     border-radius: 4px;
     padding: 4px 8px;
     cursor: pointer;
-  }
-  
-  .pb-delete-button:hover {
+}
+
+.pb-delete-button:hover {
     background-color: #c82333;
-  }
-  
-  .pb-modal-footer {
+}
+
+.pb-modal-footer {
     display: flex;
     justify-content: flex-end;
     gap: 8px;
     margin-top: 24px;
-  }
-  
-  .pb-cancel-button {
+}
+
+.pb-cancel-button {
     padding: 8px 16px;
     background-color: #6c757d;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-  }
-  
-  .pb-cancel-button:hover {
+}
+
+.pb-cancel-button:hover {
     background-color: #5a6268;
-  }
-  
-  .pb-save-button {
+}
+
+.pb-save-button {
     padding: 8px 16px;
     background-color: #28a745;
     color: white;
     border: none;
     border-radius: 4px;
     cursor: pointer;
-  }
-  
-  .pb-save-button:hover {
+}
+
+.pb-save-button:hover {
     background-color: #218838;
-  }
+}
