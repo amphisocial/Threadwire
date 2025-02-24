@@ -22,12 +22,25 @@ const WorkOrders = () => {
     useEffect(() => {
       fetchWorkOrders();
     }, []);
-  
+ 
+    const getAuthHeaders = () => {
+    const token = localStorage.getItem('authToken');
+    const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+    };
+  };
+ 
     const fetchWorkOrders = async () => {
       try {
-        const response = await fetch('/api/workorders');
+        const response = await fetch('/api/workorders', {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
         const data = await response.json();
-        setWorkOrders(data);
+      setWorkOrders(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Error fetching work orders:', error);
       }
@@ -35,7 +48,10 @@ const WorkOrders = () => {
   
     const fetchWorkOrderExecution = async (workorderId) => {
       try {
-        const response = await fetch(`/api/workorderexecution?workorder=${workorderId}`);
+        const response = await fetch(`/api/workorderexecution?workorder=${workorderId}`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
         const data = await response.json();
         setExecutionData(data);
       } catch (error) {
@@ -45,7 +61,10 @@ const WorkOrders = () => {
   
     const fetchPartBop = async (partnumber) => {
       try {
-        const response = await fetch(`/api/partbop?partnumber=${partnumber}`);
+        const response = await fetch(`/api/partbop?partnumber=${partnumber}`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
         const data = await response.json();
         setPartBopData(data);
       } catch (error) {
@@ -54,6 +73,7 @@ const WorkOrders = () => {
     };
   
     const handleWorkOrderSelect = (workOrder) => {
+    if (!workOrder) return;
       setSelectedWorkOrder(workOrder);
       fetchWorkOrderExecution(workOrder.workorder);
       fetchPartBop(workOrder.partnumber);
