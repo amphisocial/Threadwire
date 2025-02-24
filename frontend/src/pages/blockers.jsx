@@ -13,6 +13,7 @@ const BlockersApp = () => {
 
   useEffect(() => {  
     loadBlockers();
+    document.title = 'Blockers';
   }, []);
 
   const getAuthHeaders = () => {

@@ -60,6 +60,8 @@ const RegistrationForm = () => {
 
 
   useEffect(() => {
+
+    document.title = 'Registration';
     const fetchCompanies = async () => {
       try {
         const response = await fetch('/api/user/companies');

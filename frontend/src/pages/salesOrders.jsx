@@ -27,6 +27,7 @@ const SalesOrdersApp = () => {
 
   useEffect(() => {
     loadSalesOrders();
+    document.title = 'Sales Orders';
   }, []);
 
   const loadSalesOrders = async () => {

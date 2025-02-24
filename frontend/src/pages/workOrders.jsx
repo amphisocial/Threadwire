@@ -20,6 +20,7 @@ const WorkOrders = () => {
 
   useEffect(() => {
     fetchWorkOrders();
+    document.title = 'Work Orders';
   }, []);
 
   const getAuthHeaders = () => {
