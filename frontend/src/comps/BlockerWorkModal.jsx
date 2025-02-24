@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, forwardRef, useImperativeHandle} from 'react';
 
-const BlockerManager = ({ selectedWorkOrder, onBlockerSaved }) => {
+const BlockerManager = forwardRef(({ selectedWorkOrder, onBlockerSaved}, ref) => {
   const [showModal, setShowModal] = useState(false);
   const [currentBlockerId, setCurrentBlockerId] = useState(null);
   const [formData, setFormData] = useState({
@@ -10,6 +10,15 @@ const BlockerManager = ({ selectedWorkOrder, onBlockerSaved }) => {
     description: ''
   });
   const [actionItems, setActionItems] = useState([]);
+
+  useImperativeHandle(ref, () => ({
+    handleAddRiskIssue: () => {
+      openBlockerModalForCreate();
+    },
+    handleEditRiskIssue: async () => {
+      await findAndEditBlocker();
+    }
+  }));
 
   // Authentication headers helper
   const getAuthHeaders = () => {
@@ -58,13 +67,7 @@ const BlockerManager = ({ selectedWorkOrder, onBlockerSaved }) => {
     }
   };
 
-  // Handler for the "Add Risk/Issue" button
-  const handleAddRiskIssue = () => {
-    if (!selectedWorkOrder) {
-      alert("Please select a Work Order first.");
-      return;
-    }
-    // Reset form for create mode
+  const openBlockerModalForCreate = () => {
     setCurrentBlockerId(null);
     setFormData({
       title: '',
@@ -76,8 +79,8 @@ const BlockerManager = ({ selectedWorkOrder, onBlockerSaved }) => {
     setShowModal(true);
   };
 
-  // Handler for the "Edit Risk/Issue" button
-  const handleEditRiskIssue = async () => {
+
+  const findAndEditBlocker = async () => {
     if (!selectedWorkOrder) {
       alert("Please select a Work Order first.");
       return;
@@ -86,7 +89,7 @@ const BlockerManager = ({ selectedWorkOrder, onBlockerSaved }) => {
     try {
       // Fetch blockers referencing this workorder
       const res = await fetch(`/api/blockers?relatedWorkOrders=${selectedWorkOrder._id}`, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders ? getAuthHeaders() : { 'Content-Type': 'application/json' },
       });
       const blockers = await res.json();
 
@@ -229,6 +232,10 @@ const BlockerManager = ({ selectedWorkOrder, onBlockerSaved }) => {
       alert("Failed to save. Check console for details.");
     }
   };
+
+  if (!showModal) {
+    return null;
+  }
 
   return (
     <>
@@ -377,6 +384,6 @@ const BlockerManager = ({ selectedWorkOrder, onBlockerSaved }) => {
       )}
     </>
   );
-};
+});
 
 export default BlockerManager;
