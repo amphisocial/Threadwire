@@ -66,6 +66,8 @@ const GraphView = () => {
   };
 
   useEffect(() => {
+
+    document.title = 'Visualization';
     if (!graphRef.current || !graphData.nodes.length) return;
 
     const treeContainer = d3.select(graphRef.current);

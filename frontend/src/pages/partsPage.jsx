@@ -8,34 +8,38 @@ import BlockerPartsModal from '../comps/BlockerPartsModal';
 import './parts.css';
 
 const PartsPage = () => {
-    const [selectedPart, setSelectedPart] = useState(null);
-    const [showImportPartModal, setShowImportPartModal] = useState(false);
-    const [showBlockerPartsModal, setShowBlockerPartsModal] = useState(false);
-    const [showDetailsModal, setShowDetailsModal] = useState(false);
-    const [isEditingBlocker, setIsEditingBlocker] = useState(false);
+  const [selectedPart, setSelectedPart] = useState(null);
+  const [showImportPartModal, setShowImportPartModal] = useState(false);
+  const [showBlockerPartsModal, setShowBlockerPartsModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [isEditingBlocker, setIsEditingBlocker] = useState(false);
 
-    const handlePartSelect = (part) => {
-        setSelectedPart(part);
-        setShowDetailsModal(true);
-      };
-    
-      const handleBlockerAction = (isEditing) => {
-        setIsEditingBlocker(isEditing);
-        setShowBlockerPartsModal(true);
-        setShowDetailsModal(false);
-      };
-    
-      const handleBlockerClose = () => {
-        setShowBlockerPartsModal(false);
-        setShowDetailsModal(true);
-      };
+  const handlePartSelect = (part) => {
+    setSelectedPart(part);
+    setShowDetailsModal(true);
+  };
 
-    return (
-        <div className="pm-container">
-            <NavBar />
-            <div className="pm-header">
+  const handleBlockerAction = (isEditing) => {
+    setIsEditingBlocker(isEditing);
+    setShowBlockerPartsModal(true);
+    setShowDetailsModal(false);
+  };
+
+  const handleBlockerClose = () => {
+    setShowBlockerPartsModal(false);
+    setShowDetailsModal(true);
+  };
+
+  useEffect(() => {
+    document.title = 'Parts';
+  }, []);
+
+  return (
+    <div className="pm-container">
+      <NavBar />
+      <div className="pm-header">
         <h2>Parts Management</h2>
-        <button 
+        <button
           className="pm-import-button"
           onClick={() => setShowImportPartModal(true)}
         >
@@ -43,7 +47,7 @@ const PartsPage = () => {
         </button>
       </div>
 
-      <PartsTable 
+      <PartsTable
         selectedPart={selectedPart}
         onSelectPart={handlePartSelect}
       />
@@ -58,13 +62,13 @@ const PartsPage = () => {
       )}
 
       {showImportPartModal && (
-        <ImportPartModal 
-          onClose={() => setShowImportPartModal(false)} 
+        <ImportPartModal
+          onClose={() => setShowImportPartModal(false)}
         />
       )}
 
       {showBlockerPartsModal && (
-        <BlockerPartsModal 
+        <BlockerPartsModal
           isEditing={isEditingBlocker}
           part={selectedPart}
           onClose={handleBlockerClose}

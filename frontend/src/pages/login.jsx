@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useStatem, useEffect } from 'react';
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import { useAuth } from '../context/authContext';
 import './login.css';
@@ -10,6 +10,10 @@ const LoginForm = () => {
         email: '',
         password: ''
     });
+
+    useEffect(() => {
+        document.title = 'Login';
+      }, []);
 
     const navigate = useNavigate();
 

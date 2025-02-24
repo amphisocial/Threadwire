@@ -35,16 +35,8 @@ const Card = ({ data, onBlockClick, onDangerClick }) => {
           &#9762;
         </div>
       )}
-      <div className="card-header">Order: {ordernumber}</div>
-      <div className="card-body">
-        <div className="card-row">Part Number: {partnumber}</div>
-        <div className="card-row">Line Number: {linenumber}</div>
-        <div className="card-row">Customer Name: {customer_name}</div>
-        <div className="card-row">Quantity: {quantity}</div>
-        <div className="card-row">Amount: {amount}</div>
-        <div className="card-row">Order Status: {order_status}</div>
-        <div className="card-row">Shipping Status: {shipping_status}</div>
-        <div className="card-row">Order Date: {order_date}</div>
+      <div className="card-header">
+        <span>Order: {ordernumber}</span>
         {blockerTag === 'No' ? (
           <button
             className="blocked-button add-icon"
@@ -60,6 +52,17 @@ const Card = ({ data, onBlockClick, onDangerClick }) => {
             ✍
           </button>
         )}
+      </div>
+      <div className="card-body">
+        <div className="card-row">Part Number: {partnumber}</div>
+        <div className="card-row">Line Number: {linenumber}</div>
+        <div className="card-row">Customer Name: {customer_name}</div>
+        <div className="card-row">Quantity: {quantity}</div>
+        <div className="card-row">Amount: {amount}</div>
+        <div className="card-row">Order Status: {order_status}</div>
+        <div className="card-row">Shipping Status: {shipping_status}</div>
+        <div className="card-row">Order Date: {order_date}</div>
+        
       </div>
     </div>
   );

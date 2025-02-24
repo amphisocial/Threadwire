@@ -167,11 +167,7 @@ body {
     margin-bottom: 10px;
     position: relative;
     width: 100%;
-    height: 280px;
-    /* Fixed height */
     box-sizing: border-box;
-    overflow-y: auto;
-    /* Add scrollbar if content exceeds height */
 }
 
 .card-header {
@@ -179,12 +175,14 @@ body {
     font-weight: bold;
     margin-bottom: 10px;
     position: sticky;
-    text-align: center;
     top: 0;
     background-color: #e9e9dc;
     padding: 5px 5px;
     border-radius: 5px;
     z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .card-body {
@@ -214,7 +212,8 @@ body {
     border: none;
     font-size: 20px;
     cursor: pointer;
-    padding: 4px;
+    padding: 0;
+    margin-left: 8px;
     transition: color 0.2s;
 }
 
@@ -224,25 +223,6 @@ body {
 
 .blocked-button.edit-icon:hover {
     color: #0052cc;
-}
-
-/* Custom scrollbar styles for better appearance */
-.card-container::-webkit-scrollbar {
-    width: 6px;
-}
-
-.card-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-}
-
-.card-container::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 3px;
-}
-
-.card-container::-webkit-scrollbar-thumb:hover {
-    background: #999;
 }
 
 /* Modal Styles */
