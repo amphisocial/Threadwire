@@ -1,13 +1,17 @@
 
 .wo-left-pane {
-    flex: 2;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+    width: 60%;
+    padding: 20px;
+    overflow-y: auto;
+    background-color: white;
+    border-right: 1px solid #ddd;
 }
 
 .wo-right-pane {
-    flex: 1;
+    width: 40%;
+    padding: 20px;
+    overflow-y: auto;
+    background-color: white;
 }
 
 /* Section Headers */
@@ -98,6 +102,7 @@
     background-color: #007bff;
     color: white;
     padding: 8px 16px;
+    width: 30%;
     border: none;
     border-radius: 4px;
     cursor: pointer;
@@ -111,10 +116,16 @@
     background-color: #0056b3;
 }
 
+.wo-section-navbar {
+    display: flex;
+    justify-content: space-evenly;
+}
+
 .wo-risk-button {
     background-color: #f8f9fa;
     border: 1px solid #dee2e6;
     color: #212529;
+    width: 30%;
     padding: 6px 12px;
     border-radius: 4px;
     cursor: pointer;
@@ -285,6 +296,159 @@
         flex: 1;
         width: 100%;
     }
+}
+
+.pb-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.pb-modal {
+    background-color: white;
+    border-radius: 8px;
+    padding: 24px;
+    width: 75%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.pb-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.pb-modal-title {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.pb-close-button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    width: fit-content;
+}
+
+
+.pb-form-group {
+    margin-bottom: 16px;
+}
+
+.pb-form-group label {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.pb-input-field,
+.pb-select-field,
+.pb-textarea-field {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.pb-textarea-field {
+    resize: vertical;
+}
+
+.pb-action-items-section {
+    margin-top: 24px;
+}
+
+.pb-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.pb-add-button {
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: fit-content;
+}
+
+.pb-add-button:hover {
+    background-color: #0056b3;
+}
+
+.pb-action-items-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+.pb-action-items-table th,
+.pb-action-items-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    color: #000;
+}
+
+.pb-action-items-table th {
+    background-color: #f5f5f5;
+    text-align: left;
+}
+
+.pb-delete-button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.pb-delete-button:hover {
+    background-color: #c82333;
+}
+
+.pb-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 24px;
+}
+
+.pb-cancel-button {
+    padding: 8px 16px;
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.pb-cancel-button:hover {
+    background-color: #5a6268;
+}
+
+.pb-save-button {
+    padding: 8px 16px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.pb-save-button:hover {
+    background-color: #218838;
 }
 
 /* Utility Classes */
