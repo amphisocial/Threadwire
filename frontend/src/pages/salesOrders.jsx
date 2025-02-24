@@ -65,9 +65,12 @@ const SalesOrdersApp = () => {
       alert("Please select a Sales Order row first.");
       return;
     }
-
+      
+    const orderId = selectedSalesOrder._id || selectedSalesOrder.id || selectedSalesOrder.salesOrderId;
+    
+    
     try {
-      const res = await fetch(`/api/blockers?relatedSalesOrders=${selectedSalesOrder.salesOrderId}`, {
+      const res = await fetch(`/api/blockers?relatedSalesOrders=${orderId}`, {
         method: 'GET',
         headers: getAuthHeaders(),
       });
@@ -132,7 +135,7 @@ const SalesOrdersApp = () => {
         {showBlockerModal && (
           <BlockerModal
             blockerId={currentBlockerId}
-            salesOrderId={selectedSalesOrder?.salesOrderId}
+            salesOrderId={selectedSalesOrder?._id || selectedSalesOrder?.id}
             onClose={() => setShowBlockerModal(false)}
             onSave={() => {
               setShowBlockerModal(false);
