@@ -4,7 +4,7 @@ import Navbar from '../comps/NavBar';
 import ImportWorkOrders from '../comps/ImportWorkOrders';
 import ImportPartBoP from '../comps/ImportPartBoP';
 import ImportExecution from '../comps/ImportExecution';
-import BlockerModal from '../comps/BlockerPartsModal';
+import BlockerManager from '../comps/BlockerWorkModal';
 import WorkOrdersTable from '../comps/WorkOrdersTable';
 import PartBoPTable from '../comps/PartBoPTable';
 import ExecutionTable from '../comps/ExecutionTable';
@@ -150,7 +150,7 @@ const WorkOrders = () => {
       </div>
 
       {showBlockerModal && (
-        <BlockerModal
+        <BlockerManager
           isOpen={showBlockerModal}
           onClose={() => setShowBlockerModal(false)}
           blocker={currentBlocker}
