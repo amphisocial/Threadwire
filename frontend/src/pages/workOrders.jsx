@@ -16,8 +16,7 @@ const WorkOrders = () => {
   const [workOrders, setWorkOrders] = useState([]);
   const [executionData, setExecutionData] = useState([]);
   const [partBopData, setPartBopData] = useState([]);
-  const [showBlockerModal, setShowBlockerModal] = useState(false);
-  const [currentBlocker, setCurrentBlocker] = useState(null);
+  const blockerManagerRef = useRef(null);
 
   useEffect(() => {
     fetchWorkOrders();
@@ -79,6 +78,28 @@ const WorkOrders = () => {
     fetchPartBop(workOrder.partnumber);
   };
 
+  const handleAddRiskIssue = () => {
+    if (!selectedWorkOrder) {
+      alert("Please select a Work Order first.");
+      return;
+    }
+    
+    if (blockerManagerRef.current && blockerManagerRef.current.handleAddRiskIssue) {
+      blockerManagerRef.current.handleAddRiskIssue();
+    }
+  };
+
+  const handleEditRiskIssue = async () => {
+    if (!selectedWorkOrder) {
+      alert("Please select a Work Order first.");
+      return;
+    }
+
+    if (blockerManagerRef.current && blockerManagerRef.current.handleEditRiskIssue) {
+      blockerManagerRef.current.handleEditRiskIssue();
+    }
+  };
+
   return (
     <div>
       <div className="app-container">
@@ -91,38 +112,13 @@ const WorkOrders = () => {
               <ImportWorkOrders onImportComplete={fetchWorkOrders} />
               <button
                 className="wo-risk-button"
-                onClick={() => {
-                  if (!selectedWorkOrder) {
-                    alert("Please select a Work Order first.");
-                    return;
-                  }
-                  setCurrentBlocker(null);
-                  setShowBlockerModal(true);
-                }}
+                onClick={handleAddRiskIssue}
               >
                 + Add Risk/Issue
               </button>
               <button
                 className="wo-risk-button"
-                onClick={async () => {
-                  if (!selectedWorkOrder) {
-                    alert("Please select a Work Order first.");
-                    return;
-                  }
-                  try {
-                    const res = await fetch(`/api/blockers?relatedWorkOrders=${selectedWorkOrder._id}`);
-                    const blockers = await res.json();
-                    if (!blockers || blockers.length === 0) {
-                      alert("No existing Risk/Issue found for this Work Order.");
-                      return;
-                    }
-                    setCurrentBlocker(blockers[0]);
-                    setShowBlockerModal(true);
-                  } catch (err) {
-                    console.error("Error finding blockers:", err);
-                    alert("Failed to find risk/issue for this workorder.");
-                  }
-                }}
+                onClick={handleEditRiskIssue}
               >
                 Edit Risk/Issue
               </button>
@@ -149,18 +145,12 @@ const WorkOrders = () => {
         </div>
       </div>
 
-      {showBlockerModal && (
-        <BlockerManager
-          isOpen={showBlockerModal}
-          onClose={() => setShowBlockerModal(false)}
-          blocker={currentBlocker}
-          workOrderId={selectedWorkOrder?._id}
-          onSave={() => {
-            setShowBlockerModal(false);
-            fetchWorkOrders();
-          }}
-        />
-      )}
+      <BlockerManager
+        ref={blockerManagerRef}
+        selectedWorkOrder={selectedWorkOrder}
+        onBlockerSaved={fetchWorkOrders}
+        getAuthHeaders={getAuthHeaders}
+      />
     </div>
   );
 };
