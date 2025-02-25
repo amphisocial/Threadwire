@@ -60,10 +60,11 @@ body {
     margin-left: 12px;
 }
 
-.home-icon {
+.home-iconn {
     margin-right: 10px;
+    margin-top: 5px;
     cursor: pointer;
-    color: white;
+    color: Black;
     width: 24px;
     height: 24px;
     display: flex;
@@ -72,7 +73,7 @@ body {
     transition: transform 0.2s ease;
   }
   
-  .home-icon:hover {
+  .home-iconn:hover {
     transform: scale(1.2);
   }
 
