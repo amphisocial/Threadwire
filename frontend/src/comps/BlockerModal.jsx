@@ -211,7 +211,7 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
 
           <div className="action-items-section">
             <div 
-              className={`action-items-header ${isActionItemsExpanded ? 'expanded' : ''}`}
+              className={`action-items-headerr ${isActionItemsExpanded ? 'expanded' : ''}`}
               onClick={toggleActionItems}
             >
               <h4>Action Items {actionItems.length > 0 && `(${actionItems.length})`}</h4>
