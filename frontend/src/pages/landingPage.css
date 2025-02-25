@@ -60,6 +60,22 @@ body {
     margin-left: 12px;
 }
 
+.home-icon {
+    margin-right: 10px;
+    cursor: pointer;
+    color: white;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease;
+  }
+  
+  .home-icon:hover {
+    transform: scale(1.2);
+  }
+
 .filter-container {
     display: flex;
     gap: 12px;
