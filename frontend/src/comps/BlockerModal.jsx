@@ -203,7 +203,7 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
           </div>
 
           <div className="action-items-section">
-            <div className="action-items-header">
+            <div className="action-items-headerr">
               <h4>Action Items</h4>
               <button 
                 onClick={addActionItem}
