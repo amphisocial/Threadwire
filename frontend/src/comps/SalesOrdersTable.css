@@ -49,12 +49,18 @@
   }
   
   .row-selected {
-    background-color: #fff3cd !important;
+    background-color: #e3f2fd !important;
     font-weight: bold;
   }
   
   .row-has-blocker {
     background-color: #ffdada !important;
+  }
+
+  .row-selected.row-has-blocker {
+    background-color: #ffb3b3 !important; 
+    font-weight: bold;
+    border: 2px solid #ff6666; 
   }
   
   .edit-column {

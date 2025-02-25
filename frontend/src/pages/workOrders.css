@@ -68,8 +68,14 @@
 }
 
 .wo-row-has-blocker {
-    background-color: rgba(255, 0, 25, 0.25) !important;
+    background-color: #ffdada !important;
 }
+
+.wo-row-highlighted.wo-row-has-blocker {
+    background-color: #ffb3b3 !important; 
+    font-weight: bold;
+    border: 2px solid #ff6666;  
+  }
 
 /* Search Inputs */
 .wo-search-input {

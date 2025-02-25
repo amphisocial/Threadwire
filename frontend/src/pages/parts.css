@@ -107,17 +107,17 @@
     background-color: #e3f2fd;
 }
 
-.pm-table-row.pm-selected:hover {
-    background-color: #bbdefb;
-}
 
 .pm-table-row.pm-has-blocker {
-    background-color: #fff3cd;
+    background-color: #ffdada;
 }
 
-.pm-table-row.pm-has-blocker:hover {
-    background-color: #ffeeba;
-}
+
+.pm-table-row.pm-selected.pm-has-blocker {
+    background-color: #ffb3b3 !important; 
+    font-weight: bold;
+    border: 2px solid #ff6666;  
+  }
 
 /* Table States */
 .pm-table-loading {
