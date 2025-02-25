@@ -10,6 +10,7 @@ const BlockerManager = forwardRef(({ selectedWorkOrder, onBlockerSaved}, ref) =>
     description: ''
   });
   const [actionItems, setActionItems] = useState([]);
+  const [isActionItemsExpanded, setIsActionItemsExpanded] = useState(false);
 
   useImperativeHandle(ref, () => ({
     handleAddRiskIssue: () => {
@@ -128,6 +129,7 @@ const BlockerManager = forwardRef(({ selectedWorkOrder, onBlockerSaved}, ref) =>
         remark: ""
       }
     ]);
+    setIsActionItemsExpanded(true);
   };
 
   // Update an action item
@@ -140,6 +142,10 @@ const BlockerManager = forwardRef(({ selectedWorkOrder, onBlockerSaved}, ref) =>
   // Remove an action item
   const removeActionItem = (id) => {
     setActionItems(prev => prev.filter(item => item._id !== id));
+  };
+
+  const toggleActionItems = () => {
+    setIsActionItemsExpanded(!isActionItemsExpanded);
   };
 
   // Close the modal
@@ -298,77 +304,95 @@ const BlockerManager = forwardRef(({ selectedWorkOrder, onBlockerSaved}, ref) =>
               />
             </div>
 
-            <div className="pb-action-items-section">
-              <div className="pb-section-header">
-                <h4>Action Items</h4>
-                <button 
-                  onClick={addActionItem}
-                  className="pb-add-button"
-                >
-                  + Add Action Item
-                </button>
+            <div className="pb-action-items-container">
+              <div 
+                className={`pb-action-items-header ${isActionItemsExpanded ? 'expanded' : ''}`}
+                onClick={toggleActionItems}
+              >
+                <h4>Action Items {actionItems.length > 0 && `(${actionItems.length})`}</h4>
+                <div className="pb-header-controls">
+                  <span className="pb-items-count">
+                    {actionItems.filter(item => item.status === 'Completed').length}/{actionItems.length} completed
+                  </span>
+                  <span className="pb-toggle-icon">{isActionItemsExpanded ? '▼' : '►'}</span>
+                </div>
               </div>
 
-              <table className="pb-action-items-table">
-                <thead>
-                  <tr>
-                    <th>Action Item</th>
-                    <th>Assigned To</th>
-                    <th>Status</th>
-                    <th>Remark</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {actionItems.map((item) => (
-                    <tr key={item._id}>
-                      <td>
-                        <input
-                          type="text"
-                          value={item.actionItem}
-                          onChange={(e) => updateActionItem(item._id, 'actionItem', e.target.value)}
-                          className="pb-input-field"
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          value={item.assignedTo}
-                          onChange={(e) => updateActionItem(item._id, 'assignedTo', e.target.value)}
-                          className="pb-input-field"
-                        />
-                      </td>
-                      <td>
-                        <select
-                          value={item.status}
-                          onChange={(e) => updateActionItem(item._id, 'status', e.target.value)}
-                          className="pb-select-field"
-                        >
-                          <option value="Open">Open</option>
-                          <option value="In Progress">In Progress</option>
-                          <option value="Completed">Completed</option>
-                        </select>
-                      </td>
-                      <td>
-                        <input
-                          type="text"
-                          value={item.remark}
-                          onChange={(e) => updateActionItem(item._id, 'remark', e.target.value)}
-                          className="pb-input-field"
-                        />
-                      </td>
-                      <td>
-                        <button
-                          onClick={() => removeActionItem(item._id)}
-                          className="pb-delete-button"
-                        >
-                          ×
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {isActionItemsExpanded && (
+                <div className="pb-action-items-content">
+                  <button 
+                    onClick={addActionItem}
+                    className="pb-add-button"
+                  >
+                    + Add Action Item
+                  </button>
+                  
+                  {actionItems.length > 0 ? (
+                    <table className="pb-action-items-table">
+                      <thead>
+                        <tr>
+                          <th>Action Item</th>
+                          <th>Assigned To</th>
+                          <th>Status</th>
+                          <th>Remark</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {actionItems.map((item) => (
+                          <tr key={item._id}>
+                            <td>
+                              <input
+                                type="text"
+                                value={item.actionItem}
+                                onChange={(e) => updateActionItem(item._id, 'actionItem', e.target.value)}
+                                className="pb-input-field"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={item.assignedTo}
+                                onChange={(e) => updateActionItem(item._id, 'assignedTo', e.target.value)}
+                                className="pb-input-field"
+                              />
+                            </td>
+                            <td>
+                              <select
+                                value={item.status}
+                                onChange={(e) => updateActionItem(item._id, 'status', e.target.value)}
+                                className="pb-select-field"
+                              >
+                                <option value="Open">Open</option>
+                                <option value="In Progress">In Progress</option>
+                                <option value="Completed">Completed</option>
+                              </select>
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={item.remark}
+                                onChange={(e) => updateActionItem(item._id, 'remark', e.target.value)}
+                                className="pb-input-field"
+                              />
+                            </td>
+                            <td>
+                              <button
+                                onClick={() => removeActionItem(item._id)}
+                                className="pb-delete-button"
+                              >
+                                ×
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="pb-no-items">No action items added yet.</div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="pb-modal-footer">

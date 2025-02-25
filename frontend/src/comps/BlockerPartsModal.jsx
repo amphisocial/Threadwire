@@ -4,7 +4,7 @@ const ActionItemRow = ({ actionItem, onUpdate, onDelete }) => {
   return (
     <tr>
       <td>
-        <input 
+        <input
           type="text"
           className="pb-input-field"
           value={actionItem.actionItem}
@@ -12,7 +12,7 @@ const ActionItemRow = ({ actionItem, onUpdate, onDelete }) => {
         />
       </td>
       <td>
-        <input 
+        <input
           type="text"
           className="pb-input-field"
           value={actionItem.assignedTo}
@@ -31,7 +31,7 @@ const ActionItemRow = ({ actionItem, onUpdate, onDelete }) => {
         </select>
       </td>
       <td>
-        <input 
+        <input
           type="text"
           className="pb-input-field"
           value={actionItem.remark}
@@ -39,7 +39,7 @@ const ActionItemRow = ({ actionItem, onUpdate, onDelete }) => {
         />
       </td>
       <td>
-        <button 
+        <button
           className="pb-delete-button"
           onClick={() => onDelete(actionItem._id)}
         >
@@ -59,6 +59,7 @@ const BlockerPartsModal = ({ isEditing, part, onClose }) => {
   });
   const [actionItems, setActionItems] = useState([]);
   const [blockerId, setBlockerId] = useState(null);
+  const [isActionItemsExpanded, setIsActionItemsExpanded] = useState(false);
 
   useEffect(() => {
     if (isEditing && part) {
@@ -83,7 +84,7 @@ const BlockerPartsModal = ({ isEditing, part, onClose }) => {
         headers: getAuthHeaders(),
       });
       const blockers = await res.json();
-      
+
       if (blockers.length > 0) {
         const blocker = blockers[0];
         setBlockerId(blocker._id);
@@ -95,9 +96,9 @@ const BlockerPartsModal = ({ isEditing, part, onClose }) => {
         });
 
         const resAI = await fetch(`/api/action-items/blocker/${blocker._id}`, {
-            method: 'GET',
-            headers: getAuthHeaders(),
-          });
+          method: 'GET',
+          headers: getAuthHeaders(),
+        });
         const actionItemsData = await resAI.json();
         setActionItems(actionItemsData);
       } else {
@@ -122,16 +123,22 @@ const BlockerPartsModal = ({ isEditing, part, onClose }) => {
         remark: ''
       }
     ]);
+
+    setIsActionItemsExpanded(true);
   };
 
   const handleUpdateActionItem = (updatedItem) => {
-    setActionItems(actionItems.map(item => 
+    setActionItems(actionItems.map(item =>
       item._id === updatedItem._id ? updatedItem : item
     ));
   };
 
   const handleDeleteActionItem = (itemId) => {
     setActionItems(actionItems.filter(item => item._id !== itemId));
+  };
+
+  const toggleActionItems = () => {
+    setIsActionItemsExpanded(!isActionItemsExpanded);
   };
 
   const handleSave = async () => {
@@ -216,7 +223,7 @@ const BlockerPartsModal = ({ isEditing, part, onClose }) => {
           <h3 className="pb-modal-title">
             {isEditing ? 'Edit Risk/Issue' : 'Create Risk/Issue'}
           </h3>
-          <button 
+          <button
             className="pb-close-button"
             onClick={onClose}
           >
@@ -270,38 +277,56 @@ const BlockerPartsModal = ({ isEditing, part, onClose }) => {
             />
           </div>
 
-          <div className="pb-action-items-section">
-            <div className="pb-section-header">
-              <h4>Action Items</h4>
-              <button 
-                className="pb-add-button"
-                onClick={handleAddActionItem}
-              >
-                + Add Action Item
-              </button>
+          <div className="pb-action-items-container">
+            <div
+              className={`pb-action-items-header ${isActionItemsExpanded ? 'expanded' : ''}`}
+              onClick={toggleActionItems}
+            >
+              <h4>Action Items {actionItems.length > 0 && `(${actionItems.length})`}</h4>
+              <div className="pb-header-controls">
+                <span className="pb-items-count">
+                  {actionItems.filter(item => item.status === 'Completed').length}/{actionItems.length} completed
+                </span>
+                <span className="pb-toggle-icon">{isActionItemsExpanded ? '▼' : '►'}</span>
+              </div>
             </div>
-            
-            <table className="pb-action-items-table">
-              <thead>
-                <tr>
-                  <th>Action Item</th>
-                  <th>Assigned To</th>
-                  <th>Status</th>
-                  <th>Remark</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {actionItems.map(item => (
-                  <ActionItemRow
-                    key={item._id}
-                    actionItem={item}
-                    onUpdate={handleUpdateActionItem}
-                    onDelete={handleDeleteActionItem}
-                  />
-                ))}
-              </tbody>
-            </table>
+
+            {isActionItemsExpanded && (
+              <div className="pb-action-items-content">
+                <button
+                  className="pb-add-button"
+                  onClick={handleAddActionItem}
+                >
+                  + Add Action Item
+                </button>
+
+                {actionItems.length > 0 ? (
+                  <table className="pb-action-items-table">
+                    <thead>
+                      <tr>
+                        <th>Action Item</th>
+                        <th>Assigned To</th>
+                        <th>Status</th>
+                        <th>Remark</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {actionItems.map(item => (
+                        <ActionItemRow
+                          key={item._id}
+                          actionItem={item}
+                          onUpdate={handleUpdateActionItem}
+                          onDelete={handleDeleteActionItem}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="pb-no-items">No action items added yet.</div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="pb-modal-footer">
