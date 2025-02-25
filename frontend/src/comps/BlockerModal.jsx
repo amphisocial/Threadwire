@@ -9,6 +9,7 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
     description: ''
   });
   const [actionItems, setActionItems] = useState([]);
+  const [isActionItemsExpanded, setIsActionItemsExpanded] = useState(false);
 
   const getAuthHeaders = () => {
     const token = localStorage.getItem('authToken');
@@ -70,6 +71,8 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
       status: 'Open',
       remark: ''
     }]);
+
+    setIsActionItemsExpanded(true);
   };
 
   const updateActionItem = (id, field, value) => {
@@ -80,6 +83,10 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
 
   const removeActionItem = (id) => {
     setActionItems(prev => prev.filter(item => item._id !== id));
+  };
+
+  const toggleActionItems = () => {
+    setIsActionItemsExpanded(!isActionItemsExpanded);
   };
 
   const handleSubmit = async () => {
@@ -203,76 +210,94 @@ const BlockerModal = ({ blockerId, salesOrderId, onClose, onSave }) => {
           </div>
 
           <div className="action-items-section">
-            <div className="action-items-headerr">
-              <h4>Action Items</h4>
-              <button 
-                onClick={addActionItem}
-                className="add-action-button"
-              >
-                + Add Action Item
-              </button>
+            <div 
+              className={`action-items-header ${isActionItemsExpanded ? 'expanded' : ''}`}
+              onClick={toggleActionItems}
+            >
+              <h4>Action Items {actionItems.length > 0 && `(${actionItems.length})`}</h4>
+              <div className="action-header-controls">
+                <span className="action-items-count">
+                  {actionItems.filter(item => item.status === 'Completed').length}/{actionItems.length} completed
+                </span>
+                <span className="toggle-indicator">{isActionItemsExpanded ? '▼' : '►'}</span>
+              </div>
             </div>
 
-            <table className="action-items-table">
-              <thead>
-                <tr>
-                  <th>Action Item</th>
-                  <th>Assigned To</th>
-                  <th>Status</th>
-                  <th>Remark</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {actionItems.map((item) => (
-                  <tr key={item._id}>
-                    <td>
-                      <input
-                        type="text"
-                        value={item.actionItem}
-                        onChange={(e) => updateActionItem(item._id, 'actionItem', e.target.value)}
-                        className="action-item-input"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={item.assignedTo}
-                        onChange={(e) => updateActionItem(item._id, 'assignedTo', e.target.value)}
-                        className="action-item-input"
-                      />
-                    </td>
-                    <td>
-                      <select
-                        value={item.status}
-                        onChange={(e) => updateActionItem(item._id, 'status', e.target.value)}
-                        className="action-item-select"
-                      >
-                        <option value="Open">Open</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={item.remark}
-                        onChange={(e) => updateActionItem(item._id, 'remark', e.target.value)}
-                        className="action-item-input"
-                      />
-                    </td>
-                    <td>
-                      <button
-                        onClick={() => removeActionItem(item._id)}
-                        className="remove-action-button"
-                      >
-                        ×
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {isActionItemsExpanded && (
+              <div className="action-items-content">
+                <button 
+                  onClick={addActionItem}
+                  className="add-action-button"
+                >
+                  + Add Action Item
+                </button>
+                
+                {actionItems.length > 0 ? (
+                  <table className="action-items-table">
+                    <thead>
+                      <tr>
+                        <th>Action Item</th>
+                        <th>Assigned To</th>
+                        <th>Status</th>
+                        <th>Remark</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {actionItems.map((item) => (
+                        <tr key={item._id}>
+                          <td>
+                            <input
+                              type="text"
+                              value={item.actionItem}
+                              onChange={(e) => updateActionItem(item._id, 'actionItem', e.target.value)}
+                              className="action-item-input"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              value={item.assignedTo}
+                              onChange={(e) => updateActionItem(item._id, 'assignedTo', e.target.value)}
+                              className="action-item-input"
+                            />
+                          </td>
+                          <td>
+                            <select
+                              value={item.status}
+                              onChange={(e) => updateActionItem(item._id, 'status', e.target.value)}
+                              className="action-item-select"
+                            >
+                              <option value="Open">Open</option>
+                              <option value="In Progress">In Progress</option>
+                              <option value="Completed">Completed</option>
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              value={item.remark}
+                              onChange={(e) => updateActionItem(item._id, 'remark', e.target.value)}
+                              className="action-item-input"
+                            />
+                          </td>
+                          <td>
+                            <button
+                              onClick={() => removeActionItem(item._id)}
+                              className="remove-action-button"
+                            >
+                              ×
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="no-action-items">No action items added yet.</div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="blocker-modal-footer">
