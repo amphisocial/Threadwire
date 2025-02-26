@@ -288,3 +288,112 @@ tbody td {
 h2 {
     padding-top: 25px;
 }
+
+
+/* Blocker Container Layout */
+.blocker-container {
+  display: flex;
+  gap: 20px;
+  padding: 0 20px;
+}
+
+.left-pane, .right-pane {
+  flex: 1;
+}
+
+/* Table Filter Styles */
+.table-filter {
+  width: 100%;
+  padding: 5px;
+  margin-top: 5px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+/* Selected Row Style */
+.row-selected {
+  background-color: #e9f7ef !important;
+}
+
+/* Edit Button */
+.edit-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+/* No Data Message */
+.no-data-message {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-style: italic;
+}
+
+/* Blocker Details Panel */
+.blocker-details {
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 15px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.detail-item {
+  margin-bottom: 10px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 5px;
+}
+
+.detail-item strong {
+  font-weight: bold;
+  color: #004080;
+}
+
+.origin-list {
+  padding-left: 20px;
+  margin-top: 5px;
+}
+
+.origin-list li {
+  margin-bottom: 5px;
+}
+
+.origin-list ul {
+  padding-left: 20px;
+  margin-top: 3px;
+  margin-bottom: 10px;
+  list-style-type: disc;
+}
+
+/* Loading and Error Messages */
+.loading-message, .error-message {
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.loading-message {
+  background-color: #e3f2fd;
+  color: #0074cc;
+}
+
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+/* Responsive Design for Blockers */
+@media (max-width: 768px) {
+  .blocker-container {
+    flex-direction: column;
+  }
+  
+  .left-pane, .right-pane {
+    width: 100%;
+  }
+}
