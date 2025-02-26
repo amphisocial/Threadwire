@@ -14,24 +14,24 @@ const Tabs = ({ filters, onFilterChange }) => {
   const currentPage = getCurrentPage();
 
 
-  const handleTabClick = (tab) => {
+  const handleNavigation = (tab) => {
     switch (tab) {
-      case 'Blockers':
+      case 'blockers':
         navigate('/blockers');
         break;
-      case 'Visualization':
+      case 'visualization':
         navigate('/visualization');
         break;
-      case 'Sales Orders':
+      case 'salesorders':
         navigate('/salesorders');
         break;
-      case 'Work Orders':
+      case 'workorders':
         navigate('/workorders');
         break;
-      case 'Parts':
+      case 'parts':
         navigate('/parts');
         break;
-      case 'Dashboard':
+      case 'dashboard':
         navigate('/home');
         break;
       default:
