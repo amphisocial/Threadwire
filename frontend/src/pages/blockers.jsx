@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Navbar from '../comps/NavBar';
 import BlockersTable from '../comps/BlockersTable';
 import ActionItemsTable from '../comps/ActionItemsTable';
+import BlockerDetails from '../comps/BlockerDetails';
 import './salesOrders.css';
 
 const BlockersApp = () => {
@@ -138,63 +139,11 @@ const BlockersApp = () => {
         </div>
         
         <div className="right-pane">
-          {selectedBlocker && (
-            <div className="blocker-details">
-              <h2>Blocker Details</h2>
-              <div className="detail-item">
-                <strong>Title:</strong> {selectedBlocker.title}
-              </div>
-              <div className="detail-item">
-                <strong>Type:</strong> {selectedBlocker.type}
-              </div>
-              <div className="detail-item">
-                <strong>Description:</strong> {selectedBlocker.description}
-              </div>
-              <div className="detail-item">
-                <strong>Status:</strong> {selectedBlocker.status}
-              </div>
-              <div className="detail-item">
-                <strong>Priority:</strong> {selectedBlocker.priority}
-              </div>
-              
-              <div className="detail-item">
-                <strong>Origin:</strong>
-                <ul className="origin-list">
-                  {selectedBlocker.relatedWorkOrders && selectedBlocker.relatedWorkOrders.length > 0 && (
-                    <li>
-                      <strong>Work Orders:</strong>
-                      <ul>
-                        {selectedBlocker.relatedWorkOrders.map(woId => (
-                          <li key={woId}>{woId}</li>
-                        ))}
-                      </ul>
-                    </li>
-                  )}
-                  
-                  {selectedBlocker.relatedSalesOrders && selectedBlocker.relatedSalesOrders.length > 0 && (
-                    <li>
-                      <strong>Sales Orders:</strong>
-                      <ul>
-                        {selectedBlocker.relatedSalesOrders.map(soId => (
-                          <li key={soId}>{soId}</li>
-                        ))}
-                      </ul>
-                    </li>
-                  )}
-                  
-                  {selectedBlocker.relatedParts && selectedBlocker.relatedParts.length > 0 && (
-                    <li>
-                      <strong>Parts:</strong>
-                      <ul>
-                        {selectedBlocker.relatedParts.map(partId => (
-                          <li key={partId}>{partId}</li>
-                        ))}
-                      </ul>
-                    </li>
-                  )}
-                </ul>
-              </div>
-            </div>
+        {selectedBlocker && (
+            <BlockerDetails 
+              selectedBlocker={selectedBlocker}
+              getAuthHeaders={getAuthHeaders}
+            />
           )}
           
           <h2>Action Items</h2>
