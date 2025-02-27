@@ -10,7 +10,7 @@ const SalesOrdersApp = () => {
   const [showBlockerModal, setShowBlockerModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [currentBlockerId, setCurrentBlockerId] = useState(null);
-  const [salesOrders, setSalesOrders] = useState([]); // Initialize as empty array
+  const [salesOrders, setSalesOrders] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -41,11 +41,11 @@ const SalesOrdersApp = () => {
         throw new Error('Failed to fetch sales orders');
       }
       const data = await response.json();
-      setSalesOrders(Array.isArray(data) ? data : []); // Ensure it's an array
+      setSalesOrders(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading sales orders:", error);
       setError(error.message);
-      setSalesOrders([]); // Set to empty array on error
+      setSalesOrders([]); 
     } finally {
       setIsLoading(false);
     }

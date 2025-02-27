@@ -18,56 +18,86 @@ const BlockerDetails = ({ selectedBlocker, getAuthHeaders }) => {
     setIsLoading(true);
     
     try {
-      // Fetch related work orders
-      if (selectedBlocker.relatedWorkOrders && selectedBlocker.relatedWorkOrders.length > 0) {
-        const workOrderPromises = selectedBlocker.relatedWorkOrders
-          .filter(id => id) // Filter out null values
-          .map(id => 
-            fetch(`/api/workorders/${id}`, { headers: getAuthHeaders() })
-              .then(res => res.ok ? res.json() : null)
-              .catch(err => {
-                console.error(`Error fetching work order ${id}:`, err);
-                return null;
-              })
-          );
+        const hasWorkOrders = selectedBlocker.relatedWorkOrders && selectedBlocker.relatedWorkOrders.length > 0;
+        const hasSalesOrders = selectedBlocker.relatedSalesOrders && selectedBlocker.relatedSalesOrders.length > 0;
+        const hasParts = selectedBlocker.relatedParts && selectedBlocker.relatedParts.length > 0;
         
-        const workOrders = (await Promise.all(workOrderPromises)).filter(wo => wo);
-        setRelatedData(prev => ({ ...prev, workOrders }));
-      }
-      
-      // Fetch related sales orders
-      if (selectedBlocker.relatedSalesOrders && selectedBlocker.relatedSalesOrders.length > 0) {
-        const salesOrderPromises = selectedBlocker.relatedSalesOrders
-          .filter(id => id) // Filter out null values
-          .map(id => 
-            fetch(`/api/salesorders/${id}`, { headers: getAuthHeaders() })
-              .then(res => res.ok ? res.json() : null)
-              .catch(err => {
-                console.error(`Error fetching sales order ${id}:`, err);
-                return null;
-              })
-          );
-        
-        const salesOrders = (await Promise.all(salesOrderPromises)).filter(so => so);
-        setRelatedData(prev => ({ ...prev, salesOrders }));
-      }
-      
-      // Fetch related parts
-      if (selectedBlocker.relatedParts && selectedBlocker.relatedParts.length > 0) {
-        const partPromises = selectedBlocker.relatedParts
-          .filter(id => id) // Filter out null values
-          .map(id => 
-            fetch(`/api/parts/${id}`, { headers: getAuthHeaders() })
-              .then(res => res.ok ? res.json() : null)
-              .catch(err => {
-                console.error(`Error fetching part ${id}:`, err);
-                return null;
-              })
-          );
-        
-        const parts = (await Promise.all(partPromises)).filter(part => part);
-        setRelatedData(prev => ({ ...prev, parts }));
-      }
+        // Only fetch data if there are related items
+        if (hasWorkOrders || hasSalesOrders || hasParts) {
+          const promises = [];
+          
+          // Fetch all work orders and filter on client side
+          if (hasWorkOrders) {
+            promises.push(
+              fetch('/api/workorders', { headers: getAuthHeaders() })
+                .then(res => res.ok ? res.json() : [])
+                .then(data => {
+                  // Filter to only include related work orders
+                  const filteredWorkOrders = Array.isArray(data) ? data.filter(wo => 
+                    selectedBlocker.relatedWorkOrders.includes(wo._id)
+                  ) : [];
+                  
+                  return { type: 'workOrders', data: filteredWorkOrders };
+                })
+                .catch(err => {
+                  console.error('Error fetching work orders:', err);
+                  return { type: 'workOrders', data: [] };
+                })
+            );
+          }
+          
+          // Fetch all sales orders and filter on client side
+          if (hasSalesOrders) {
+            promises.push(
+              fetch('/api/salesorders', { headers: getAuthHeaders() })
+                .then(res => res.ok ? res.json() : [])
+                .then(data => {
+                  // Filter to only include related sales orders
+                  const filteredSalesOrders = Array.isArray(data) ? data.filter(so => 
+                    selectedBlocker.relatedSalesOrders.includes(so._id)
+                  ) : [];
+                  
+                  return { type: 'salesOrders', data: filteredSalesOrders };
+                })
+                .catch(err => {
+                  console.error('Error fetching sales orders:', err);
+                  return { type: 'salesOrders', data: [] };
+                })
+            );
+          }
+          
+          // Fetch all parts and filter on client side
+          if (hasParts) {
+            promises.push(
+              fetch('/api/parts', { headers: getAuthHeaders() })
+                .then(res => res.ok ? res.json() : [])
+                .then(data => {
+                  // Filter to only include related parts
+                  const filteredParts = Array.isArray(data) ? data.filter(part => 
+                    selectedBlocker.relatedParts.includes(part._id)
+                  ) : [];
+                  
+                  return { type: 'parts', data: filteredParts };
+                })
+                .catch(err => {
+                  console.error('Error fetching parts:', err);
+                  return { type: 'parts', data: [] };
+                })
+            );
+          }
+          
+          // Process all promises
+          const results = await Promise.all(promises);
+          
+          // Update state with results
+          const newRelatedData = { workOrders: [], salesOrders: [], parts: [] };
+          
+          results.forEach(result => {
+            newRelatedData[result.type] = result.data;
+          });
+          
+          setRelatedData(newRelatedData);
+        }
     } catch (error) {
       console.error("Error fetching related data:", error);
     } finally {
@@ -76,6 +106,14 @@ const BlockerDetails = ({ selectedBlocker, getAuthHeaders }) => {
   };
 
   if (!selectedBlocker) return null;
+
+  const hasAnyRelatedData = () => {
+    return (
+      relatedData.workOrders.length > 0 || 
+      relatedData.salesOrders.length > 0 || 
+      relatedData.parts.length > 0
+    );
+  };
 
   return (
     <div className="blocker-details">
@@ -100,7 +138,7 @@ const BlockerDetails = ({ selectedBlocker, getAuthHeaders }) => {
         <strong>Origin:</strong>
         {isLoading ? (
           <div className="loading-data">Loading related data...</div>
-        ) : (
+        ) : hasAnyRelatedData() ? (
           <div className="related-data-container">
             {relatedData.workOrders.length > 0 && (
               <div className="related-section">
@@ -110,7 +148,7 @@ const BlockerDetails = ({ selectedBlocker, getAuthHeaders }) => {
                     <div key={wo._id} className="related-item">
                       <div><strong>Work Order:</strong> {wo.workorder}</div>
                       <div><strong>Part Number:</strong> {wo.partnumber}</div>
-                      <div><strong>Quantity:</strong> {wo.quantity}</div>
+                      <div><strong>Quantity:</strong> {wo.quantity || 'N/A'}</div>
                     </div>
                   ))}
                 </div>
@@ -146,14 +184,14 @@ const BlockerDetails = ({ selectedBlocker, getAuthHeaders }) => {
                 </div>
               </div>
             )}
-            
-            {relatedData.workOrders.length === 0 && 
-             relatedData.salesOrders.length === 0 && 
-             relatedData.parts.length === 0 && (
-              <div className="no-related-data">
-                No related documents found
-              </div>
-            )}
+          </div>
+        ) : hasRelationsButNoData() ? (
+          <div className="no-related-data">
+            Related items exist but could not be found in the database
+          </div>
+        ) : (
+          <div className="no-related-data">
+            No related documents found
           </div>
         )}
       </div>
