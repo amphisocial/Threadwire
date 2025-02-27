@@ -36,6 +36,7 @@ const BlockersApp = () => {
         throw new Error('Failed to fetch blockers');
       }
       const data = await response.json();
+      console.log('Loaded blockers:', data);
       setBlockers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Error loading blockers:", error);
@@ -117,7 +118,7 @@ const BlockersApp = () => {
     <div className="app-container">
       <Navbar />
       <div className="blocker-container">
-        <div className="left-pane">
+        <div>
           <h2>Blockers</h2>
           {error && (
             <div className="error-message">

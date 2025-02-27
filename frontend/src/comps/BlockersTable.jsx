@@ -10,6 +10,7 @@ const BlockersTable = ({
     status: '',
     // category: '',
     // impact: ''
+    priority: '',
     type: '',
     origin: ''
   });
@@ -42,10 +43,14 @@ const BlockersTable = ({
 
   const filteredBlockers = blockers.filter(blocker => {
     const origin = getBlockerOrigin(blocker).toLowerCase();
+    const statusValue = (blocker.status || '').toLowerCase();
+    const typeValue = (blocker.type || '').toLowerCase();
+    const priorityValue = (blocker.priority || '').toLowerCase();
+    
     return (
-      blocker.status?.toLowerCase().includes(filters.status) &&
-      blocker.category?.toLowerCase().includes(filters.category) &&
-      blocker.impact?.toLowerCase().includes(filters.impact) &&
+      statusValue.includes(filters.status) &&
+      typeValue.includes(filters.type) &&
+      priorityValue.includes(filters.priority) &&
       origin.includes(filters.origin)
     );
   });
@@ -187,7 +192,7 @@ const BlockersTable = ({
     //     </tbody>
     //   </table>
     // </div>
-    <div className="table-container">
+    <div className="table-container left-pane">
       <table>
         <thead>
           <tr>
@@ -258,21 +263,21 @@ const BlockersTable = ({
                 {editingRow === blocker._id ? (
                   <input
                     type="text"
-                    defaultValue={blocker.title}
+                    defaultValue={blocker.title || blocker.salesorder || ''}
                     onBlur={(e) => handleSave(blocker, { ...blocker, title: e.target.value })}
                   />
-                ) : blocker.title}
+                ) : (blocker.title || blocker.salesorder || 'No Title')}
               </td>
               <td>
                 {editingRow === blocker._id ? (
                   <select
-                    defaultValue={blocker.type}
+                    defaultValue={blocker.type || 'Issue'}
                     onChange={(e) => handleSave(blocker, { ...blocker, type: e.target.value })}
                   >
                     <option value="Risk">Risk</option>
                     <option value="Issue">Issue</option>
                   </select>
-                ) : blocker.type}
+                ) : (blocker.type || 'Issue')}
               </td>
               <td>
                 {editingRow === blocker._id ? (
@@ -280,19 +285,19 @@ const BlockersTable = ({
                     defaultValue={blocker.description}
                     onBlur={(e) => handleSave(blocker, { ...blocker, description: e.target.value })}
                   />
-                ) : blocker.description}
+                ) : (blocker.description || blocker.category || 'No Description')}
               </td>
               <td>
                 {editingRow === blocker._id ? (
                   <select
-                    defaultValue={blocker.status}
+                    defaultValue={blocker.status || 'Open'}
                     onChange={(e) => handleSave(blocker, { ...blocker, status: e.target.value })}
                   >
                     <option value="Open">Open</option>
                     <option value="In Progress">In Progress</option>
                     <option value="Closed">Closed</option>
                   </select>
-                ) : blocker.status}
+                ) : (blocker.status || 'Open')}
               </td>
               <td>
                 {editingRow === blocker._id ? (
