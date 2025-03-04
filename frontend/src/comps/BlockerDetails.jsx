@@ -10,7 +10,12 @@ const BlockerDetails = ({ selectedBlocker, getAuthHeaders }) => {
 
   useEffect(() => {
     if (selectedBlocker) {
-      fetchRelatedData();
+       setRelatedData({
+        workOrders: [],
+        salesOrders: [],
+        parts: []
+      });
+       fetchRelatedData();
     }
   }, [selectedBlocker]);
 
@@ -112,6 +117,18 @@ const BlockerDetails = ({ selectedBlocker, getAuthHeaders }) => {
       relatedData.workOrders.length > 0 || 
       relatedData.salesOrders.length > 0 || 
       relatedData.parts.length > 0
+    );
+  };
+
+  const hasRelationsButNoData = () => {
+    const hasWorkOrderRefs = selectedBlocker.relatedWorkOrders && selectedBlocker.relatedWorkOrders.length > 0;
+    const hasSalesOrderRefs = selectedBlocker.relatedSalesOrders && selectedBlocker.relatedSalesOrders.length > 0;
+    const hasPartRefs = selectedBlocker.relatedParts && selectedBlocker.relatedParts.length > 0;
+    
+    return (
+      (hasWorkOrderRefs && relatedData.workOrders.length === 0) ||
+      (hasSalesOrderRefs && relatedData.salesOrders.length === 0) ||
+      (hasPartRefs && relatedData.parts.length === 0)
     );
   };
 

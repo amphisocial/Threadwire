@@ -281,6 +281,7 @@ tbody td {
   
   tbody td {
     padding: 8px;
+    cursor: pointer;
   }
 }
 
@@ -338,6 +339,7 @@ h2 {
   border-radius: 4px;
   padding: 15px;
   margin-bottom: 20px;
+  margin-top: 95px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
