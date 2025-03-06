@@ -1,4 +1,5 @@
 const { WorkOrder } = require('../models/Workorder');
+const vectorService = require('../services/vectorService');
 
 // Generic response handler
 const handleResponse = (res, err, data) => {
@@ -7,14 +8,44 @@ const handleResponse = (res, err, data) => {
 };
 
 // WorkOrder Controller
-const createWorkOrder = (req, res) => {
-  const newWorkOrder = new WorkOrder(req.body);
-  newWorkOrder.save((err, data) => handleResponse(res, err, data));
+const createWorkOrder = async (req, res) => {
+  try {
+    const newWorkOrder = new WorkOrder(req.body);
+    const savedWorkOrder = await newWorkOrder.save();
+
+    // Process for vector database
+    try {
+      await vectorService.processDocument(savedWorkOrder.toObject(), 'workorders');
+    } catch (vectorError) {
+      console.error('Error creating vector embedding for work order:', vectorError);
+      // Continue despite vector error
+    }
+
+    res.status(201).json(savedWorkOrder);
+  } catch (err) {
+    handleResponse(res, err, null);
+  }
 };
 
-const updateWorkOrder = (req, res) => {
-  const { id } = req.params;
-  WorkOrder.findByIdAndUpdate(id, req.body, { new: true }, (err, data) => handleResponse(res, err, data));
+const updateWorkOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updatedWorkOrder = await WorkOrder.findByIdAndUpdate(id, req.body, { new: true });
+    
+    if (updatedWorkOrder) {
+      // Update vector embedding for the updated document
+      try {
+        await vectorService.processDocument(updatedWorkOrder.toObject(), 'workorders');
+      } catch (vectorError) {
+        console.error('Error updating vector embedding for work order:', vectorError);
+        // Continue despite vector error
+      }
+    }
+    
+    handleResponse(res, null, updatedWorkOrder);
+  } catch (err) {
+    handleResponse(res, err, null);
+  }
 };
 
 const deleteWorkOrder = (req, res) => {
@@ -52,7 +83,7 @@ const getWorkOrders = async (req, res) => {
 
 const importWorkorders = async (req, res) => {
   const workorderData = req.body;
-  console.log("payload at server:",workorderData);
+  console.log("payload at server:", workorderData);
   try {
     if (!workorderData.workorder || !workorderData.type || !workorderData.description || !workorderData.partnumber || !workorderData.salesorder) {
       return res.status(400).json({ error: "Missing required fields: workorder, type, description, partnumber, or salesorder." });
@@ -73,7 +104,15 @@ const importWorkorders = async (req, res) => {
       dateModified: now,
     });
 
-    await newWorkorder.save();
+    const savedWorkorder = await newWorkorder.save();
+    
+    // Process for vector database
+    try {
+      await vectorService.processDocument(savedWorkorder.toObject(), 'workorders');
+    } catch (vectorError) {
+      console.error('Error creating vector embedding for imported work order:', vectorError);
+      // Continue despite vector error
+    }
     return res.status(201).json({ message: "Workorder imported successfully." });
   } catch (error) {
     console.error("Error importing workorder:", error.message);

@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 const Navbar = () => {
   const { logout } = useAuth();
-  const navigate = useNavigate();  
+  const navigate = useNavigate();
   const getCurrentPage = () => {
     const path = window.location.pathname;
     return path.substring(1).split('.')[0] || 'dashboard';
@@ -32,6 +32,9 @@ const Navbar = () => {
       case "workorders":
         navigate('/workorders');
         break;
+      case "chat":
+        navigate('/chatbot');
+        break;
       default:
         console.error(`Unknown page: ${page}`);
     }
@@ -47,43 +50,49 @@ const Navbar = () => {
           <polyline points="9 22 9 12 15 12 15 22"></polyline>
         </svg>
       </div>
-      <button 
+      <button
         onClick={() => handleNavigation('blockers')}
         className={currentPage === 'blockers' ? 'active' : ''}
       >
         Blockers
       </button>
-      <button 
+      <button
         onClick={() => handleNavigation('salesorders')}
         className={currentPage === 'salesorders' ? 'active' : ''}
       >
-        Salesorders
+        Sales Orders
       </button>
-      <button 
+      <button
         onClick={() => handleNavigation('dashboard')}
         className={currentPage === 'dashboard' ? 'active' : ''}
       >
         Dashboard
       </button>
-      <button 
+      <button
         onClick={() => handleNavigation('parts')}
         className={currentPage === 'parts' ? 'active' : ''}
       >
         Parts
       </button>
-      <button 
+      <button
         onClick={() => handleNavigation('workorders')}
         className={currentPage === 'workorders' ? 'active' : ''}
       >
-        Workorders
+        Work Orders
       </button>
-      <button 
+      <button
         onClick={() => handleNavigation('graph')}
         className={currentPage === 'graph' ? 'active' : ''}
       >
         Visualization
       </button>
-      <button 
+      <button
+        onClick={() => handleNavigation('chat')}
+        className={currentPage === 'chat' ? 'active' : ''}
+      >
+        Chat Assistant
+      </button>
+      <button
         onClick={logout}
       >
         Logout

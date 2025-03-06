@@ -11,6 +11,7 @@ import BlockersApp from "./pages/blockers.jsx";
 import GraphView from "./pages/graphView.jsx";
 import PartsPage from "./pages/partsPage.jsx";
 import WorkOrders from "./pages/workOrders.jsx";
+import Chatbot from './pages/chatbot.jsx'; 
 
 
 function App() {
@@ -67,6 +68,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <WorkOrders />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chatbot"
+            element={
+              <ProtectedRoute>
+                <Chatbot />
               </ProtectedRoute>
             }
           />

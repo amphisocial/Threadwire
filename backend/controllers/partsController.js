@@ -1,5 +1,6 @@
 // controllers/partController.js
 const Part = require("../models/Part");
+const vectorService = require('../services/vectorService');
 
 // GET Parts with optional filters
 exports.getParts = async (req, res) => {
@@ -25,7 +26,15 @@ exports.getParts = async (req, res) => {
 exports.createPart = async (req, res) => {
   try {
     const part = new Part(req.body);
-    await part.save();
+    const savedPart = await part.save();
+    
+    // Process for vector database
+    try {
+      await vectorService.processDocument(savedPart.toObject(), 'parts');
+    } catch (vectorError) {
+      console.error('Error creating vector embedding for part:', vectorError);
+      // Continue despite vector error
+    }
     res.status(201).json(part);
   } catch (error) {
     res.status(400).json({ message: "Error creating part", error });
@@ -45,6 +54,15 @@ exports.updatePart = async (req, res) => {
     if (!updatedPart) {
       return res.status(404).json({ message: "Part not found" });
     }
+
+    // Update vector embedding
+    try {
+      await vectorService.processDocument(updatedPart.toObject(), 'parts');
+    } catch (vectorError) {
+      console.error('Error updating vector embedding for part:', vectorError);
+      // Continue despite vector error
+    }
+
     res.status(200).json(updatedPart);
   } catch (error) {
     res.status(400).json({ message: "Error updating part", error });
@@ -88,7 +106,16 @@ exports.importParts = async (req, res) => {
       datemodified: now,
     });
 
-    await newPart.save();
+    const savedPart = await newPart.save();
+    
+    // Process for vector database
+    try {
+      await vectorService.processDocument(savedPart.toObject(), 'parts');
+    } catch (vectorError) {
+      console.error('Error creating vector embedding for imported part:', vectorError);
+      // Continue despite vector error
+    }
+
     return res.status(201).json({ message: "Part imported successfully." });
   } catch (error) {
     console.error("Error importing part:", error.message);

@@ -34,6 +34,9 @@ const Tabs = ({ filters, onFilterChange }) => {
       case 'dashboard':
         navigate('/home');
         break;
+      case "chat":
+        navigate('/chatbot');
+        break;
       default:
         console.error(`Unknown tab: ${tab}`);
     }
@@ -48,43 +51,49 @@ const Tabs = ({ filters, onFilterChange }) => {
             <polyline points="9 22 9 12 15 12 15 22"></polyline>
           </svg>
         </div>
-        <button 
+        <button
           onClick={() => handleNavigation('blockers')}
           className={currentPage === 'blockers' ? 'active' : ''}
         >
           Blockers
         </button>
-        <button 
+        <button
           onClick={() => handleNavigation('salesorders')}
           className={currentPage === 'salesorders' ? 'active' : ''}
         >
           Sales Orders
         </button>
-        <button 
+        <button
           onClick={() => handleNavigation('dashboard')}
           className={currentPage === 'home' ? 'active' : ''}
         >
           Dashboard
         </button>
-        <button 
+        <button
           onClick={() => handleNavigation('parts')}
           className={currentPage === 'parts' ? 'active' : ''}
         >
           Parts
         </button>
-        <button 
+        <button
           onClick={() => handleNavigation('workorders')}
           className={currentPage === 'workorders' ? 'active' : ''}
         >
           Work Orders
         </button>
-        <button 
+        <button
           onClick={() => handleNavigation('visualization')}
           className={currentPage === 'visualization' ? 'active' : ''}
         >
           Visualization
         </button>
-        <button 
+        <button
+          onClick={() => handleNavigation('chat')}
+          className={currentPage === 'chat' ? 'active' : ''}
+        >
+          Chat Assistant
+        </button>
+        <button
           onClick={logout}
         >
           Logout

@@ -1,5 +1,6 @@
 
 const { WorkOrderExecution } = require('../models/Workorderexecution');
+const vectorService = require('../services/vectorService');
 
 // Generic response handler
 const handleResponse = (res, err, data) => {
@@ -50,6 +51,15 @@ const createWorkOrderExecution = async (req, res) => {
   try {
     const newWorkOrderExecution = new WorkOrderExecution(req.body);
     const savedWorkOrderExecution = await newWorkOrderExecution.save();
+
+    // Process for vector database
+    try {
+      await vectorService.processDocument(savedWorkOrderExecution.toObject(), 'workorderexecution');
+    } catch (vectorError) {
+      console.error('Error creating vector embedding for work order execution:', vectorError);
+      // Continue despite vector error
+    }
+
     res.status(201).json(savedWorkOrderExecution);
   } catch (error) {
     console.error('Error creating work order execution:', error);
@@ -70,6 +80,15 @@ const updateWorkOrderExecution = async (req, res) => {
     if (!updatedWorkOrderExecution) {
       return res.status(404).json({ error: 'Work order execution not found' });
     }
+
+    // Update vector embedding for the updated document
+    try {
+      await vectorService.processDocument(updatedWorkOrderExecution.toObject(), 'workorderexecution');
+    } catch (vectorError) {
+      console.error('Error updating vector embedding for work order execution:', vectorError);
+      // Continue despite vector error
+    }
+
 
     res.status(200).json(updatedWorkOrderExecution);
   } catch (error) {
@@ -99,7 +118,16 @@ const importWorkOrderExecutions = async (req, res) => {
       location: executionData.location,
     });
 
-    await newExecution.save();
+    const savedExecution = await newExecution.save();
+    
+    // Process for vector database
+    try {
+      await vectorService.processDocument(savedExecution.toObject(), 'workorderexecution');
+    } catch (vectorError) {
+      console.error('Error creating vector embedding for imported work order execution:', vectorError);
+      // Continue despite vector error
+    }
+
     return res.status(201).json({ message: "Work order execution imported successfully." });
   } catch (error) {
     console.error("Error importing Work Order Execution:", error.message);
