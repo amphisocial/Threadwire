@@ -1,4 +1,5 @@
 const SalesOrder = require('../models/SalesOrder');
+const vectorService = require('../services/vectorService');
 
 // Get sales orders
 const getSalesOrders = async (req, res) => {
@@ -30,7 +31,15 @@ const editSalesOrder = async (req, res) => {
     salesOrder.blockerTag = "Yes";
 
     // Save the updated sales order
-    salesOrder.save();
+    const updatedOrder = await salesOrder.save();
+    
+    // Update vector embedding
+    try {
+      await vectorService.processDocument(updatedOrder.toObject(), 'salesOrders');
+    } catch (vectorError) {
+      console.error('Error updating vector embedding for sales order:', vectorError);
+      // Continue despite vector error
+    }
 
     res.status(200).json({ message: 'Blocker tag updated successfully.', salesOrder });
   } catch (error) {
@@ -85,7 +94,15 @@ if (salesOrders.length === 0) {
                 shipping_date: new Date(order.shipping_date),
             });
 
-            await newOrder.save();
+            const savedOrder = await newOrder.save();
+            
+            // Process for vector database
+            try {
+                await vectorService.processDocument(savedOrder.toObject(), 'salesOrders');
+            } catch (vectorError) {
+                console.error('Error creating vector embedding for sales order:', vectorError);
+                // Continue despite vector error
+            }
             successCount.push(order.salesOrder);
         } catch (error) {
             errors.push({

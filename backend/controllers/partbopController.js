@@ -1,5 +1,6 @@
 
 const { PartBoP } = require('../models/Workorder');
+const vectorService = require('../services/vectorService');
 
 // Generic response handler
 const handleResponse = (res, err, data) => {
@@ -8,14 +9,44 @@ const handleResponse = (res, err, data) => {
 };
 
 // PartBoP Controller
-const createPartBoP = (req, res) => {
-  const newPartBoP = new PartBoP(req.body);
-  newPartBoP.save((err, data) => handleResponse(res, err, data));
+const createPartBoP = async (req, res) => {
+  try {
+    const newPartBoP = new PartBoP(req.body);
+    const savedPartBoP = await newPartBoP.save();
+    
+    // Process for vector database
+    try {
+      await vectorService.processDocument(savedPartBoP.toObject(), 'partbop');
+    } catch (vectorError) {
+      console.error('Error creating vector embedding for Part BoP:', vectorError);
+      // Continue despite vector error
+    }
+    
+    res.status(201).json(savedPartBoP);
+  } catch (err) {
+    handleResponse(res, err, null);
+  }
 };
 
-const updatePartBoP = (req, res) => {
-  const { id } = req.params;
-  PartBoP.findByIdAndUpdate(id, req.body, { new: true }, (err, data) => handleResponse(res, err, data));
+const updatePartBoP = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updatedPartBoP = await PartBoP.findByIdAndUpdate(id, req.body, { new: true });
+    
+    if (updatedPartBoP) {
+      // Update vector embedding for the updated document
+      try {
+        await vectorService.processDocument(updatedPartBoP.toObject(), 'partbop');
+      } catch (vectorError) {
+        console.error('Error updating vector embedding for Part BoP:', vectorError);
+        // Continue despite vector error
+      }
+    }
+    
+    handleResponse(res, null, updatedPartBoP);
+  } catch (err) {
+    handleResponse(res, err, null);
+  }
 };
 
 const deletePartBoP = (req, res) => {
@@ -65,7 +96,16 @@ const importPartBoPs = async (req, res) => {
       planner: partBoPData.planner,
     });
 
-    await newPartBoP.save();
+    const savedPartBoP = await newPartBoP.save();
+    
+    // Process for vector database
+    try {
+      await vectorService.processDocument(savedPartBoP.toObject(), 'partbop');
+    } catch (vectorError) {
+      console.error('Error creating vector embedding for imported Part BoP:', vectorError);
+      // Continue despite vector error
+    }
+    
     return res.status(201).json({ message: "Part BoP imported successfully." });
   } catch (error) {
     console.error("Error importing Part BoP:", error.message);
