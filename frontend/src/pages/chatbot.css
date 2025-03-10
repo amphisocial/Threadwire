@@ -32,12 +32,14 @@
   
   .filter-toggle {
     padding: 6px 12px;
-    background-color: #fff;
+    background-color: #0074CC;
+    color: #FFF;
     border: 1px solid #ddd;
     border-radius: 4px;
     cursor: pointer;
     font-size: 0.9rem;
     display: flex;
+    width: fit-content;
     align-items: center;
     gap: 5px;
   }
@@ -242,6 +244,7 @@
     padding: 0 20px;
     background-color: #0084ff;
     color: white;
+    width: fit-content;
     border: none;
     border-radius: 20px;
     cursor: pointer;

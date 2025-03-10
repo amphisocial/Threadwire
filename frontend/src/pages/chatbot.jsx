@@ -147,73 +147,15 @@ const Chatbot = () => {
     };
 
     return (
-        <div className="chatbot-container">
+        <div className="app-container">
             <Navbar />
             <div className="chatbot-header">
                 <div className="chatbot-title-row">
                     <h2>Manufacturing Data Assistant</h2>
-                    <button
-                        className={`filter-toggle ${showFilters ? 'active' : ''}`}
-                        onClick={() => setShowFilters(!showFilters)}
-                    >
-                        <i className="fa fa-filter"></i> Filters
-                    </button>
                 </div>
-
-                {showFilters && (
-                    <div className="filter-panel">
-                        <div className="document-type-filters">
-                            <h4>Data Sources</h4>
-                            <div className="doc-type-container">
-                                <div className="doc-type-all">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedDocTypes.length === documentTypes.length}
-                                            onChange={handleToggleAllDocTypes}
-                                        />
-                                        All Data Types
-                                    </label>
-                                </div>
-                                <div className="doc-types-grid">
-                                    {documentTypes.map(docType => (
-                                        <label key={docType.id} className="doc-type-item">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedDocTypes.includes(docType.id)}
-                                                onChange={() => handleDocTypeChange(docType.id)}
-                                            />
-                                            {docType.label}
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {Object.entries(availableFilters).length > 0 && (
-                            <div className="status-filters">
-                                <h4>Filters</h4>
-                                {Object.entries(availableFilters).map(([filterName, options]) => (
-                                    <div className="filter-item" key={filterName}>
-                                        <label htmlFor={`filter-${filterName}`}>{filterName}:</label>
-                                        <select
-                                            id={`filter-${filterName}`}
-                                            value={filters[filterName] || ''}
-                                            onChange={(e) => handleFilterChange(filterName, e.target.value)}
-                                        >
-                                            <option value="">Any</option>
-                                            {options.map(option => (
-                                                <option key={option} value={option}>{option}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
             </div>
 
+              
             <div className="chatbot-messages">
                 {messages.length === 0 ? (
                     <div className="welcome-message">

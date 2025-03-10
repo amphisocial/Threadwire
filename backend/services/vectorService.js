@@ -7,7 +7,8 @@ class VectorService {
     this.pinecone = null;
     this.index = null;
     this.embeddings = new OpenAIEmbeddings({
-      openAIApiKey: "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"
+      openAIApiKey: "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",
+      modelName: "text-embedding-3-small"
     });
     this.isInitialized = false;
     
@@ -61,8 +62,7 @@ class VectorService {
       const id = `${collectionName}_${document._id.toString()}`;
       
       // Store in Pinecone
-      await this.index.upsert({
-        vectors: [{
+      await this.index.upsert([{
           id,
           values: embedding,
           metadata: {
@@ -71,9 +71,9 @@ class VectorService {
             source: collectionName,
             docId: document._id.toString(),
             timestamp: new Date().toISOString()
-          }
-        }]
-      });
+          
+        }
+      }]);
       
       return true;
     } catch (error) {
