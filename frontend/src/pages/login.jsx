@@ -58,7 +58,7 @@ const LoginForm = () => {
                         localStorage.setItem('username', data.username);
                     }
                         setTimeout(() => {
-                            navigate('/home');
+                            navigate('/chatbot');
                           }, 1000);
                 }
             }
@@ -87,7 +87,7 @@ const LoginForm = () => {
                 if (data.token) {
                     login(data.token, true);
                     setTimeout(() => {
-                            navigate('/home');
+                            navigate('/chatbot');
                           }, 1000);
                 }
             }
