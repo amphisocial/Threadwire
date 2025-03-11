@@ -151,7 +151,7 @@ const Chatbot = () => {
             <Navbar />
             <div className="chatbot-header">
                 <div className="chatbot-title-row">
-                    <h2>Manufacturing Data Assistant</h2>
+                    <h2>Enterprise Data Assistant</h2>
                 </div>
             </div>
 
