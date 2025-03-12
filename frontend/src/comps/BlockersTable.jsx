@@ -38,7 +38,7 @@ const BlockersTable = ({
       origins.push('Parts');
     }
     
-    return origins.length > 0 ? origins.join(', ') : 'None';
+    return origins.length > 0 ? origins.join(', ') : 'Sales Orders';
   };
 
   const filteredBlockers = blockers.filter(blocker => {

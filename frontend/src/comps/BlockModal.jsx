@@ -8,11 +8,7 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
     type: 'Issue',
     status: 'Open',
     description: '',
-    owner: '',
-    category: 'Schedule',
-    impact: 'High',
-    probability: 'Low'
-  });
+    });
   const [actionItems, setActionItems] = useState([]);
   const [isActionItemsExpanded, setIsActionItemsExpanded] = useState(false);
  
@@ -45,11 +41,7 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
             type: firstBlocker.type || 'Issue',
             status: firstBlocker.status || 'Open',
             description: firstBlocker.description || '',
-            owner: firstBlocker.owner || '',
-            category: firstBlocker.category || 'Schedule',
-            impact: firstBlocker.impact || 'High',
-            probability: firstBlocker.probability || 'Low'
-          });
+            });
           fetchActions(firstBlocker._id);
         }
       } catch (error) {
@@ -99,10 +91,7 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
         type: blocker.type || 'Issue',
         status: blocker.status || 'Open',
         description: blocker.description || '',
-        owner: blocker.owner || '',
-        category: blocker.category || 'Schedule',
-        impact: blocker.impact || 'High',
-        probability: blocker.probability || 'Low'
+        
       });
     }
   };
@@ -282,68 +271,7 @@ const BlockModal = ({ show, onClose, salesOrder, partNumber, lineNumber }) => {
             </div>
           </div>
 
-          <div className="blocker-form-row">
-            <div className="blocker-form-group">
-              <label>Category:</label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                className="blocker-form-select"
-              >
-                <option>Schedule</option>
-                <option>Cost</option>
-                <option>Effort</option>
-                <option>Material</option>
-                <option>Defect</option>
-                <option>Design</option>
-                <option>Equipment</option>
-                <option>Others</option>
-              </select>
-            </div>
-
-            <div className="blocker-form-group">
-              <label>Owner:</label>
-              <input
-                type="text"
-                name="owner"
-                value={formData.owner}
-                onChange={handleInputChange}
-                className="blocker-form-input"
-              />
-            </div>
-          </div>
-
-          <div className="blocker-form-row">
-            <div className="blocker-form-group">
-              <label>Impact:</label>
-              <select
-                name="impact"
-                value={formData.impact}
-                onChange={handleInputChange}
-                className="blocker-form-select"
-              >
-                <option>High</option>
-                <option>Medium</option>
-                <option>Low</option>
-              </select>
-            </div>
-
-            <div className="blocker-form-group">
-              <label>Probability:</label>
-              <select
-                name="probability"
-                value={formData.probability}
-                onChange={handleInputChange}
-                className="blocker-form-select"
-              >
-                <option>High</option>
-                <option>Medium</option>
-                <option>Low</option>
-              </select>
-            </div>
-          </div>
-
+          
           <div className="blocker-form-group">
             <label>Description:</label>
             <textarea
