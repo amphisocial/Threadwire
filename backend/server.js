@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 const userRoutes = require('./routes/users');
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
+const vectorService = require('./services/vectorService');
+const changeStreamService = require('./services/changeStreamService');
 
 const app = express();
 const port = 5000;
@@ -11,12 +13,6 @@ const port = 5000;
 app.use(cors());
 // Middleware to parse JSON bodies
 app.use(express.json());
-
-// Connect to MongoDB
-// mongoose
-//   .connect('mongodb://127.0.0.1:27017/threadwire', { useNewUrlParser: true, useUnifiedTopology: true })
-//   .then(() => console.log('Connected to MongoDB'))
-//   .catch((error) => console.error('Error connecting to MongoDB:', error));
 
 // Import and use routes
 const partsRoutes = require('./routes/parts');
@@ -40,17 +36,11 @@ app.use('/workorders', workorderRoutes);
 app.use('/partbop', partbopRoutes);
 app.use('/workorderexecution', workorderexecutionRoutes);
 app.use('/partgraph', graphRoutes);
-
-// Start the server
-// app.listen(port, () => {
-//   console.log(`Server running on http://127.0.0.1:${port}`);
-// });
-
 app.use('/user', userRoutes);
 app.use('/auth', authRoutes);
 app.use('/chatbot', chatbotRoutes);
 
-mongoose.connect('mongodb://127.0.0.1:27017/threadwire', { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect('mongodb://127.0.0.1:27017/threadwire?replicaSet=rs0', { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
     console.log('MongoDB Connected');
     app.listen(5000, () => console.log('Server running on port 5000'));
@@ -66,6 +56,8 @@ db.once('open', async function () {
   try {
     await vectorService.initialize();
     console.log('Vector service initialized successfully');
+    await changeStreamService.initialize(db);
+    console.log('Change stream service initialized successfully');
   } catch (error) {
     console.error('Failed to initialize vector service:', error);
   }
