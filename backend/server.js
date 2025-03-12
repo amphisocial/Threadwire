@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 const userRoutes = require('./routes/users');
 const authRoutes = require('./routes/auth');
 const cors = require('cors');
-const vectorService = require('./services/vectorService');
 const changeStreamService = require('./services/changeStreamService');
 
 const app = express();
@@ -56,7 +55,7 @@ db.once('open', async function () {
   try {
     await vectorService.initialize();
     console.log('Vector service initialized successfully');
-    await changeStreamService.initialize(db);
+    await changeStreamService.initialize(mongoose.connection.db);
     console.log('Change stream service initialized successfully');
   } catch (error) {
     console.error('Failed to initialize vector service:', error);
