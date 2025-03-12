@@ -1,6 +1,8 @@
 // services/vectorService.js
 const { OpenAIEmbeddings } = require('@langchain/openai');
 const { Pinecone } = require('@pinecone-database/pinecone');
+const mongoose = require('mongoose');
+
 
 class VectorService {
   constructor() {
@@ -18,7 +20,8 @@ class VectorService {
       parts: this.processPart,
       workorders: this.processWorkOrder,
       partbop: this.processPartBoP,
-      workorderexecution: this.processWorkOrderExecution
+      workorderexecution: this.processWorkOrderExecution,
+      blockers: this.processBlocker
     };
   }
 
@@ -52,8 +55,14 @@ class VectorService {
       // Use the appropriate processing strategy based on collection type
       const processStrategy = this.processingStrategies[collectionName] || this.defaultProcessing;
       
-      // Process the document using the selected strategy
-      const { text, metadata } = processStrategy.call(this, document, collectionName);
+      let result;
+      if (processStrategy.constructor.name === 'AsyncFunction') {
+        result = await processStrategy.call(this, document, collectionName);
+      } else {
+        result = processStrategy.call(this, document, collectionName);
+      }
+      
+      const { text, metadata } = result;
       
       // Generate embedding
       const embedding = await this.embeddings.embedQuery(text);
@@ -106,6 +115,118 @@ class VectorService {
         type: collectionName
       }
     };
+  }
+
+  async processBlocker(document, collectionName) {
+    try {
+      const fields = [];
+      
+      // Add basic blocker fields
+      if (document.title) fields.push(`title: ${document.title}`);
+      if (document.description) fields.push(`description: ${document.description}`);
+      if (document.priority) fields.push(`priority: ${document.priority}`);
+      if (document.type) fields.push(`type: ${document.type}`);
+      if (document.status) fields.push(`status: ${document.status}`);
+      
+      // Handle related parts
+      if (document.relatedParts && document.relatedParts.length > 0) {
+        // Convert string IDs to ObjectId if needed
+        const partIds = document.relatedParts.map(id => 
+          typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id
+        );
+        
+        try {
+          // Fetch related parts information
+          const relatedParts = await mongoose.connection.db.collection('parts').find({ 
+            _id: { $in: partIds } 
+          }).toArray();
+          
+          // Add related parts details
+          if (relatedParts.length > 0) {
+            fields.push(`Related Parts:`);
+            relatedParts.forEach(part => {
+              fields.push(`  - Part Number: ${part.partnumber}, Revision: ${part.revision}, Description: ${part.description}`);
+            });
+          } else {
+            fields.push(`relatedParts: ${JSON.stringify(document.relatedParts)}`);
+          }
+        } catch (err) {
+          console.error('Error fetching related parts:', err);
+          fields.push(`relatedParts: ${JSON.stringify(document.relatedParts)}`);
+        }
+      }
+      
+      // Handle related work orders
+      if (document.relatedWorkOrders && document.relatedWorkOrders.length > 0) {
+        try {
+          const workOrderIds = document.relatedWorkOrders.map(id => 
+            typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id
+          );
+          
+          const relatedWorkOrders = await mongoose.connection.db.collection('workorders').find({ 
+            _id: { $in: workOrderIds } 
+          }).toArray();
+          
+          if (relatedWorkOrders.length > 0) {
+            fields.push(`Related Work Orders:`);
+            relatedWorkOrders.forEach(wo => {
+              fields.push(`  - Work Order: ${wo.workorder}, Type: ${wo.type}, Description: ${wo.description}`);
+            });
+          } else {
+            fields.push(`relatedWorkOrders: ${JSON.stringify(document.relatedWorkOrders)}`);
+          }
+        } catch (err) {
+          console.error('Error fetching related work orders:', err);
+          fields.push(`relatedWorkOrders: ${JSON.stringify(document.relatedWorkOrders)}`);
+        }
+      }
+      
+      // Handle related sales orders
+      if (document.relatedSalesOrders && document.relatedSalesOrders.length > 0) {
+        try {
+          const salesOrderIds = document.relatedSalesOrders.map(id => 
+            typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id
+          );
+          
+          const relatedSalesOrders = await mongoose.connection.db.collection('salesorders').find({ 
+            _id: { $in: salesOrderIds } 
+          }).toArray();
+          
+          if (relatedSalesOrders.length > 0) {
+            fields.push(`Related Sales Orders:`);
+            relatedSalesOrders.forEach(so => {
+              fields.push(`  - Order Number: ${so.ordernumber}, Customer: ${so.customer_name}, Part Number: ${so.partnumber}`);
+            });
+          } else {
+            fields.push(`relatedSalesOrders: ${JSON.stringify(document.relatedSalesOrders)}`);
+          }
+        } catch (err) {
+          console.error('Error fetching related sales orders:', err);
+          fields.push(`relatedSalesOrders: ${JSON.stringify(document.relatedSalesOrders)}`);
+        }
+      }
+      
+      // Add timestamps
+      if (document.createdAt) fields.push(`createdAt: ${new Date(document.createdAt).toISOString().split('T')[0]}`);
+      if (document.updatedAt) fields.push(`updatedAt: ${new Date(document.updatedAt).toISOString().split('T')[0]}`);
+      
+      return {
+        text: fields.join(' ').trim(),
+        metadata: {
+          type: 'blockers',
+          title: document.title,
+          status: document.status,
+          priority: document.priority,
+          relatedPartIds: document.relatedParts,
+          relatedWorkOrderIds: document.relatedWorkOrders,
+          relatedSalesOrderIds: document.relatedSalesOrders
+        }
+      };
+    } catch (error) {
+      console.error(`Error processing blocker document: ${error}`);
+      // Fallback to basic processing if fetching related details fails
+      return this.defaultProcessing(document, collectionName);
+    }
   }
   
   // Sales Order specific processing
