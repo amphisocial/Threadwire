@@ -381,35 +381,73 @@ class VectorService {
       const queryEmbedding = await this.embeddings.embedQuery(query);
       
       // Prepare filter
-      const pineconeFilter = {};
+      let pineconeFilter = {};
       
-      // Handle document type filter
-      if (filters.type && Array.isArray(filters.type.$in) && filters.type.$in.length > 0) {
-        pineconeFilter.type = { $in: filters.type.$in };
-      } else if (filters.type) {
-        pineconeFilter.type = filters.type;
-      }
-      
-      // Handle other filters
-      for (const [key, value] of Object.entries(filters)) {
-        if (key !== 'type') {
-          pineconeFilter[key] = value;
+      // Process $or conditions specially
+      if (filters.$or) {
+        // Direct $or support isn't available in Pinecone, so we'll need
+        // to perform multiple queries and merge results
+        const orResults = [];
+        
+        for (const condition of filters.$or) {
+          const subFilter = { ...filters };
+          delete subFilter.$or;
+          
+          // Merge this condition with the base filters
+          const mergedFilter = { ...subFilter, ...condition };
+          
+          // Execute a query with this filter
+          const subQueryResponse = await this.index.query({
+            vector: queryEmbedding,
+            topK: limit,
+            includeMetadata: true,
+            filter: mergedFilter
+          });
+          
+          orResults.push(...subQueryResponse.matches);
         }
+        
+        // Remove duplicates and sort by score
+        const uniqueResults = [];
+        const seenIds = new Set();
+        
+        for (const match of orResults) {
+          if (!seenIds.has(match.id)) {
+            seenIds.add(match.id);
+            uniqueResults.push(match);
+          }
+        }
+        
+        uniqueResults.sort((a, b) => b.score - a.score);
+        
+        // Format results
+        return uniqueResults.slice(0, limit).map(match => ({
+          pageContent: match.metadata.pageContent,
+          metadata: match.metadata
+        }));
+      } else {
+        // Handle normal filtering
+        pineconeFilter = { ...filters };
+        
+        // Handle document type filter
+        if (filters.type && Array.isArray(filters.type.$in) && filters.type.$in.length > 0) {
+          pineconeFilter.type = { $in: filters.type.$in };
+        }
+        
+        // Query Pinecone
+        const queryResponse = await this.index.query({
+          vector: queryEmbedding,
+          topK: limit,
+          includeMetadata: true,
+          filter: Object.keys(pineconeFilter).length > 0 ? pineconeFilter : undefined
+        });
+        
+        // Format results
+        return queryResponse.matches.map(match => ({
+          pageContent: match.metadata.pageContent,
+          metadata: match.metadata
+        }));
       }
-      
-      // Query Pinecone
-      const queryResponse = await this.index.query({
-        vector: queryEmbedding,
-        topK: limit,
-        includeMetadata: true,
-        filter: Object.keys(pineconeFilter).length > 0 ? pineconeFilter : undefined
-      });
-      
-      // Format results
-      return queryResponse.matches.map(match => ({
-        pageContent: match.metadata.pageContent,
-        metadata: match.metadata
-      }));
     } catch (error) {
       console.error('Error in similarity search:', error);
       throw error;
