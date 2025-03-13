@@ -128,33 +128,38 @@ class VectorService {
       if (document.type) fields.push(`type: ${document.type}`);
       if (document.status) fields.push(`status: ${document.status}`);
       
+      let partNumbers = [];
+    let workOrderNumbers = [];
+    let salesOrderNumbers = [];
       // Handle related parts
       if (document.relatedParts && document.relatedParts.length > 0) {
         // Convert string IDs to ObjectId if needed
+        try {
         const partIds = document.relatedParts.map(id => 
           typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id
         );
         
-        try {
-          // Fetch related parts information
-          const relatedParts = await mongoose.connection.db.collection('parts').find({ 
-            _id: { $in: partIds } 
-          }).toArray();
+        const relatedParts = await mongoose.connection.db.collection('parts').find({ 
+          _id: { $in: partIds } 
+        }).toArray();
+        
+        if (relatedParts.length > 0) {
+          fields.push(`Related Parts:`);
+          relatedParts.forEach(part => {
+            fields.push(`  - Part Number: ${part.partnumber}, Revision: ${part.revision}, Description: ${part.description}`);
+            partNumbers.push(part.partnumber);
+          });
           
-          // Add related parts details
-          if (relatedParts.length > 0) {
-            fields.push(`Related Parts:`);
-            relatedParts.forEach(part => {
-              fields.push(`  - Part Number: ${part.partnumber}, Revision: ${part.revision}, Description: ${part.description}`);
-            });
-          } else {
-            fields.push(`relatedParts: ${JSON.stringify(document.relatedParts)}`);
-          }
-        } catch (err) {
-          console.error('Error fetching related parts:', err);
+          // Add searchable part numbers section
+          fields.push(`Related Part Numbers: ${partNumbers.join(', ')}`);
+        } else {
           fields.push(`relatedParts: ${JSON.stringify(document.relatedParts)}`);
         }
+      } catch (err) {
+        console.error('Error fetching related parts:', err);
+        fields.push(`relatedParts: ${JSON.stringify(document.relatedParts)}`);
       }
+    }
       
       // Handle related work orders
       if (document.relatedWorkOrders && document.relatedWorkOrders.length > 0) {
@@ -171,7 +176,9 @@ class VectorService {
             fields.push(`Related Work Orders:`);
             relatedWorkOrders.forEach(wo => {
               fields.push(`  - Work Order: ${wo.workorder}, Type: ${wo.type}, Description: ${wo.description}`);
+              workOrderNumbers.push(wo.workorder);
             });
+            fields.push(`Related Work Order Numbers: ${workOrderNumbers.join(', ')}`);
           } else {
             fields.push(`relatedWorkOrders: ${JSON.stringify(document.relatedWorkOrders)}`);
           }
@@ -196,7 +203,10 @@ class VectorService {
             fields.push(`Related Sales Orders:`);
             relatedSalesOrders.forEach(so => {
               fields.push(`  - Order Number: ${so.ordernumber}, Customer: ${so.customer_name}, Part Number: ${so.partnumber}`);
-            });
+              salesOrderNumbers.push(so.ordernumber);
+             });
+            
+            fields.push(`Related Sales Order Numbers: ${salesOrderNumbers.join(', ')}`);
           } else {
             fields.push(`relatedSalesOrders: ${JSON.stringify(document.relatedSalesOrders)}`);
           }
@@ -218,8 +228,11 @@ class VectorService {
           status: document.status,
           priority: document.priority,
           relatedPartIds: document.relatedParts,
-          relatedWorkOrderIds: document.relatedWorkOrders,
-          relatedSalesOrderIds: document.relatedSalesOrders
+        relatedPartNumbers: partNumbers,
+        relatedWorkOrderIds: document.relatedWorkOrders,
+        relatedWorkOrderNumbers: workOrderNumbers,
+        relatedSalesOrderIds: document.relatedSalesOrders,
+        relatedSalesOrderNumbers: salesOrderNumbers
         }
       };
     } catch (error) {
