@@ -13,6 +13,9 @@ const Chatbot = () => {
     const [availableFilters, setAvailableFilters] = useState({});
     const messagesEndRef = useRef(null);
     const [showFilters, setShowFilters] = useState(false);
+    const [typingText, setTypingText] = useState('');
+    const [fullResponse, setFullResponse] = useState('');
+    const [isTyping, setIsTyping] = useState(false);
 
     // Get authentication headers
     const getAuthHeaders = () => {
@@ -51,7 +54,47 @@ const Chatbot = () => {
     // Auto-scroll to bottom of messages
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+    }, [messages, typingText]);
+    
+    // Handle the word-by-word typing effect
+    useEffect(() => {
+        if (!isTyping || !fullResponse) return;
+        
+        const words = fullResponse.split(' ');
+        let currentWordIndex = typingText.split(' ').length;
+        
+        // If we've typed all words, stop typing
+        if (currentWordIndex >= words.length) {
+            setIsTyping(false);
+            return;
+        }
+        
+        // Add the next word with appropriate spacing
+        const nextWord = words[currentWordIndex];
+        const shouldAddSpace = typingText.length > 0;
+        
+        const timer = setTimeout(() => {
+            setTypingText(prev => 
+                shouldAddSpace ? `${prev} ${nextWord}` : nextWord
+            );
+            
+            // Update the last message with the current typing text
+            setMessages(prev => {
+                const updatedMessages = [...prev];
+                const lastMessage = updatedMessages[updatedMessages.length - 1];
+                
+                if (lastMessage && lastMessage.type === 'bot') {
+                    lastMessage.text = shouldAddSpace 
+                        ? `${typingText} ${nextWord}` 
+                        : nextWord;
+                }
+                
+                return updatedMessages;
+            });
+        }, 100); // Adjust timing as needed for desired speed
+        
+        return () => clearTimeout(timer);
+    }, [isTyping, fullResponse, typingText]);
 
     // Handle sending messages
     const handleSendMessage = async () => {
@@ -86,11 +129,17 @@ const Chatbot = () => {
 
             const data = await response.json();
 
-            // Add bot response to chat
+            // Start the typing effect
+            setFullResponse(data.answer);
+            setTypingText('');
+            setIsTyping(true);
+            
+            // Add an empty bot message that will be filled word by word
             const botMessage = {
-                text: data.answer,
+                text: '',
                 type: 'bot',
-                timestamp: new Date()
+                timestamp: new Date(),
+                id: Date.now() // Add a unique ID to track this message
             };
 
             setMessages(prev => [...prev, botMessage]);
@@ -160,23 +209,19 @@ const Chatbot = () => {
                 {messages.length === 0 ? (
                     <div className="welcome-message">
                         <h3>Hi. I am your Threadwire Assistant</h3>
-                        <p>Ask me anything about your manufacturing data. For example:</p>
-                        <ul>
-                            <li>What's the status of sales order SO12345?</li>
-                            <li>Find all work orders for part P9876</li>
-                            <li>What components are used in part ABC123?</li>
-                            <li>Show me execution details for work order WO456</li>
-                            <li>What's the current inventory of part XYZ?</li>
-                        </ul>
+                        <p>Ask me anything about your enterprise data</p>
                     </div>
                 ) : (
                     messages.map((message, index) => (
                         <div
-                            key={index}
+                            key={message.id || index}
                             className={`message ${message.type}`}
                         >
                             <div className="message-content">
                                 {message.text}
+                                {message.type === 'bot' && isTyping && index === messages.length - 1 && (
+                                    <span className="typing-cursor"></span>
+                                )}
                             </div>
                             <div className="message-timestamp">
                                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -211,8 +256,12 @@ const Chatbot = () => {
                 <button
                     onClick={handleSendMessage}
                     disabled={isLoading || !input.trim()}
+                    className="send-button"
+                    aria-label="Send message"
                 >
-                    Send
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+                    </svg>
                 </button>
             </div>
         </div>
