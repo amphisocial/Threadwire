@@ -23,7 +23,7 @@ const LandingPage = () => {
   };
 
   useEffect(() => {
-    document.title = 'Home';
+    document.title = 'Dashboard';
   }, []);
 
   const handlePrevWeek = () => {

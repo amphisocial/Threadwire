@@ -27,7 +27,10 @@ const Chatbot = () => {
             ...(isGoogleAuth && { 'Auth-Type': 'google' }),
         };
     };
-
+    
+    useEffect(() => {
+      document.title = 'Home';
+    }, []);
     // Fetch available filters and document types on component mount
     useEffect(() => {
         const fetchMetadata = async () => {
