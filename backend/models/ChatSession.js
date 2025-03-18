@@ -3,13 +3,16 @@ const mongoose = require('mongoose');
 
 const ChatSessionSchema = new mongoose.Schema({
   userId: {
-    type: String, 
+    type: mongoose.Schema.Types.ObjectId,
     required: true,
     index: true
   },
   messages: [
     {
-      text: String,
+      text: {
+        type: String,
+        required: true
+      },
       type: {
         type: String,
         enum: ['user', 'bot', 'error'],
@@ -29,7 +32,7 @@ const ChatSessionSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  // Optional: Add session expiry - sessions will expire after 30 days by default
+  
   expiresAt: {
     type: Date,
     default: () => new Date(+new Date() + 30*24*60*60*1000) // 30 days from now
@@ -38,8 +41,5 @@ const ChatSessionSchema = new mongoose.Schema({
 
 // Add TTL index if you want sessions to expire automatically
 ChatSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-
-// Add index on updatedAt for efficiently retrieving the most recent sessions
-ChatSessionSchema.index({ userId: 1, updatedAt: -1 });
 
 module.exports = mongoose.model('ChatSession', ChatSessionSchema);

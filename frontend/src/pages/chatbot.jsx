@@ -51,9 +51,15 @@ const Chatbot = () => {
                             ...msg,
                             timestamp: new Date(msg.timestamp)
                         }));
+                        
+                        console.log('Loaded chat history:', messagesWithDates);
                         setMessages(messagesWithDates);
                         setSessionId(data.sessionId);
+                    } else {
+                        console.log('No chat history found or empty history');
                     }
+                } else {
+                    console.error('Failed to fetch chat history, status:', response.status);
                 }
             } catch (error) {
                 console.error('Error fetching chat history:', error);
@@ -336,14 +342,23 @@ const Chatbot = () => {
                             key={message.id || index}
                             className={`message ${message.type}`}
                         >
-                            <div className="message-content">
-                                {message.text}
-                                {message.type === 'bot' && isTyping && index === messages.length - 1 && (
-                                    <span className="typing-cursor"></span>
+                            <div className="message-avatar">
+                                {message.type === 'user' ? (
+                                    <span className="user-avatar">You</span>
+                                ) : (
+                                    <span className="bot-avatar">AI</span>
                                 )}
                             </div>
-                            <div className="message-timestamp">
-                                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            <div className="message-bubble">
+                                <div className="message-content">
+                                    {message.text}
+                                    {message.type === 'bot' && isTyping && index === messages.length - 1 && (
+                                        <span className="typing-cursor"></span>
+                                    )}
+                                </div>
+                                <div className="message-timestamp">
+                                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
                             </div>
                         </div>
                     ))
