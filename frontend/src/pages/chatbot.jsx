@@ -45,6 +45,8 @@ const Chatbot = () => {
 
                 if (response.ok) {
                     const data = await response.json();
+                    console.log("Raw chat history data:", data);
+                    
                     if (data.messages && data.messages.length > 0) {
                         // Convert ISO strings back to Date objects
                         const messagesWithDates = data.messages.map(msg => ({
@@ -52,7 +54,7 @@ const Chatbot = () => {
                             timestamp: new Date(msg.timestamp)
                         }));
                         
-                        console.log('Loaded chat history:', messagesWithDates);
+                        console.log('Processed chat history:', messagesWithDates);
                         setMessages(messagesWithDates);
                         setSessionId(data.sessionId);
                     } else {
@@ -142,6 +144,7 @@ const Chatbot = () => {
     // Helper function to save message to server
     const saveMessageToHistory = async (message) => {
         try {
+            console.log('Saving message to history:', message);
             const response = await fetch('/api/chatsession/message', {
                 method: 'POST',
                 headers: getAuthHeaders(),
@@ -153,12 +156,20 @@ const Chatbot = () => {
 
             if (response.ok) {
                 const data = await response.json();
+                console.log('Message saved successfully:', data);
                 if (data.sessionId && !sessionId) {
                     setSessionId(data.sessionId);
                 }
+                return true;
+            } else {
+                console.error('Failed to save message, server responded with:', response.status);
+                const errorText = await response.text();
+                console.error('Error details:', errorText);
+                return false;
             }
         } catch (error) {
             console.error('Failed to save message to history:', error);
+            return false;
         }
     };
 
@@ -173,11 +184,16 @@ const Chatbot = () => {
             timestamp: new Date()
         };
 
+        // Important: Update the chat UI first
         setMessages(prev => [...prev, userMessage]);
         
         // Save user message to history
-        await saveMessageToHistory(userMessage);
+        const savedUserMessage = await saveMessageToHistory(userMessage);
+        if (!savedUserMessage) {
+            console.error('Failed to save user message to history');
+        }
         
+        const currentInput = input;
         setInput('');
         setIsLoading(true);
 
@@ -187,7 +203,7 @@ const Chatbot = () => {
                 method: 'POST',
                 headers: getAuthHeaders(),
                 body: JSON.stringify({
-                    query: input,
+                    query: currentInput,
                     filters: filters,
                     documentTypes: selectedDocTypes.length > 0 ? selectedDocTypes : undefined
                 }),
@@ -299,6 +315,11 @@ const Chatbot = () => {
         }
     };
 
+    // Debug function to log messages array content
+    const logMessages = () => {
+        console.log('Current messages in state:', messages);
+    };
+
     return (
         <div className="app-container">
             <Navbar />
@@ -317,6 +338,13 @@ const Chatbot = () => {
                             Clear Chat
                         </button>
                     )}
+                    {/* Debug button - remove in production */}
+                    <button 
+                        onClick={logMessages} 
+                        style={{marginLeft: '10px', fontSize: '12px', padding: '3px 8px'}}
+                    >
+                        Debug
+                    </button>
                 </div>
             </div>
 
@@ -345,6 +373,8 @@ const Chatbot = () => {
                             <div className="message-avatar">
                                 {message.type === 'user' ? (
                                     <span className="user-avatar">You</span>
+                                ) : message.type === 'error' ? (
+                                    <span className="error-avatar">!</span>
                                 ) : (
                                     <span className="bot-avatar">AI</span>
                                 )}
@@ -366,11 +396,13 @@ const Chatbot = () => {
 
                 {isLoading && (
                     <div className="message bot loading">
-                        <div className="message-content">
-                            <div className="typing-indicator">
-                                <span></span>
-                                <span></span>
-                                <span></span>
+                        <div className="message-bubble">
+                            <div className="message-content">
+                                <div className="typing-indicator">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
                             </div>
                         </div>
                     </div>
