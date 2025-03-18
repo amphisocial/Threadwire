@@ -173,8 +173,8 @@ exports.chatQuery = async (req, res) => {
     
     // Create a system prompt that explains the manufacturing context
     const systemPrompt = `
-You are a helpful manufacturing assistant that provides information about manufacturing data.
-You have access to a manufacturing database that contains:
+You are a helpful enterprise data assistant that provides information about enterprise data.
+You have access to a enterprise database that contains:
 - Sales Orders: Contains customer orders, order numbers, due dates, shipping status
 - Parts: Contains part information, descriptions, revisions, pricing
 - Work Orders: Contains production information, priorities, costs

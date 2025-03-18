@@ -53,11 +53,11 @@
   color: #495057;
 }
 
+/* Updated message styling with avatars */
 .message {
+  display: flex;
+  margin-bottom: 12px;
   max-width: 80%;
-  padding: 10px 15px;
-  border-radius: 18px;
-  position: relative;
   animation: messageAppear 0.3s ease;
 }
 
@@ -75,23 +75,77 @@
 
 .message.user {
   align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.message.bot, .message.error {
+  align-self: flex-start;
+}
+
+.message-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+.user-avatar {
+  background-color: #0084ff;
+  color: white;
+  font-size: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bot-avatar {
+  background-color: #6e48aa;
+  color: white;
+  font-size: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message-bubble {
+  padding: 10px 15px;
+  border-radius: 18px;
+  position: relative;
+  max-width: calc(100% - 50px);
+}
+
+.message.user .message-bubble {
   background-color: #0084ff;
   color: white;
   border-bottom-right-radius: 5px;
 }
 
-.message.bot {
-  align-self: flex-start;
+.message.bot .message-bubble {
   background-color: #f1f0f0;
   color: #333;
   border-bottom-left-radius: 5px;
 }
 
-.message.error {
-  align-self: flex-start;
+.message.error .message-bubble {
   background-color: #ffebee;
   color: #c62828;
   border-bottom-left-radius: 5px;
+}
+
+.message-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 .message-timestamp {
@@ -250,7 +304,6 @@
 }
 
 @keyframes blink {
-
   0%,
   100% {
     opacity: 1;
@@ -259,6 +312,25 @@
   50% {
     opacity: 0;
   }
+}
+
+/* Scrollbar styling */
+.chatbot-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chatbot-messages::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.chatbot-messages::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 10px;
+}
+
+.chatbot-messages::-webkit-scrollbar-thumb:hover {
+  background: #aaa;
 }
 
 /* Responsive adjustments */
@@ -277,5 +349,21 @@
 
   .doc-types-grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+  
+  .message-bubble {
+    max-width: calc(100% - 40px);
+  }
+  
+  .message-avatar {
+    width: 28px;
+    height: 28px;
+    margin: 0 6px;
+  }
+  
+  .user-avatar, .bot-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 10px;
   }
 }

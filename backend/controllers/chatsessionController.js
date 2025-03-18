@@ -5,7 +5,7 @@ const ChatSession = require('../models/ChatSession');
 // Get chat history for a user
 exports.getChatHistory = async (req, res) => {
   try {
-    const userId = req.user.id; 
+    const userId = req.user.id; // Assuming user ID is attached by auth middleware
     
     // Find the most recent chat session for this user
     const chatSession = await ChatSession.findOne({ userId })
@@ -36,6 +36,13 @@ exports.saveMessage = async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
     
+    // Ensure all required fields are present
+    if (!message.text || !message.type || !message.timestamp) {
+      return res.status(400).json({ 
+        error: 'Message must include text, type, and timestamp fields' 
+      });
+    }
+    
     let chatSession;
     
     // If session ID provided, update that session
@@ -54,6 +61,11 @@ exports.saveMessage = async (req, res) => {
         userId,
         messages: []
       });
+    }
+    
+    // Format timestamp as Date if it's a string
+    if (typeof message.timestamp === 'string') {
+      message.timestamp = new Date(message.timestamp);
     }
     
     // Add the new message
