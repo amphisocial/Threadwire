@@ -73,28 +73,7 @@ const Chatbot = () => {
         fetchChatHistory();
     }, []);
 
-    // Fetch available filters and document types on component mount
-    useEffect(() => {
-        const fetchMetadata = async () => {
-            try {
-                const response = await fetch('/api/chatbot/metadata', {
-                    headers: getAuthHeaders(),
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    setAvailableFilters(data.filters || {});
-                    setDocumentTypes(data.documentTypes || []);
-                    // By default, select all document types
-                    setSelectedDocTypes(data.documentTypes.map(docType => docType.id));
-                }
-            } catch (error) {
-                console.error('Error fetching metadata:', error);
-            }
-        };
-
-        fetchMetadata();
-    }, []);
+    
 
     // Auto-scroll to bottom of messages
     useEffect(() => {
@@ -315,11 +294,7 @@ const Chatbot = () => {
         }
     };
 
-    // Debug function to log messages array content
-    const logMessages = () => {
-        console.log('Current messages in state:', messages);
-    };
-
+    
     return (
         <div className="app-container">
             <Navbar />
@@ -338,13 +313,8 @@ const Chatbot = () => {
                             Clear Chat
                         </button>
                     )}
-                    {/* Debug button - remove in production */}
-                    <button 
-                        onClick={logMessages} 
-                        style={{marginLeft: '10px', fontSize: '12px', padding: '3px 8px'}}
-                    >
-                        Debug
-                    </button>
+                    
+                   
                 </div>
             </div>
 
