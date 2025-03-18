@@ -45,7 +45,6 @@ const Chatbot = () => {
 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log("Raw chat history data:", data);
                     
                     if (data.messages && data.messages.length > 0) {
                         // Convert ISO strings back to Date objects
@@ -54,17 +53,16 @@ const Chatbot = () => {
                             timestamp: new Date(msg.timestamp)
                         }));
                         
-                        console.log('Processed chat history:', messagesWithDates);
                         setMessages(messagesWithDates);
                         setSessionId(data.sessionId);
                     } else {
-                        console.log('No chat history found or empty history');
+                        if (data.sessionId) {
+                            setSessionId(data.sessionId);
+                        }
                     }
-                } else {
-                    console.error('Failed to fetch chat history, status:', response.status);
                 }
             } catch (error) {
-                console.error('Error fetching chat history:', error);
+                // Error handling
             } finally {
                 setIsLoadingHistory(false);
             }
@@ -73,7 +71,28 @@ const Chatbot = () => {
         fetchChatHistory();
     }, []);
 
-    
+    // Fetch available filters and document types on component mount
+    useEffect(() => {
+        const fetchMetadata = async () => {
+            try {
+                const response = await fetch('/api/chatbot/metadata', {
+                    headers: getAuthHeaders(),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    setAvailableFilters(data.filters || {});
+                    setDocumentTypes(data.documentTypes || []);
+                    // By default, select all document types
+                    setSelectedDocTypes(data.documentTypes.map(docType => docType.id));
+                }
+            } catch (error) {
+                // Error handling
+            }
+        };
+
+        fetchMetadata();
+    }, []);
 
     // Auto-scroll to bottom of messages
     useEffect(() => {
@@ -123,7 +142,6 @@ const Chatbot = () => {
     // Helper function to save message to server
     const saveMessageToHistory = async (message) => {
         try {
-            console.log('Saving message to history:', message);
             const response = await fetch('/api/chatsession/message', {
                 method: 'POST',
                 headers: getAuthHeaders(),
@@ -135,20 +153,17 @@ const Chatbot = () => {
 
             if (response.ok) {
                 const data = await response.json();
-                console.log('Message saved successfully:', data);
-                if (data.sessionId && !sessionId) {
+                
+                // Only update session ID if we don't have one yet
+                if (!sessionId && data.sessionId) {
                     setSessionId(data.sessionId);
                 }
-                return true;
-            } else {
-                console.error('Failed to save message, server responded with:', response.status);
-                const errorText = await response.text();
-                console.error('Error details:', errorText);
-                return false;
+                
+                return data.sessionId;
             }
+            return null;
         } catch (error) {
-            console.error('Failed to save message to history:', error);
-            return false;
+            return null;
         }
     };
 
@@ -163,18 +178,21 @@ const Chatbot = () => {
             timestamp: new Date()
         };
 
-        // Important: Update the chat UI first
+        // Store the current input value to use in the API call
+        const currentInput = input.trim();
+        
+        // Update UI immediately to show user's message
         setMessages(prev => [...prev, userMessage]);
-        
-        // Save user message to history
-        const savedUserMessage = await saveMessageToHistory(userMessage);
-        if (!savedUserMessage) {
-            console.error('Failed to save user message to history');
-        }
-        
-        const currentInput = input;
-        setInput('');
+        setInput(''); // Clear input field
         setIsLoading(true);
+        
+        // Save user message to history and get back session ID
+        const savedSessionId = await saveMessageToHistory(userMessage);
+        
+        // Update session ID if needed and returned
+        if (savedSessionId && !sessionId) {
+            setSessionId(savedSessionId);
+        }
 
         try {
             // Send chat query to backend
@@ -217,11 +235,9 @@ const Chatbot = () => {
                     timestamp: new Date()
                 };
                 saveMessageToHistory(completedBotMessage);
-            }, data.answer.split(' ').length * 100 + 200); // Estimate completion time based on word count
+            }, Math.min(data.answer.split(' ').length * 100 + 200, 2000)); // Cap at 2 seconds max
 
         } catch (error) {
-            console.error('Chat error:', error);
-
             // Add error message
             const errorMessage = {
                 text: 'Sorry, I encountered an error. Please try again later.',
@@ -258,11 +274,10 @@ const Chatbot = () => {
 
             if (response.ok) {
                 setMessages([]);
-                // Optionally create a new session
-                setSessionId(null);
+                // Do NOT reset session ID - keep using the same session
             }
         } catch (error) {
-            console.error('Failed to clear chat history:', error);
+            // Error handling
         }
     };
 
@@ -294,7 +309,6 @@ const Chatbot = () => {
         }
     };
 
-    
     return (
         <div className="app-container">
             <Navbar />
@@ -313,8 +327,6 @@ const Chatbot = () => {
                             Clear Chat
                         </button>
                     )}
-                    
-                   
                 </div>
             </div>
 
@@ -337,7 +349,7 @@ const Chatbot = () => {
                 ) : (
                     messages.map((message, index) => (
                         <div
-                            key={message.id || index}
+                            key={message._id || message.id || index}
                             className={`message ${message.type}`}
                         >
                             <div className="message-avatar">
@@ -366,6 +378,9 @@ const Chatbot = () => {
 
                 {isLoading && (
                     <div className="message bot loading">
+                        <div className="message-avatar">
+                            <span className="bot-avatar">AI</span>
+                        </div>
                         <div className="message-bubble">
                             <div className="message-content">
                                 <div className="typing-indicator">
@@ -385,7 +400,12 @@ const Chatbot = () => {
                 <textarea
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    onKeyUp={handleKeyPress}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage();
+                        }
+                    }}
                     placeholder="Type your question here..."
                     disabled={isLoading}
                 />

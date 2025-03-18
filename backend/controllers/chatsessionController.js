@@ -1,11 +1,12 @@
 // controllers/chatSessionController.js
-const mongoose = require('mongoose');
 const ChatSession = require('../models/ChatSession');
 
 // Get chat history for a user
 exports.getChatHistory = async (req, res) => {
   try {
-    const userId = req.user.id; // Assuming user ID is attached by auth middleware
+    // Get userId as a string
+    const userId = String(req.user.id);
+    const isGoogleUser = req.user.isGoogleUser === true;
     
     // Find the most recent chat session for this user
     const chatSession = await ChatSession.findOne({ userId })
@@ -13,7 +14,19 @@ exports.getChatHistory = async (req, res) => {
       .limit(1);
     
     if (!chatSession) {
-      return res.json({ messages: [] });
+      // Create an empty session to use for this user
+      const newSession = new ChatSession({
+        userId,
+        authType: isGoogleUser ? 'google' : 'jwt',
+        messages: []
+      });
+      
+      await newSession.save();
+      
+      return res.json({ 
+        messages: [], 
+        sessionId: newSession._id 
+      });
     }
     
     res.json({ 
@@ -21,7 +34,6 @@ exports.getChatHistory = async (req, res) => {
       sessionId: chatSession._id 
     });
   } catch (error) {
-    console.error('Error fetching chat history:', error);
     res.status(500).json({ error: 'Error fetching chat history' });
   }
 };
@@ -29,7 +41,9 @@ exports.getChatHistory = async (req, res) => {
 // Save message to chat history
 exports.saveMessage = async (req, res) => {
   try {
-    const userId = req.user.id; // Assuming user ID is attached by auth middleware
+    // Get userId as a string
+    const userId = String(req.user.id);
+    const isGoogleUser = req.user.isGoogleUser === true;
     const { message, sessionId } = req.body;
     
     if (!message) {
@@ -49,16 +63,29 @@ exports.saveMessage = async (req, res) => {
     if (sessionId) {
       chatSession = await ChatSession.findById(sessionId);
       
-      // Verify the session belongs to this user
-      if (chatSession && chatSession.userId.toString() !== userId) {
+      // If session not found with that ID, look up the most recent session for this user
+      if (!chatSession) {
+        chatSession = await ChatSession.findOne({ userId })
+          .sort({ updatedAt: -1 })
+          .limit(1);
+      }
+      
+      // Verify the session belongs to this user if found
+      if (chatSession && chatSession.userId !== userId) {
         return res.status(403).json({ error: 'Unauthorized access to chat session' });
       }
+    } else {
+      // No session ID provided, find the most recent session for this user
+      chatSession = await ChatSession.findOne({ userId })
+        .sort({ updatedAt: -1 })
+        .limit(1);
     }
     
     // If no existing session found, create a new one
     if (!chatSession) {
       chatSession = new ChatSession({
         userId,
+        authType: isGoogleUser ? 'google' : 'jwt',
         messages: []
       });
     }
@@ -83,7 +110,6 @@ exports.saveMessage = async (req, res) => {
       messageCount: chatSession.messages.length
     });
   } catch (error) {
-    console.error('Error saving chat message:', error);
     res.status(500).json({ error: 'Error saving chat message' });
   }
 };
@@ -91,7 +117,7 @@ exports.saveMessage = async (req, res) => {
 // Clear chat history for a user
 exports.clearChatHistory = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = String(req.user.id);
     const { sessionId } = req.body;
     
     // If session ID provided, clear just that session
@@ -115,7 +141,6 @@ exports.clearChatHistory = async (req, res) => {
     
     res.json({ success: true });
   } catch (error) {
-    console.error('Error clearing chat history:', error);
     res.status(500).json({ error: 'Error clearing chat history' });
   }
 };
