@@ -11,6 +11,8 @@ const Chatbot = () => {
     const [documentTypes, setDocumentTypes] = useState([]);
     const [selectedDocTypes, setSelectedDocTypes] = useState([]);
     const [availableFilters, setAvailableFilters] = useState({});
+    const [sessionId, setSessionId] = useState(null);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
     const messagesEndRef = useRef(null);
     const [showFilters, setShowFilters] = useState(false);
     const [typingText, setTypingText] = useState('');
@@ -31,6 +33,38 @@ const Chatbot = () => {
     useEffect(() => {
       document.title = 'Home';
     }, []);
+    
+    // Fetch chat history on component mount
+    useEffect(() => {
+        const fetchChatHistory = async () => {
+            try {
+                setIsLoadingHistory(true);
+                const response = await fetch('/api/chatsession/history', {
+                    headers: getAuthHeaders(),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.messages && data.messages.length > 0) {
+                        // Convert ISO strings back to Date objects
+                        const messagesWithDates = data.messages.map(msg => ({
+                            ...msg,
+                            timestamp: new Date(msg.timestamp)
+                        }));
+                        setMessages(messagesWithDates);
+                        setSessionId(data.sessionId);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching chat history:', error);
+            } finally {
+                setIsLoadingHistory(false);
+            }
+        };
+
+        fetchChatHistory();
+    }, []);
+
     // Fetch available filters and document types on component mount
     useEffect(() => {
         const fetchMetadata = async () => {
@@ -99,6 +133,29 @@ const Chatbot = () => {
         return () => clearTimeout(timer);
     }, [isTyping, fullResponse, typingText]);
 
+    // Helper function to save message to server
+    const saveMessageToHistory = async (message) => {
+        try {
+            const response = await fetch('/api/chatsession/message', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    message,
+                    sessionId
+                }),
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.sessionId && !sessionId) {
+                    setSessionId(data.sessionId);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to save message to history:', error);
+        }
+    };
+
     // Handle sending messages
     const handleSendMessage = async () => {
         if (!input.trim()) return;
@@ -111,6 +168,10 @@ const Chatbot = () => {
         };
 
         setMessages(prev => [...prev, userMessage]);
+        
+        // Save user message to history
+        await saveMessageToHistory(userMessage);
+        
         setInput('');
         setIsLoading(true);
 
@@ -146,6 +207,17 @@ const Chatbot = () => {
             };
 
             setMessages(prev => [...prev, botMessage]);
+            
+            // Save the bot's response to history once typing is complete
+            setTimeout(() => {
+                const completedBotMessage = {
+                    text: data.answer,
+                    type: 'bot',
+                    timestamp: new Date()
+                };
+                saveMessageToHistory(completedBotMessage);
+            }, data.answer.split(' ').length * 100 + 200); // Estimate completion time based on word count
+
         } catch (error) {
             console.error('Chat error:', error);
 
@@ -157,6 +229,10 @@ const Chatbot = () => {
             };
 
             setMessages(prev => [...prev, errorMessage]);
+            
+            // Save error message to history
+            await saveMessageToHistory(errorMessage);
+            
         } finally {
             setIsLoading(false);
         }
@@ -167,6 +243,25 @@ const Chatbot = () => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSendMessage();
+        }
+    };
+
+    // Handle clearing chat history
+    const handleClearChat = async () => {
+        try {
+            const response = await fetch('/api/chatsession/clear', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ sessionId }),
+            });
+
+            if (response.ok) {
+                setMessages([]);
+                // Optionally create a new session
+                setSessionId(null);
+            }
+        } catch (error) {
+            console.error('Failed to clear chat history:', error);
         }
     };
 
@@ -204,12 +299,33 @@ const Chatbot = () => {
             <div className="chatbot-header">
                 <div className="chatbot-title-row">
                     <h2>Enterprise Data Assistant</h2>
+                    {messages.length > 0 && (
+                        <button 
+                            onClick={handleClearChat} 
+                            className="clear-chat-button"
+                            title="Clear chat history"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
+                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                            </svg>
+                            Clear Chat
+                        </button>
+                    )}
                 </div>
             </div>
 
               
             <div className="chatbot-messages">
-                {messages.length === 0 ? (
+                {isLoadingHistory ? (
+                    <div className="loading-history">
+                        <div className="typing-indicator">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <p>Loading your chat history...</p>
+                    </div>
+                ) : messages.length === 0 ? (
                     <div className="welcome-message">
                         <h3>Hi. I am your Threadwire Assistant</h3>
                         <p>Ask me anything about your enterprise data</p>

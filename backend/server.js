@@ -25,6 +25,8 @@ const workorderexecutionRoutes = require('./routes/workorderexecution');
 const graphRoutes = require('./routes/partgraph');
 const vectorService = require('./services/vectorService');
 const chatbotRoutes = require('./routes/chatbot');
+const chatSessionRoutes = require('./routes/chatSessionRoutes');
+
 
 app.use('/parts', partsRoutes);
 app.use('/salesorders', salesOrdersRoutes);
@@ -38,6 +40,9 @@ app.use('/partgraph', graphRoutes);
 app.use('/user', userRoutes);
 app.use('/auth', authRoutes);
 app.use('/chatbot', chatbotRoutes);
+app.use('/chatsession', chatSessionRoutes);
+
+
 
 mongoose.connect('mongodb://127.0.0.1:27017/threadwire?replicaSet=rs0', { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => {
