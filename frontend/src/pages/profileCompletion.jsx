@@ -1,25 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
-import { useNavigate } from 'react-router-dom';
-import './register.css';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
+import './register.css'; 
 
-
-const RegistrationForm = () => {
-  const { login } = useAuth();
+const ProfileCompletion = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+  const { userId } = useParams();
+  const navigate = useNavigate();
+  
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
     userName: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
     phone: '',
     customerId: ''
   });
-
-  const navigate = useNavigate();
-
+  
   const [companies, setCompanies] = useState([]);
   const [countryCode, setCountryCode] = useState('+1');
   const [toast, setToast] = useState({ show: false, type: '', message: '' });
@@ -27,7 +21,6 @@ const RegistrationForm = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredCompanies, setFilteredCompanies] = useState([]);
   const suggestionRef = useRef(null);
-
 
   const countryCodes = [
     { code: '+1', country: 'US' },
@@ -58,13 +51,25 @@ const RegistrationForm = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-
   useEffect(() => {
-
-    document.title = 'Registration';
+    document.title = 'Complete Your Profile';
+    
+    // Check authentication after loading is complete
+    if (!isLoading && !isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
+    // Fetch companies
     const fetchCompanies = async () => {
       try {
-        const response = await fetch('/api/user/companies');
+        const token = localStorage.getItem('authToken');
+        const response = await fetch('/api/user/companies', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data = await response.json();
         setCompanies(data);
@@ -72,8 +77,11 @@ const RegistrationForm = () => {
         showToast('error', 'Failed to fetch companies: ' + err.message);
       }
     };
-    fetchCompanies();
-  }, []);
+    
+    if (isAuthenticated) {
+      fetchCompanies();
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   const handleCompanySearch = (e) => {
     const searchTerm = e.target.value;
@@ -86,7 +94,6 @@ const RegistrationForm = () => {
     setShowSuggestions(true);
   };
 
-  // Handle company selection
   const handleCompanySelect = (company) => {
     setCompanySearch(company.name);
     setFormData({ ...formData, customerId: company._id });
@@ -102,35 +109,38 @@ const RegistrationForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
     try {
+      // Format the phone number with country code
       const formDataWithCountryCode = {
         ...formData,
         phone: `${countryCode}${formData.phone}`
       };
-      const response = await fetch('/api/user/register', {
+      
+      const token = localStorage.getItem('authToken');
+      const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
+      
+      // Send the request to complete the profile
+      const response = await fetch(`/api/user/complete-profile/${userId}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...(isGoogleAuth && { 'Auth-Type': 'google' })
+        },
         body: JSON.stringify(formDataWithCountryCode),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        showToast('error', data.error || data.message || 'Registration failed');
+        showToast('error', data.error || data.message || 'Profile completion failed');
       } else {
-        showToast('success', 'Registration successful!');
-        setFormData({
-          firstName: '',
-          lastName: '',
-          userName: '',
-          email: '',
-          password: '',
-          confirmPassword: '',
-          phone: '',
-          customerId: ''
-        });
+        showToast('success', 'Profile completed successfully!');
+        
+        // Navigate to home after successful profile completion
         setTimeout(() => {
-          navigate('/login');
+          navigate('/home');
         }, 2000);
       }
     } catch (err) {
@@ -138,44 +148,10 @@ const RegistrationForm = () => {
     }
   };
 
-  const handleSuccess = async (response) => {
-    try {
-      const res = await fetch("/api/auth/google", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: response.credential }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (data.message) {
-          showToast('error', data.message);
-        } else {
-          showToast('error', 'Google login failed');
-        }
-      } else {
-        showToast('success', 'Google login successful!');
-        await login(data.token, true);
-
-        // Check if profile is complete
-        if (data.isProfileComplete) {
-          // If profile is complete, navigate to home
-          setTimeout(() => {
-            navigate('/home');
-          }, 1000);
-        } else {
-          // If profile is incomplete, navigate to profile completion page
-          setTimeout(() => {
-            navigate(`/complete-profile/${data.userId}`);
-          }, 1000);
-        } 
-
-      }
-    } catch (error) {
-      showToast('error', "Google login failed. Try again.");
-    }
-  };
+  // Show loading indicator while checking authentication
+  if (isLoading) {
+    return <div className="loading">Loading...</div>;
+  }
 
   return (
     <div className="rootclass">
@@ -197,42 +173,28 @@ const RegistrationForm = () => {
           </div>
         </div>
       )}
+      
       <header className="header">
         <a href="/" className="header-logo">
           Threadwire
         </a>
       </header>
+      
       <div className="container">
-        <h2>Register</h2>
+        <h2>Complete Your Profile</h2>
+        <p>Please provide the following additional information to complete your registration.</p>
+        
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label>First Name</label>
-            <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} required />
-          </div>
-
-          <div className="form-group">
-            <label>Last Name</label>
-            <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} required />
-          </div>
-
-          <div className="form-group">
             <label>Username</label>
-            <input type="text" name="userName" value={formData.userName} onChange={handleChange} required />
-          </div>
-
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" name="email" value={formData.email} onChange={handleChange} required />
-          </div>
-
-          <div className="form-group">
-            <label>Password</label>
-            <input type="password" name="password" value={formData.password} onChange={handleChange} required />
-          </div>
-
-          <div className="form-group">
-            <label>Confirm Password</label>
-            <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required />
+            <input 
+              type="text" 
+              name="userName" 
+              value={formData.userName} 
+              onChange={handleChange} 
+              required 
+              placeholder="Choose a unique username"
+            />
           </div>
 
           <div className="form-group">
@@ -256,6 +218,7 @@ const RegistrationForm = () => {
                 onChange={handleChange}
                 className="phone-input"
                 required
+                placeholder="Phone number without country code"
               />
             </div>
           </div>
@@ -287,20 +250,10 @@ const RegistrationForm = () => {
             </div>
           </div>
 
-          <button type="submit">Register</button>
+          <button type="submit">Complete Profile</button>
         </form>
-
-        <div className="divider">Or</div>
-
-        <GoogleOAuthProvider clientId="597032685964-tstm86dpp6ds4j9qiknm8enhiigt6j6r.apps.googleusercontent.com">
-          <GoogleLogin onSuccess={handleSuccess} onError={() => showToast('error', "Google Sign-In failed")} />
-        </GoogleOAuthProvider>
-
-        <div className="register-link">
-          Already have an account? <a href="/app/login">Login</a>
-        </div>
       </div>
-
+      
       <footer className="footer">
         <div className="footer-copyright">
           © 2025 Threadwire. All rights reserved.
@@ -319,9 +272,7 @@ const RegistrationForm = () => {
         </div>
       </footer>
     </div>
-
-
   );
 };
 
-export default RegistrationForm;
+export default ProfileCompletion;

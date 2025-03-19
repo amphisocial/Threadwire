@@ -12,7 +12,7 @@ import GraphView from "./pages/graphView.jsx";
 import PartsPage from "./pages/partsPage.jsx";
 import WorkOrders from "./pages/workOrders.jsx";
 import Chatbot from './pages/chatbot.jsx'; 
-
+import ProfileCompletion from './pages/profileCompletion.jsx';
 
 function App() {
   return (
@@ -23,6 +23,7 @@ function App() {
           <Route path="/" element={<div>Home Page</div>} />
           <Route path="/register" element={<RegistrationForm />} />
           <Route path="/login" element={<LoginForm />} />
+          <Route path="/complete-profile/:userId" element={<ProfileCompletion />} />
           <Route
             path="/home"
             element={
