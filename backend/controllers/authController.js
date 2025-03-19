@@ -14,8 +14,9 @@ const googleAuth = async (req, res) => {
 
         const { sub: googleId, email, name, picture } = payload;
 
-        const firstName = name.split(' ')[0];
-        const lastName = name.split(' ')[1] || '';
+        const nameParts = name ? name.split(' ') : ['User'];
+        const firstName = nameParts[0] || 'User';
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'User';
 
         // Check if user exists in the database
         let user = await User.findOne({ email });
