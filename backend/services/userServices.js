@@ -144,11 +144,65 @@ const verifyMFA = async (userId, token) => {
     return { message: 'MFA verified successfully' };
 };
 
+const completeProfile = async (userId, profileData) => {
+    try {
+        const { userName, phone, customerId } = profileData;
+
+        // Find the user
+        const user = await User.findById(userId);
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        // Check if userName is unique (if provided)
+        if (userName) {
+            const existingUser = await User.findOne({ userName, _id: { $ne: userId } });
+            if (existingUser) {
+                throw new Error('Username already exists');
+            }
+            user.userName = userName;
+        }
+
+        // Check if phone is unique (if provided)
+        if (phone) {
+            const existingUser = await User.findOne({ phone, _id: { $ne: userId } });
+            if (existingUser) {
+                throw new Error('Phone number already exists');
+            }
+            user.phone = phone;
+        }
+
+        // Update customerId if provided
+        if (customerId) {
+            user.customerId = customerId;
+        }
+
+        // Save the updated user
+        await user.save();
+
+        // Generate JWT token
+        const token = jwt.sign(
+            { userId: user._id, email: user.email, username: user.userName },
+            '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
+            { expiresIn: '1h' }
+        );
+
+        return {
+            token,
+            userId: user._id,
+            message: 'Profile completed successfully'
+        };
+    } catch (error) {
+        throw new Error(error.message || 'Failed to complete profile');
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     getUserById,
     enableMFA,
     disableMFA,
-    verifyMFA
+    verifyMFA,
+    completeProfile
 };

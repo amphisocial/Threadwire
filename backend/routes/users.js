@@ -33,4 +33,6 @@ router.post('/enable-mfa/:userId', userController.enableMFA);
 // Disable MFA for a user
 router.post('/disable-mfa/:userId', userController.disableMFA);
 
+router.post('/complete-profile/:userId', authenticateToken, userController.completeProfile);
+
 module.exports = router;
