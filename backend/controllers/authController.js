@@ -28,7 +28,7 @@ const googleAuth = async (req, res) => {
                 user.googleId = googleId;
                 await user.save();
             }
-            
+
             // Check if profile is complete
             isProfileComplete = Boolean(user.phone && user.userName && user.customerId);
         } else {
@@ -40,39 +40,36 @@ const googleAuth = async (req, res) => {
                 userName = `${baseUserName}${counter}`;
                 counter++;
             }
-            
-            // Create a new user if they don't exist
-            user = new User({
-                googleId,
-                email,
-                firstName,
-                lastName,
-                userName,
-                profilePic: picture
-            });
 
-            await user.save();
+            // Create a new user if they don't exist
+            try {
+                user = new User({
+                    googleId,
+                    email,
+                    firstName,
+                    lastName,
+                    userName,
+                    profilePic: picture
+                });
+
+                await user.save();
+            } catch (userError) {
+                console.error('User creation error:', userError);
+                return res.status(400).json({ message: userError.message });
+            }
         }
 
-        // Generate JWT token
-        const jwtToken = jwt.sign(
-            { 
-                userId: user._id, 
-                email: user.email, 
-                username: user.userName || null
-            },
-            '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
-            { expiresIn: '1h' }
-        );
+
 
         return res.status(200).json({
             message: 'User authenticated successfully',
             user,
-            token: jwtToken,
+            token: token,
             userId: user._id,
             isProfileComplete
         });
     } catch (error) {
+        console.error('Google auth error:', error);
         return res.status(401).json({ message: error.message });
     }
 };
@@ -82,13 +79,13 @@ const completeProfile = async (req, res) => {
     try {
         const { userId } = req.params;
         const { userName, phone, customerId } = req.body;
-        
+
         // Check if user exists
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
-        
+
         // Update user fields if provided
         if (userName) {
             // Check if userName is unique
@@ -98,46 +95,39 @@ const completeProfile = async (req, res) => {
             }
             user.userName = userName;
         }
-        
-        if (phone) {
-            // Check if phone is unique
-            const existingUser = await User.findOne({ phone, _id: { $ne: userId } });
+
+        let formattedPhone = phone;
+        if (phone && !phone.startsWith('+')) {
+            formattedPhone = `+${phone}`;
+        }
+
+        // Check if phone is unique (if changed)
+        if (formattedPhone) {
+            const existingUser = await User.findOne({ phone: formattedPhone, _id: { $ne: userId } });
             if (existingUser) {
                 return res.status(400).json({ error: 'Phone number already exists' });
             }
-            user.phone = phone;
+            user.phone = formattedPhone;
         }
-        
+
         if (customerId) {
             user.customerId = customerId;
         }
-        
+
         // Save the updated user
         await user.save();
-        
-        // Generate a new JWT token
-        const token = jwt.sign(
-            { 
-                userId: user._id, 
-                email: user.email, 
-                username: user.userName 
-            },
-            '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
-            { expiresIn: '1h' }
-        );
-        
+
+
         return res.status(200).json({
-            message: 'Profile completed successfully',
-            user,
-            token,
-            userId: user._id
+            userId: user._id,
+            message: 'Profile completed successfully'
         });
     } catch (error) {
         return res.status(500).json({ error: error.message || 'Failed to complete profile' });
     }
 };
 
-module.exports = { 
+module.exports = {
     googleAuth,
-    completeProfile 
+    completeProfile
 };
