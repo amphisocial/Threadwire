@@ -182,7 +182,7 @@ const ProfileCompletion = () => {
       
       <div className="container">
         <h2>Complete Your Profile</h2>
-        <p>Please provide the following additional information to complete your registration.</p>
+        
         
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -193,14 +193,14 @@ const ProfileCompletion = () => {
               value={formData.userName} 
               onChange={handleChange} 
               required 
-              placeholder="Choose a unique username"
+              placeholder="Username"
             />
           </div>
 
           <div className="form-group">
             <label>Phone</label>
             <div className="phone-input-container">
-              <select
+             <select
                 className="country-code-select"
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
@@ -218,7 +218,7 @@ const ProfileCompletion = () => {
                 onChange={handleChange}
                 className="phone-input"
                 required
-                placeholder="Phone number without country code"
+                placeholder="Phone number"
               />
             </div>
           </div>
