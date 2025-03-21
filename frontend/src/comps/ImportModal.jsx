@@ -36,52 +36,59 @@ const ImportModal = ({ onClose, onImportComplete }) => {
           header: true,
           skipEmptyLines: true,
           complete: async (results) => {
-            const newErrors = [];
-            let processed = 0;
-
-            for (const row of results.data) {
-              // Validate required fields
-              if (!row.salesOrder || !row.customer_name || !row.line) {
-                newErrors.push({
-                  row: processed + 2,
-                  message: "Missing required fields (salesOrder, customer_name, or line).",
-                });
-                processed++;
-                continue;
-              }
-
-              try {
+            try {
+              // Validate rows first
+              const validRows = [];
+              const newErrors = [];
+              
+              results.data.forEach((row, index) => {
+                if (!row.salesOrder || !row.customer_name || !row.line) {
+                  newErrors.push({
+                    row: index + 2, // +2 for header row and 0-indexing
+                    message: "Missing required fields (salesOrder, customer_name, or line)."
+                  });
+                } else {
+                  validRows.push(row);
+                }
+              });
+              
+              if (validRows.length > 0) {
+                // Send all valid rows in a single request
                 const response = await fetch("/api/salesorders/import", {
                   method: "POST",
                   headers: getAuthHeaders(),
-                  body: JSON.stringify(row),
+                  body: JSON.stringify(validRows) // Send array of rows
                 });
-
+                
                 if (!response.ok) {
-                  const errorText = await response.text();
-                  throw new Error(errorText);
+                  const errorData = await response.json();
+                  throw new Error(errorData.error || 'Failed to import sales orders');
                 }
-
-                processed++;
-                setProgress((processed / results.data.length) * 100);
-              } catch (error) {
-                newErrors.push({
-                  row: processed + 2,
-                  message: `Failed to import row: ${error.message}`,
-                });
+                
+                const result = await response.json();
+                
+                // Add any server-reported errors
+                if (result.errors && result.errors.length > 0) {
+                  setErrors([...newErrors, ...result.errors]);
+                } else {
+                  setErrors(newErrors);
+                }
+                
+                setImportStatus(newErrors.length === 0 ? 'success' : 'error');
+              } else {
+                setErrors(newErrors);
+                setImportStatus('error');
               }
-            }
-
-            setErrors(newErrors);
-            setIsProcessing(false);
-            
-            if (newErrors.length === 0) {
-              setImportStatus('success');
-              if (onImportComplete) {
-                onImportComplete();
-              }
-            } else {
+              
+            } catch (error) {
+              console.error("Error importing data:", error);
+              setErrors([...newErrors, { row: 0, message: `Import failed: ${error.message}` }]);
               setImportStatus('error');
+            }
+            
+            setIsProcessing(false);
+            if (importStatus === 'success' && onImportComplete) {
+              onImportComplete();
             }
           },
           error: (error) => {
