@@ -15,6 +15,11 @@ const salesOrderSchema = new mongoose.Schema({
   customer_name: String,
   linenumber: Number,
   blockerTag: {type: Number},
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: true
+  }
 });
 
 module.exports = mongoose.model('SalesOrder', salesOrderSchema);
