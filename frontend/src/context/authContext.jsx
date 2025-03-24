@@ -52,7 +52,11 @@ export const AuthProvider = ({ children }) => {
   const login = async (token, isGoogle = false) => {
     try {
       localStorage.setItem('authToken', token);
-      localStorage.setItem('isGoogleAuth', isGoogle.toString());
+      if (isGoogle) {
+      localStorage.setItem('isGoogleAuth', 'true');
+    } else {
+      localStorage.removeItem('isGoogleAuth'); // Remove it completely for regular login
+    }
       
       const response = await fetch('/api/user/verify-token', {
         headers: {

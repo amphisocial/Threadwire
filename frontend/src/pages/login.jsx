@@ -56,6 +56,7 @@ const LoginForm = () => {
                         login(data.token);
                         localStorage.setItem('userId', data.userId);
                         localStorage.setItem('username', data.username);
+                        
                     }
                         setTimeout(() => {
                             navigate('/chatbot');
