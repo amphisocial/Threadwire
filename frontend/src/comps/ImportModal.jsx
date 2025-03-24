@@ -53,19 +53,24 @@ const ImportModal = ({ onClose, onImportComplete }) => {
               });
               
               if (validRows.length > 0) {
+                console.log("Sending data to server:", validRows);
                 // Send all valid rows in a single request
                 const response = await fetch("/api/salesorders/import", {
                   method: "POST",
                   headers: getAuthHeaders(),
                   body: JSON.stringify(validRows) // Send array of rows
                 });
+
+                console.log("Response status:", response.status);
                 
                 if (!response.ok) {
                   const errorData = await response.json();
+                  console.error("Server error:", errorData);
                   throw new Error(errorData.error || 'Failed to import sales orders');
                 }
                 
                 const result = await response.json();
+                console.error("Server error:", errorData);
                 
                 // Add any server-reported errors
                 if (result.errors && result.errors.length > 0) {
