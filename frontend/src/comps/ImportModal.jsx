@@ -36,63 +36,53 @@ const ImportModal = ({ onClose, onImportComplete }) => {
           header: true,
           skipEmptyLines: true,
           complete: async (results) => {
-            try {
-              // Validate rows first
-              const validRows = [];
-              const newErrors = [];
-
-              results.data.forEach((row, index) => {
-                if (!row.salesOrder || !row.customer_name || !row.line) {
-                  newErrors.push({
-                    row: index + 2, // +2 for header row and 0-indexing
-                    message: "Missing required fields (salesOrder, customer_name, or line)."
-                  });
-                } else {
-                  validRows.push(row);
-                }
-              });
-
-              if (validRows.length > 0) {
-                console.log("Sending data to server:", validRows);
-                // Send all valid rows in a single request
+            const newErrors = [];
+            let successCount = 0;
+            
+            // Process each row individually
+            for (let i = 0; i < results.data.length; i++) {
+              const row = results.data[i];
+              
+              // Validate required fields
+              if (!row.salesOrder || !row.customer_name || !row.line) {
+                newErrors.push({
+                  row: i + 2, // +2 for header row and 0-indexing
+                  message: "Missing required fields (salesOrder, customer_name, or line)."
+                });
+                continue;
+              }
+              
+              try {
+                // Import one row at a time
                 const response = await fetch("/api/salesorders/import", {
                   method: "POST",
                   headers: getAuthHeaders(),
-                  body: JSON.stringify(validRows) // Send array of rows
+                  body: JSON.stringify(row) // Send single row
                 });
-
-                console.log("Response status:", response.status);
-
+                
                 if (!response.ok) {
                   const errorData = await response.json();
-                  console.error("Server error:", errorData);
-                  throw new Error(errorData.error || 'Failed to import sales orders');
+                  throw new Error(errorData.error || 'Failed to import sales order');
                 }
-
-                const result = await response.json();
-                console.log("Import result:", result);
-
-                // Add any server-reported errors
-                if (result.errors && result.errors.length > 0) {
-                  setErrors([...newErrors, ...result.errors]);
-                } else {
-                  setErrors(newErrors);
-                }
-
-                setImportStatus(newErrors.length === 0 ? 'success' : 'error');
-              } else {
-                setErrors(newErrors);
-                setImportStatus('error');
+                
+                successCount++;
+                
+                // Update progress
+                setProgress(((i + 1) / results.data.length) * 100);
+              } catch (error) {
+                newErrors.push({
+                  row: i + 2,
+                  message: `Failed to import row: ${error.message}`
+                });
               }
-
-            } catch (error) {
-              console.error("Error importing data:", error);
-              setErrors([...newErrors, { row: 0, message: `Import failed: ${error.message}` }]);
-              setImportStatus('error');
             }
 
+            setErrors(newErrors);
+            setImportStatus(newErrors.length === 0 ? 'success' : 'error');
             setIsProcessing(false);
-            if (newErrors.length === 0 && onImportComplete) {
+            
+            // Call onImportComplete if there were successful imports
+            if (successCount > 0 && onImportComplete) {
               onImportComplete();
             }
           },
@@ -182,4 +172,4 @@ const ImportModal = ({ onClose, onImportComplete }) => {
   );
 };
 
-export default ImportModal; 
+export default ImportModal;
