@@ -7,7 +7,7 @@ const ImportModal = ({ onClose, onImportComplete }) => {
   const [errors, setErrors] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  
+
   const getAuthHeaders = () => {
     const token = localStorage.getItem('authToken');
     const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
@@ -40,7 +40,7 @@ const ImportModal = ({ onClose, onImportComplete }) => {
               // Validate rows first
               const validRows = [];
               const newErrors = [];
-              
+
               results.data.forEach((row, index) => {
                 if (!row.salesOrder || !row.customer_name || !row.line) {
                   newErrors.push({
@@ -51,7 +51,7 @@ const ImportModal = ({ onClose, onImportComplete }) => {
                   validRows.push(row);
                 }
               });
-              
+
               if (validRows.length > 0) {
                 console.log("Sending data to server:", validRows);
                 // Send all valid rows in a single request
@@ -62,37 +62,37 @@ const ImportModal = ({ onClose, onImportComplete }) => {
                 });
 
                 console.log("Response status:", response.status);
-                
+
                 if (!response.ok) {
                   const errorData = await response.json();
                   console.error("Server error:", errorData);
                   throw new Error(errorData.error || 'Failed to import sales orders');
                 }
-                
+
                 const result = await response.json();
-                console.error("Server error:", errorData);
-                
+                console.log("Import result:", result);
+
                 // Add any server-reported errors
                 if (result.errors && result.errors.length > 0) {
                   setErrors([...newErrors, ...result.errors]);
                 } else {
                   setErrors(newErrors);
                 }
-                
+
                 setImportStatus(newErrors.length === 0 ? 'success' : 'error');
               } else {
                 setErrors(newErrors);
                 setImportStatus('error');
               }
-              
+
             } catch (error) {
               console.error("Error importing data:", error);
               setErrors([...newErrors, { row: 0, message: `Import failed: ${error.message}` }]);
               setImportStatus('error');
             }
-            
+
             setIsProcessing(false);
-            if (importStatus === 'success' && onImportComplete) {
+            if (newErrors.length === 0 && onImportComplete) {
               onImportComplete();
             }
           },
@@ -137,7 +137,7 @@ const ImportModal = ({ onClose, onImportComplete }) => {
           {isProcessing && (
             <div className="progress-section">
               <div className="progress-bar">
-                <div 
+                <div
                   className="progress-fill"
                   style={{ width: `${progress}%` }}
                 ></div>
@@ -148,8 +148,8 @@ const ImportModal = ({ onClose, onImportComplete }) => {
 
           {importStatus && (
             <div className={`status-message ${importStatus}`}>
-              {importStatus === 'success' 
-                ? 'Import completed successfully!' 
+              {importStatus === 'success'
+                ? 'Import completed successfully!'
                 : 'Import completed with errors'}
             </div>
           )}
