@@ -24,6 +24,11 @@ const BlockerSchema = new mongoose.Schema({
   relatedParts: [
     { type: mongoose.Schema.Types.ObjectId, ref: 'Part' }
   ],
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: true
+  }
   
 }, { timestamps: true });
 

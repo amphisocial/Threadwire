@@ -5,14 +5,16 @@ const WorkOrderExecution = require("../models/Workorderexecution");
 
 exports.getPartGraph = async (req, res) => {
     //const { partnumber, type } = req.query;
-        const { partnumber, direction } = req.query;
-    console.error("partnumber:",partnumber,"direction:",direction);
+    const { partnumber, direction } = req.query;
+    const customerId = req.user.customerId;
+
+    console.error("partnumber:", partnumber, "direction:", direction);
     if (!partnumber || !direction) {
         return res.status(400).json({ error: "Missing partnumber or direction parameter" });
     }
 
     try {
-        const graphData = await fetchGraphData(partnumber, direction);
+        const graphData = await fetchGraphData(partnumber, direction, customerId);
         res.status(200).json(graphData);
     } catch (error) {
         console.error("Error fetching part graph:", error);
@@ -27,11 +29,11 @@ async function fetchLinksForPart(part, direction) {
     try {
         if (direction === "left") {
             // Fetch sales orders for the part
-            const salesOrders = await SalesOrder.find({ partnumber: part.partnumber });
+            const salesOrders = await SalesOrder.find({ partnumber: part.partnumber, customerId });
             console.error("Found sales orders:", salesOrders);
 
             salesOrders.forEach((so) => {
-            console.error("Found sales orders:", so.ordernumber, so.linenumber);
+                console.error("Found sales orders:", so.ordernumber, so.linenumber);
                 nodes.push({
                     id: so._id,
                     label: `Sales Order: ${so.ordernumber}`,
@@ -46,10 +48,15 @@ async function fetchLinksForPart(part, direction) {
         } else if (direction === "right") {
             // Fetch PartBoP and WorkOrders for the part
             const [partBoPs, workOrders] = await Promise.all([
-                WorkOrder.PartBoP.find({ partnumber: part.partnumber }),
-                WorkOrder.WorkOrder.find({ partnumber: part.partnumber }),
+                WorkOrder.PartBoP.find({ 
+                    partnumber: part.partnumber,
+                    customerId // Add company filter
+                }),
+                WorkOrder.WorkOrder.find({ 
+                    partnumber: part.partnumber,
+                    customerId // Add company filter
+                }),
             ]);
-
             console.error("Found PartBoPs:", partBoPs);
             console.error("Found WorkOrders:", workOrders);
 
@@ -84,6 +91,7 @@ async function fetchLinksForPart(part, direction) {
             // Fetch WorkOrderExecutions for the workorder
             const workOrderExecutions = await WorkOrderExecution.find({
                 workorder: part.partnumber,
+                customerId
             });
             console.error("Found WorkOrderExecutions:", workOrderExecutions);
 
@@ -106,12 +114,14 @@ async function fetchLinksForPart(part, direction) {
 
     return { nodes, links };
 }
-async function fetchGraphData(partnumber, direction) {
+async function fetchGraphData(partnumber, direction, customerId) {
     const nodes = [];
     const links = [];
 
     try {
-        const filters = {};
+        const filters = {
+            customerId // Add company filter
+        };
         if (partnumber) filters.partnumber = new RegExp(partnumber, "i");
 
         console.error("Filter value is:", filters.partnumber);
@@ -131,7 +141,7 @@ async function fetchGraphData(partnumber, direction) {
             });
 
             // Fetch links based on the direction
-            const fetchedLinks = await fetchLinksForPart(pt, direction);
+            const fetchedLinks = await fetchLinksForPart(pt, direction, customerId);
 
             // Merge fetched nodes and links
             nodes.push(...fetchedLinks.nodes);

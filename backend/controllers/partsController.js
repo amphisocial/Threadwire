@@ -8,6 +8,8 @@ exports.getParts = async (req, res) => {
     const filters = {};
     const { partnumber, description, revision, category, type, isbom } = req.query;
 
+    filters.customerId = req.user.customerId;
+
     if (req.query.partnumber) filters.partnumber = new RegExp(req.query.partnumber, "i");
     if (description) filters.description = new RegExp(description, "i");
     if (revision) filters.revision = revision;
@@ -25,7 +27,10 @@ exports.getParts = async (req, res) => {
 // POST Create new Part
 exports.createPart = async (req, res) => {
   try {
-    const part = new Part(req.body);
+    const part = new Part({
+      ...req.body,
+      customerId: req.user.customerId
+    });
     const savedPart = await part.save();
     
     // Process for vector database
@@ -46,7 +51,7 @@ exports.updatePart = async (req, res) => {
   try {
     const { partnumber, revision } = req.query;
     const updatedPart = await Part.findOneAndUpdate(
-      { partnumber, revision },
+      { partnumber, revision, customerId },
       { ...req.body, datemodified: new Date() },
       { new: true }
     );
@@ -73,7 +78,8 @@ exports.updatePart = async (req, res) => {
 exports.deletePart = async (req, res) => {
   try {
     const { partnumber, revision } = req.query;
-    const deletedPart = await Part.findOneAndDelete({ partnumber, revision });
+    const customerId = req.user.customerId;
+    const deletedPart = await Part.findOneAndDelete({ partnumber, revision, customerId });
 
     if (!deletedPart) {
       return res.status(404).json({ message: "Part not found" });
@@ -87,6 +93,7 @@ exports.deletePart = async (req, res) => {
 // Bulk import parts from CSV
 exports.importParts = async (req, res) => {
   const partData = req.body;
+  const customerId = req.user.customerId;
 
   try {
     if (!partData.partnumber || !partData.revision || !partData.description) {
@@ -104,6 +111,7 @@ exports.importParts = async (req, res) => {
       isbom: partData.isbom,
       datecreated: now,
       datemodified: now,
+      customerId: customerId
     });
 
     const savedPart = await newPart.save();

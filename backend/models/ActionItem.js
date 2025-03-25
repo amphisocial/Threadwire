@@ -16,6 +16,11 @@ const ActionItemSchema = new mongoose.Schema({
     default: 'Open'
   },
   remark: { type: String },
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: true
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('ActionItem', ActionItemSchema);

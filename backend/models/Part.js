@@ -13,6 +13,11 @@ const partSchema = new mongoose.Schema({
   lastmodifier: { type: String },
   blockerTag: { type: Number },
   isbom: { type: Boolean, default: false },
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: true
+  },
   customattribute1: { type: String },
   customattribute2: { type: String },
   customattribute3: { type: String },

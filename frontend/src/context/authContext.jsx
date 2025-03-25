@@ -53,11 +53,11 @@ export const AuthProvider = ({ children }) => {
     try {
       localStorage.setItem('authToken', token);
       if (isGoogle) {
-      localStorage.setItem('isGoogleAuth', 'true');
-    } else {
-      localStorage.removeItem('isGoogleAuth'); // Remove it completely for regular login
-    }
-      
+        localStorage.setItem('isGoogleAuth', 'true');
+      } else {
+        localStorage.removeItem('isGoogleAuth'); // Remove it completely for regular login
+      }
+
       const response = await fetch('/api/user/verify-token', {
         headers: {
           'Authorization': `Bearer ${token}`,

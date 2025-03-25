@@ -46,7 +46,7 @@ const ImportModal = ({ onClose, onImportComplete }) => {
               const row = results.data[i];
               
               // Validate required fields
-              if (!row.salesOrder || !row.customer_name || !row.line) {
+              if (!row.rder || !row.customer_name || !row.line) {
                 newErrors.push({
                   row: i + 2, // +2 for header row and 0-indexing
                   message: "Missing required fields (salesOrder, customer_name, or line)."

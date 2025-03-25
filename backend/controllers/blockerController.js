@@ -8,14 +8,21 @@ const Part = require('../models/Part');
 async function updateBlockerTags(blocker) {
   // For each related document type, check if any open blockers exist for that document.
   // If none exist, set blockerTag = false; otherwise, true.
+  const customerId = blocker.customerId;
 
   // 1. WorkOrders
   if (blocker.relatedWorkOrders && blocker.relatedWorkOrders.length > 0) {
     for (const woId of blocker.relatedWorkOrders) {
+
+      const workOrder = await WorkOrder.findOne({_id: woId, customerId});
+      if (!workOrder) continue;
+
       const openBlockersCount = await Blocker.countDocuments({
         relatedWorkOrders: woId,
-        status: { $ne: 'Closed' }  // not closed means open or in-progress
+        status: { $ne: 'Closed' },
+        customerId
       });
+
       await WorkOrder.findByIdAndUpdate(woId, {
         blockerTag: openBlockersCount > 0
       });
@@ -25,10 +32,16 @@ async function updateBlockerTags(blocker) {
   // 2. SalesOrders
   if (blocker.relatedSalesOrders && blocker.relatedSalesOrders.length > 0) {
     for (const soId of blocker.relatedSalesOrders) {
+
+      const salesOrder = await SalesOrder.findOne({_id: soId, customerId});
+      if (!salesOrder) continue;
+
       const openBlockersCount = await Blocker.countDocuments({
         relatedSalesOrders: soId,
-        status: { $ne: 'Closed' }
+        status: { $ne: 'Closed' },
+        customerId
       });
+
       await SalesOrder.findByIdAndUpdate(soId, {
         blockerTag: openBlockersCount > 0
       });
@@ -38,10 +51,16 @@ async function updateBlockerTags(blocker) {
   // 3. Parts
   if (blocker.relatedParts && blocker.relatedParts.length > 0) {
     for (const partId of blocker.relatedParts) {
+
+      const part = await Part.findOne({_id: partId, customerId});
+      if (!part) continue;
+
       const openBlockersCount = await Blocker.countDocuments({
         relatedParts: partId,
-        status: { $ne: 'Closed' }
+        status: { $ne: 'Closed' },
+        customerId
       });
+
       await Part.findByIdAndUpdate(partId, {
         blockerTag: openBlockersCount > 0
       });
@@ -53,7 +72,8 @@ async function updateBlockerTags(blocker) {
 exports.createBlocker = async (req, res) => {
   try {
     const { title, description, type, relatedWorkOrders, relatedSalesOrders, relatedParts } = req.body;
-    
+    const customerId = req.user.customerId;
+
     const newBlocker = await Blocker.create({
       title,
       description,
@@ -61,7 +81,8 @@ exports.createBlocker = async (req, res) => {
       status: 'Open',
       relatedWorkOrders,
       relatedSalesOrders,
-      relatedParts
+      relatedParts,
+      customerId
     });
 
     // Since it's a new blocker with status = 'Open', we need to set the blockerTag = true on all related docs.
@@ -78,12 +99,17 @@ exports.createBlocker = async (req, res) => {
 // GET All Blockers
 // -----------------------
 exports.getBlockers = async (req, res) => {
-    console.log(' am here');
   try {
     // Optionally, you could parse query parameters for filtering.
     // e.g. ?status=Open or ?type=Risk
-    const filters = { ...req.query }; // naive approach, refine for security
-    console.log('filters', filters);
+    const customerId = req.user.customerId;
+
+    const filters = { 
+      ...req.query,
+      customerId 
+    }; 
+
+    
     const blockers = await Blocker.find(filters).exec();
 
     res.status(200).json(blockers);
@@ -99,7 +125,12 @@ exports.getBlockers = async (req, res) => {
 exports.getBlockerById = async (req, res) => {
   try {
     const blockerId = req.params.id;
-    const blocker = await Blocker.findById(blockerId).exec();
+    const customerId = req.user.customerId;
+
+    const blocker = await Blocker.findOne({
+      _id: blockerId,
+      customerId
+    }).exec();
 
     if (!blocker) {
       return res.status(404).json({ error: 'Blocker not found' });
@@ -116,7 +147,20 @@ exports.getBlockerById = async (req, res) => {
 exports.updateBlocker = async (req, res) => {
   try {
     const blockerId = req.params.id;
+    const customerId = req.user.customerId;
     const updates = req.body; // e.g. { status, title, description, relatedWorkOrders, etc. }
+
+    const existingBlocker = await Blocker.findOne({
+      _id: blockerId,
+      customerId
+    });
+    
+    if (!existingBlocker) {
+      return res.status(404).json({ error: 'Blocker not found or you do not have permission' });
+    }
+    
+    // Don't allow customerId to be changed in updates
+    delete updates.customerId;
 
     // Update the blocker
     const updatedBlocker = await Blocker.findByIdAndUpdate(blockerId, updates, { new: true });
@@ -138,6 +182,18 @@ exports.updateBlocker = async (req, res) => {
 exports.deleteBlocker = async (req, res) => {
   try {
     const blockerId = req.params.id;
+    const customerId = req.user.customerId;
+
+    const existingBlocker = await Blocker.findOne({
+      _id: blockerId,
+      customerId
+    });
+    
+    if (!existingBlocker) {
+      return res.status(404).json({ error: 'Blocker not found or you do not have permission' });
+    }
+
+    const blockerCopy = {...existingBlocker.toObject()};
 
     const deletedBlocker = await Blocker.findByIdAndDelete(blockerId);
     if (!deletedBlocker) {

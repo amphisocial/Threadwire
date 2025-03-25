@@ -9,15 +9,31 @@ const handleResponse = (res, err, data) => {
 };
 
 
-const deleteWorkOrderExecution = (req, res) => {
-  const { id } = req.params;
-  WorkOrderExecution.findByIdAndDelete(id, (err, data) => handleResponse(res, err, data));
-};
+const deleteWorkOrderExecution = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const customerId = req.user.customerId;
+    
+    // Check if the execution record belongs to the user's company
+    const execution = await WorkOrderExecution.findOne({ _id: id, customerId });
+    
+    if (!execution) {
+      return res.status(404).json({ error: 'Work order execution not found or you do not have permission' });
+    }
+    
+    const deletedExecution = await WorkOrderExecution.findByIdAndDelete(id);
+    res.status(200).json(deletedExecution);
+  } catch (error) {
+    console.error('Error deleting work order execution:', error);
+    res.status(500).json({ error: 'Error deleting work order execution' });
+  }
+}; 
 
 const getWorkOrderExecutions = async (req, res) => {
   try {
-    // Build a dynamic filter object based on query parameters
-    const filter = {};
+    const filter = {
+      customerId: req.user.customerId 
+    };
 
     if (req.query.workorder) {
       filter.workorder = req.query.workorder;
@@ -49,7 +65,10 @@ const getWorkOrderExecutions = async (req, res) => {
 // Create a New WorkOrderExecution
 const createWorkOrderExecution = async (req, res) => {
   try {
-    const newWorkOrderExecution = new WorkOrderExecution(req.body);
+    const newWorkOrderExecution = new WorkOrderExecution({
+      ...req.body,
+      customerId: req.user.customerId // Add user's company ID
+    });
     const savedWorkOrderExecution = await newWorkOrderExecution.save();
 
     // Process for vector database
@@ -71,6 +90,17 @@ const createWorkOrderExecution = async (req, res) => {
 const updateWorkOrderExecution = async (req, res) => {
   try {
     const { id } = req.params;
+
+
+    const customerId = req.user.customerId;
+    
+    // Check if the execution record belongs to the user's company
+    const execution = await WorkOrderExecution.findOne({ _id: id, customerId });
+    
+    if (!execution) {
+      return res.status(404).json({ error: 'Work order execution not found or you do not have permission' });
+    }
+
     const updatedWorkOrderExecution = await WorkOrderExecution.findByIdAndUpdate(
       id,
       req.body,
@@ -99,6 +129,7 @@ const updateWorkOrderExecution = async (req, res) => {
 
 const importWorkOrderExecutions = async (req, res) => {
   const executionData = req.body;
+  const customerId = req.user.customerId;
   console.log("payload in server:",executionData);
 
   try {
@@ -116,6 +147,7 @@ const importWorkOrderExecutions = async (req, res) => {
       status: executionData.status,
       operator: executionData.operator,
       location: executionData.location,
+      customerId: customerId,
     });
 
     const savedExecution = await newExecution.save();

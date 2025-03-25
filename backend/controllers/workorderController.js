@@ -10,7 +10,10 @@ const handleResponse = (res, err, data) => {
 // WorkOrder Controller
 const createWorkOrder = async (req, res) => {
   try {
-    const newWorkOrder = new WorkOrder(req.body);
+    const newWorkOrder = new WorkOrder({
+      ...req.body,
+      customerId: req.user.customerId
+    });
     const savedWorkOrder = await newWorkOrder.save();
 
     // Process for vector database
@@ -30,6 +33,14 @@ const createWorkOrder = async (req, res) => {
 const updateWorkOrder = async (req, res) => {
   try {
     const { id } = req.params;
+    const customerId = req.user.customerId;
+
+    const workOrder = await WorkOrder.findOne({ _id: id, customerId });
+    
+    if (!workOrder) {
+      return res.status(404).json({ error: "Work order not found or you don't have permission" });
+    }
+
     const updatedWorkOrder = await WorkOrder.findByIdAndUpdate(id, req.body, { new: true });
     
     if (updatedWorkOrder) {
@@ -48,15 +59,31 @@ const updateWorkOrder = async (req, res) => {
   }
 };
 
-const deleteWorkOrder = (req, res) => {
-  const { id } = req.params;
-  WorkOrder.findByIdAndDelete(id, (err, data) => handleResponse(res, err, data));
+const deleteWorkOrder = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const customerId = req.user.customerId;
+    
+    // Check if the work order belongs to the user's company
+    const workOrder = await WorkOrder.findOne({ _id: id, customerId });
+    
+    if (!workOrder) {
+      return res.status(404).json({ error: "Work order not found or you don't have permission" });
+    }
+    
+    const deletedWorkOrder = await WorkOrder.findByIdAndDelete(id);
+    handleResponse(res, null, deletedWorkOrder);
+  } catch (err) {
+    handleResponse(res, err, null);
+  }
 };
 
 const getWorkOrders = async (req, res) => {
   try {
     // Build a dynamic filter object based on query parameters
-    const filter = {};
+    const filter = {
+      customerId: req.user.customerId 
+    };
 
     if (req.query.workorder) {
       filter.workorder = req.query.workorder;
@@ -83,6 +110,7 @@ const getWorkOrders = async (req, res) => {
 
 const importWorkorders = async (req, res) => {
   const workorderData = req.body;
+  const customerId = req.user.customerId;
   console.log("payload at server:", workorderData);
   try {
     if (!workorderData.workorder || !workorderData.type || !workorderData.description || !workorderData.partnumber || !workorderData.salesorder) {
@@ -102,6 +130,7 @@ const importWorkorders = async (req, res) => {
       status: "Open", // Default status
       dateCreated: now,
       dateModified: now,
+      customerId: customerId
     });
 
     const savedWorkorder = await newWorkorder.save();
