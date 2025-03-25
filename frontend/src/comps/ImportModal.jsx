@@ -19,6 +19,7 @@ const ImportModal = ({ onClose, onImportComplete }) => {
   };
 
   const handleFileUpload = async (event) => {
+    console.log("File upload function triggered", event.target.files);
     const file = event.target.files[0];
     if (!file) return;
 
@@ -29,6 +30,7 @@ const ImportModal = ({ onClose, onImportComplete }) => {
 
     const reader = new FileReader();
     reader.onload = async (e) => {
+      console.log("FileReader loaded file");
       const csvContent = e.target.result;
 
       try {
@@ -51,6 +53,12 @@ const ImportModal = ({ onClose, onImportComplete }) => {
                 });
                 continue;
               }
+
+              if (!file) {
+                  console.log("No file selected");
+                  return;
+               }
+              console.log("File selected:", file.name, file.size);
               
               try {
                 // Import one row at a time
