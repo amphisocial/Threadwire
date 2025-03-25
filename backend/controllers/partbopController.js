@@ -11,7 +11,10 @@ const handleResponse = (res, err, data) => {
 // PartBoP Controller
 const createPartBoP = async (req, res) => {
   try {
-    const newPartBoP = new PartBoP(req.body);
+    const newPartBoP = new PartBoP({
+      ...req.body,
+      customerId: req.user.customerId // Add user's company ID
+    });
     const savedPartBoP = await newPartBoP.save();
     
     // Process for vector database
@@ -31,6 +34,14 @@ const createPartBoP = async (req, res) => {
 const updatePartBoP = async (req, res) => {
   try {
     const { id } = req.params;
+    const customerId = req.user.customerId;
+
+    const partBoP = await PartBoP.findOne({ _id: id, customerId });
+    
+    if (!partBoP) {
+      return res.status(404).json({ error: "Part BoP not found or you don't have permission" });
+    }
+
     const updatedPartBoP = await PartBoP.findByIdAndUpdate(id, req.body, { new: true });
     
     if (updatedPartBoP) {
@@ -49,16 +60,32 @@ const updatePartBoP = async (req, res) => {
   }
 };
 
-const deletePartBoP = (req, res) => {
-  const { id } = req.params;
-  PartBoP.findByIdAndDelete(id, (err, data) => handleResponse(res, err, data));
+const deletePartBoP = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const customerId = req.user.customerId;
+    
+    // Check if the PartBoP belongs to the user's company
+    const partBoP = await PartBoP.findOne({ _id: id, customerId });
+    
+    if (!partBoP) {
+      return res.status(404).json({ error: "Part BoP not found or you don't have permission" });
+    }
+    
+    const deletedPartBoP = await PartBoP.findByIdAndDelete(id);
+    handleResponse(res, null, deletedPartBoP);
+  } catch (err) {
+    handleResponse(res, err, null);
+  }
 };
 
 const getPartBoPs = async (req, res) => {
   const filters = req.query;
   try {
     // Build a dynamic filter object based on query parameters
-    const filter = {};
+    const filter = {
+      customerId: req.user.customerId // Add company filter
+    };
 
     if (req.query.partnumber) {
       filter.partnumber = req.query.partnumber;
@@ -81,6 +108,8 @@ const getPartBoPs = async (req, res) => {
 
 const importPartBoPs = async (req, res) => {
   const partBoPData = req.body;
+  const customerId = req.user.customerId;
+
   console.log("Payload at server:",partBoPData);
 
   try {
@@ -94,6 +123,7 @@ const importPartBoPs = async (req, res) => {
       opcode: partBoPData.opcode,
       sequence: parseInt(partBoPData.sequence),
       planner: partBoPData.planner,
+      customerId: customerId
     });
 
     const savedPartBoP = await newPartBoP.save();

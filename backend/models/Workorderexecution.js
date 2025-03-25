@@ -12,7 +12,12 @@ const WorkOrderExecutionSchema = new mongoose.Schema({
   status: { type: String },
   operator: { type: String },
   location: { type: String },
-  priority: { type: String }
+  priority: { type: String },
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Company',
+    required: true
+  }
 });
 
 const WorkOrderExecution = mongoose.model('WorkOrderExecution', WorkOrderExecutionSchema, 'workorderexecution');

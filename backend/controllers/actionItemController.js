@@ -11,14 +11,17 @@ async function checkAndCloseBlocker(blockerId) {
   // Count how many action items for this blocker are NOT completed
   const notCompletedCount = await ActionItem.countDocuments({
     blockerId,
+    customerId,
     status: { $ne: 'Completed' },
   });
 
   if (notCompletedCount === 0) {
     // All action items completed => set blocker to "Closed"
-    const blocker = await Blocker.findByIdAndUpdate(blockerId, {
-      status: 'Closed'
-    }, { new: true });
+    const blocker = await Blocker.findOneAndUpdate(
+      { _id: blockerId, customerId },
+      { status: 'Closed' },
+      { new: true }
+    );
 
     // Possibly update the related WorkOrders / SalesOrders / Parts
     if (blocker) {
@@ -34,12 +37,19 @@ async function checkAndCloseBlocker(blockerId) {
 exports.createActionItem = async (req, res) => {
   try {
     const { blockerId, actionItem, assignedTo } = req.body;
+    const customerId = req.user.customerId;
+
+    const blocker = await Blocker.findOne({ _id: blockerId, customerId });
+    if (!blocker) {
+      return res.status(404).json({ error: 'Blocker not found or you do not have permission' });
+    }
 
     const newActionItem = await ActionItem.create({
       blockerId,
       actionItem,
       assignedTo,
-      status: 'Open'
+      status: 'Open',
+      customerId
     });
 
     res.status(201).json(newActionItem);
@@ -52,7 +62,20 @@ exports.createActionItem = async (req, res) => {
 exports.updateActionItem = async (req, res) => {
   try {
     const actionItemId = req.params.id;
+    const customerId = req.user.customerId;
     const updates = req.body; // e.g. { status: 'Completed', remark: 'Done' }
+
+    const existingActionItem = await ActionItem.findOne({
+      _id: actionItemId,
+      customerId
+    });
+    
+    if (!existingActionItem) {
+      return res.status(404).json({ error: 'Action item not found or you do not have permission' });
+    }
+    
+    // Don't allow customerId to be changed in updates
+    delete updates.customerId;
 
     const updatedActionItem = await ActionItem.findByIdAndUpdate(actionItemId, updates, { new: true });
     if (!updatedActionItem) {
@@ -61,7 +84,7 @@ exports.updateActionItem = async (req, res) => {
 
     // If the updated status is "Completed", we should check if all action items for that blocker are completed
     if (updatedActionItem.status === 'Completed') {
-      await checkAndCloseBlocker(updatedActionItem.blockerId);
+      await checkAndCloseBlocker(updatedActionItem.blockerId, customerId);
     }
 
     res.status(200).json(updatedActionItem);
@@ -74,6 +97,16 @@ exports.updateActionItem = async (req, res) => {
 exports.deleteActionItem = async (req, res) => {
   try {
     const actionItemId = req.params.id;
+    const customerId = req.user.customerId;
+
+    const existingActionItem = await ActionItem.findOne({
+      _id: actionItemId,
+      customerId
+    });
+    
+    if (!existingActionItem) {
+      return res.status(404).json({ error: 'Action item not found or you do not have permission' });
+    }
 
     const deletedActionItem = await ActionItem.findByIdAndDelete(actionItemId);
     if (!deletedActionItem) {
@@ -98,7 +131,11 @@ exports.deleteActionItem = async (req, res) => {
 // Existing getActionItems (fetches all with optional query filters)
 exports.getActionItems = async (req, res) => {
   try {
-    const queryObj = { ...req.query };
+    const customerId = req.user.customerId;
+    const queryObj = { 
+      ...req.query,
+      customerId // Add company filter
+    };
     const actionItems = await ActionItem.find(queryObj).exec();
     res.status(200).json(actionItems);
   } catch (err) {
@@ -113,8 +150,17 @@ exports.getActionItems = async (req, res) => {
 exports.getActionItemsByBlockerId = async (req, res) => {
   try {
     const { blockerId } = req.params;
+    const customerId = req.user.customerId;
 
-    const actionItems = await ActionItem.find({ blockerId }).exec();
+    const blocker = await Blocker.findOne({ _id: blockerId, customerId });
+    if (!blocker) {
+      return res.status(404).json({ error: 'Blocker not found or you do not have permission' });
+    }
+
+    const actionItems = await ActionItem.find({ 
+      blockerId,
+      customerId
+    }).exec();
 
     if (!actionItems) {
       return res.status(404).json({ error: 'No action items found for this blocker' });
@@ -131,7 +177,12 @@ exports.getActionItemsByBlockerId = async (req, res) => {
 exports.getActionItemById = async (req, res) => {
   try {
     const itemId = req.params.id;
-    const actionItem = await ActionItem.findById(itemId).exec();
+    const customerId = req.user.customerId;
+
+    const actionItem = await ActionItem.findOne({
+      _id: itemId,
+      customerId
+    }).exec();
 
     if (!actionItem) {
       return res.status(404).json({ error: 'Action item not found' });
