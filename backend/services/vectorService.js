@@ -67,8 +67,11 @@ class VectorService {
       // Generate embedding
       const embedding = await this.embeddings.embedQuery(text);
       
+      
       // Create a unique ID 
       const id = `${collectionName}_${document._id.toString()}`;
+
+      const customerId = document.customerId ? document.customerId.toString() : 'default';
       
       // Store in Pinecone
       await this.index.upsert([{
@@ -82,7 +85,8 @@ class VectorService {
             timestamp: new Date().toISOString()
           
         }
-      }]);
+      }],
+      customerId);
       
       return true;
     } catch (error) {
@@ -377,6 +381,8 @@ class VectorService {
         throw new Error('Vector service not initialized');
       }
       
+      const namespace = customerId ? customerId.toString() : 'default';
+
       // Generate embedding for the query
       const queryEmbedding = await this.embeddings.embedQuery(query);
       
@@ -398,6 +404,7 @@ class VectorService {
           
           // Execute a query with this filter
           const subQueryResponse = await this.index.query({
+            namespace,
             vector: queryEmbedding,
             topK: limit,
             includeMetadata: true,
@@ -436,6 +443,7 @@ class VectorService {
         
         // Query Pinecone
         const queryResponse = await this.index.query({
+          namespace,
           vector: queryEmbedding,
           topK: limit,
           includeMetadata: true,
