@@ -44,23 +44,58 @@ const authenticateToken = async (req, res, next) => {
             // Regular JWT verification
             try {
                 const decoded = jwt.verify(token, '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987');
+                //             if (!decoded.customerId) {
+                //     const user = await User.findOne({ 
+                //         _id: decoded.userId || decoded.id  // Depending on what field you use
+                //     });
+
+                //     if (!user) {
+                //         return res.status(403).json({ message: 'User not found in the system.' });
+                //     }
+
+                //     // Add customerId to the request user object
+                //     req.user = {
+                //         ...decoded,
+                //         customerId: user.customerId
+                //     };
+                // } else {
+                //     req.user = decoded;
+                // }
+                //             return next();
+                //         } catch (error) {
+                //             return res.status(403).json({ message: 'Invalid JWT token.' });
+                //         }
+                //     }
+                // Get MongoDB ID from the token
+                const mongoId = decoded.userId || decoded._id;
+
                 if (!decoded.customerId) {
-        const user = await User.findOne({ 
-            _id: decoded.userId || decoded.id  // Depending on what field you use
-        });
-        
-        if (!user) {
-            return res.status(403).json({ message: 'User not found in the system.' });
-        }
-        
-        // Add customerId to the request user object
-        req.user = {
-            ...decoded,
-            customerId: user.customerId
-        };
-    } else {
-        req.user = decoded;
-    }
+                    const user = await User.findOne({
+                        _id: mongoId
+                    });
+
+                    if (!user) {
+                        return res.status(403).json({ message: 'User not found in the system.' });
+                    }
+
+                    // Use consistent field names
+                    req.user = {
+                        id: user._id.toString(),
+                        email: decoded.email,
+                        name: decoded.username,
+                        isGoogleUser: false,
+                        customerId: user.customerId
+                    };
+                } else {
+                    // Use consistent field names
+                    req.user = {
+                        id: mongoId.toString(),
+                        email: decoded.email,
+                        name: decoded.username,
+                        isGoogleUser: false,
+                        customerId: decoded.customerId
+                    };
+                }
                 return next();
             } catch (error) {
                 return res.status(403).json({ message: 'Invalid JWT token.' });

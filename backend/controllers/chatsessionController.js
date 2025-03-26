@@ -5,7 +5,7 @@ const ChatSession = require('../models/ChatSession');
 exports.getChatHistory = async (req, res) => {
   try {
     // Get userId as a string
-    const userId = String(req.user._id);
+    const userId = String(req.user.id);
     const isGoogleUser = req.user.isGoogleUser === true;
     
     // Find the most recent chat session for this user
