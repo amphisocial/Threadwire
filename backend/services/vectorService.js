@@ -74,7 +74,8 @@ class VectorService {
       const customerId = document.customerId ? document.customerId.toString() : 'default';
       
       // Store in Pinecone
-      await this.index.upsert([{
+      if (customerId !== 'default') {
+        await this.index.namespace(customerId).upsert([{
           id,
           values: embedding,
           metadata: {
@@ -83,10 +84,21 @@ class VectorService {
             source: collectionName,
             docId: document._id.toString(),
             timestamp: new Date().toISOString()
-          
-        }
-      }],
-      customerId);
+          }
+        }]);
+      } else {
+        await this.index.namespace('').upsert([{
+          id,
+          values: embedding,
+          metadata: {
+            ...metadata,
+            pageContent: text,
+            source: collectionName,
+            docId: document._id.toString(),
+            timestamp: new Date().toISOString()
+          }
+        }]);
+      }
       
       return true;
     } catch (error) {
@@ -375,7 +387,7 @@ class VectorService {
     };
   }
 
-  async similaritySearch(query, filters = {}, limit = 5, customerId) {
+  async similaritySearch(query, filters = {}, limit = 5, customerId = 'default') {
     try {
       if (!this.isInitialized) {
         throw new Error('Vector service not initialized');
@@ -388,6 +400,12 @@ class VectorService {
       
       // Prepare filter
       let pineconeFilter = {};
+
+      if (filters.type && Array.isArray(filters.type.$in) && filters.type.$in.length > 0) {
+        pineconeFilter.type = { $in: filters.type.$in };
+      }
+      
+      let queryResponse;
       
       // Process $or conditions specially
       if (filters.$or) {
@@ -403,16 +421,40 @@ class VectorService {
           const mergedFilter = { ...subFilter, ...condition };
           
           // Execute a query with this filter
-          const subQueryResponse = await this.index.query({
-            namespace,
-            vector: queryEmbedding,
-            topK: limit,
-            includeMetadata: true,
-            filter: mergedFilter
-          });
-          
-          orResults.push(...subQueryResponse.matches);
+          // Try customer namespace first
+        if (customerId && customerId !== 'default') {
+          try {
+            // Execute a query with this filter in customer namespace
+            const customerResponse = await this.index.namespace(customerId.toString()).query({
+              vector: queryEmbedding,
+              topK: limit,
+              includeMetadata: true,
+              filter: mergedFilter
+            });
+            
+            orResults.push(...customerResponse.matches);
+          } catch (namespaceError) {
+            console.error(`Error querying namespace ${customerId}:`, namespaceError);
+          }
         }
+        
+        // If no or few results, try default namespace
+        if (orResults.length < 2) {
+          try {
+            // Execute a query with this filter in default namespace
+            const defaultResponse = await this.index.namespace('').query({
+              vector: queryEmbedding,
+              topK: limit,
+              includeMetadata: true,
+              filter: mergedFilter
+            });
+            
+            orResults.push(...defaultResponse.matches);
+          } catch (defaultError) {
+            console.error('Error querying default namespace:', defaultError);
+          }
+        }
+      }
         
         // Remove duplicates and sort by score
         const uniqueResults = [];
@@ -434,21 +476,44 @@ class VectorService {
         }));
       } else {
         // Handle normal filtering
-        pineconeFilter = { ...filters };
-        
-        // Handle document type filter
-        if (filters.type && Array.isArray(filters.type.$in) && filters.type.$in.length > 0) {
-          pineconeFilter.type = { $in: filters.type.$in };
+        if (customerId && customerId !== 'default') {
+          try {
+            queryResponse = await this.index.namespace(customerId.toString()).query({
+              vector: queryEmbedding,
+              topK: limit,
+              includeMetadata: true,
+              filter: Object.keys(pineconeFilter).length > 0 ? pineconeFilter : undefined
+            });
+            
+            // If no results in customer namespace, try default namespace
+            if (queryResponse.matches.length === 0) {
+              console.log(`No results in namespace "${customerId}", trying default`);
+              queryResponse = await this.index.namespace('').query({
+                vector: queryEmbedding,
+                topK: limit,
+                includeMetadata: true,
+                filter: Object.keys(pineconeFilter).length > 0 ? pineconeFilter : undefined
+              });
+            }
+          } catch (namespaceError) {
+            console.error(`Error with namespace "${customerId}":`, namespaceError);
+            // Fall back to default namespace
+            queryResponse = await this.index.namespace('').query({
+              vector: queryEmbedding,
+              topK: limit,
+              includeMetadata: true,
+              filter: Object.keys(pineconeFilter).length > 0 ? pineconeFilter : undefined
+            });
+          }
+        } else {
+          // Use default namespace
+          queryResponse = await this.index.namespace('').query({
+            vector: queryEmbedding,
+            topK: limit,
+            includeMetadata: true,
+            filter: Object.keys(pineconeFilter).length > 0 ? pineconeFilter : undefined
+          });
         }
-        
-        // Query Pinecone
-        const queryResponse = await this.index.query({
-          namespace,
-          vector: queryEmbedding,
-          topK: limit,
-          includeMetadata: true,
-          filter: Object.keys(pineconeFilter).length > 0 ? pineconeFilter : undefined
-        });
         
         // Format results
         return queryResponse.matches.map(match => ({
