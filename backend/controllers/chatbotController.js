@@ -13,6 +13,12 @@ const openAI = new OpenAI({
 exports.chatQuery = async (req, res) => {
   try {
     const { query, filters = {}, documentTypes = [] } = req.body;
+
+    const customerId = req.user.customerId;
+    
+    if (!customerId) {
+      return res.status(400).json({ error: 'User is not associated with a customer' });
+    }
     
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
@@ -125,7 +131,8 @@ exports.chatQuery = async (req, res) => {
         const blockerDocs = await vectorService.similaritySearch(
           `blockers for ${entityMentioned}`, 
           { source: "blockers", [`related${entityType === 'salesOrder' ? 'SalesOrder' : entityType === 'workorder' ? 'WorkOrder' : 'Part'}Numbers`]: entityId },
-          3
+          3,
+          customerId
         );
         
         if (blockerDocs && blockerDocs.length > 0) {
@@ -139,7 +146,7 @@ exports.chatQuery = async (req, res) => {
     
     // If no results from direct query or not a blocker query, use standard vector search
     if (relevantDocs.length === 0) {
-      relevantDocs = await vectorService.similaritySearch(query, searchFilters, 5);
+      relevantDocs = await vectorService.similaritySearch(query, searchFilters, 5, customerId);
     }
     
     if (relevantDocs.length === 0) {
@@ -276,15 +283,18 @@ exports.testVectorConnection = async (req, res) => {
     if (!vectorService.isInitialized) {
       await vectorService.initialize();
     }
+
+    const customerId = req.user.customerId;
     
     // Simple query to test the connection
-    const testResults = await vectorService.similaritySearch("test query", {}, 1);
+    const testResults = await vectorService.similaritySearch("test query", {}, 1, customerId);
     
     res.json({
       status: "success",
       message: "Successfully connected to vector database",
       initialized: vectorService.isInitialized,
-      resultsFound: testResults.length
+      resultsFound: testResults.length,
+      customerNamespace: customerId
     });
   } catch (error) {
     console.error('Error testing vector connection:', error);
@@ -301,6 +311,12 @@ exports.advancedSearch = async (req, res) => {
   try {
     const { query, filters = {}, documentTypes = [], limit = 10 } = req.body;
     
+    const customerId = req.user.customerId;
+    
+    if (!customerId) {
+      return res.status(400).json({ error: 'User is not associated with a customer' });
+    }
+
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
     }
@@ -348,7 +364,7 @@ exports.advancedSearch = async (req, res) => {
     }
     
     // Perform similarity search with higher limit for debugging
-    const searchResults = await vectorService.similaritySearch(query, searchFilters, limit);
+    const searchResults = await vectorService.similaritySearch(query, searchFilters, limit, customerId);
     
     // Return detailed results for analysis
     res.json({
