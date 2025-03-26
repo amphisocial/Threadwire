@@ -375,13 +375,13 @@ class VectorService {
     };
   }
 
-  async similaritySearch(query, filters = {}, limit = 5) {
+  async similaritySearch(query, filters = {}, limit = 5, customerId) {
     try {
       if (!this.isInitialized) {
         throw new Error('Vector service not initialized');
       }
       
-      const namespace = customerId ? customerId.toString() : 'default';
+      
 
       // Generate embedding for the query
       const queryEmbedding = await this.embeddings.embedQuery(query);
