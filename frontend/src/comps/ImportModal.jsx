@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import Papa from 'papaparse';
-import './ImportModal.css';
 
 const ImportModal = ({ onClose, onImportComplete }) => {
   const [importStatus, setImportStatus] = useState('');
@@ -19,7 +18,6 @@ const ImportModal = ({ onClose, onImportComplete }) => {
   };
 
   const handleFileUpload = async (event) => {
-    console.log("File upload function triggered", event.target.files);
     const file = event.target.files[0];
     if (!file) return;
 
@@ -30,67 +28,58 @@ const ImportModal = ({ onClose, onImportComplete }) => {
 
     const reader = new FileReader();
     reader.onload = async (e) => {
-      console.log("FileReader loaded file");
       const csvContent = e.target.result;
-
       try {
         Papa.parse(csvContent, {
           header: true,
           skipEmptyLines: true,
           complete: async (results) => {
-            const newErrors = [];
-            let successCount = 0;
-            
-            // Process each row individually
-            for (let i = 0; i < results.data.length; i++) {
-              const row = results.data[i];
-              
-              // Validate required fields
-              if (!row.rder || !row.customer_name || !row.line) {
-                newErrors.push({
-                  row: i + 2, // +2 for header row and 0-indexing
-                  message: "Missing required fields (salesOrder, customer_name, or line)."
-                });
-                continue;
-              }
+            const { data } = results;
+            const errors = [];
 
-              if (!file) {
-                  console.log("No file selected");
-                  return;
-               }
-              console.log("File selected:", file.name, file.size);
-              
+            setProgress(0);
+            for (let i = 0; i < data.length; i++) {
+              const row = data[i];
               try {
-                // Import one row at a time
+                // Validate required fields
+                if (!row.salesOrder || !row.customer_name || !row.line) {
+                  errors.push({
+                    row: i + 2,
+                    message: "Missing required fields (salesOrder, customer_name, or line)."
+                  });
+                  continue;
+                }
+
                 const response = await fetch("/api/salesorders/import", {
                   method: "POST",
                   headers: getAuthHeaders(),
-                  body: JSON.stringify(row) // Send single row
+                  body: JSON.stringify(row),
                 });
-                
+
                 if (!response.ok) {
-                  const errorData = await response.json();
-                  throw new Error(errorData.error || 'Failed to import sales order');
+                  const errorText = await response.text();
+                  throw new Error(errorText);
                 }
-                
-                successCount++;
-                
-                // Update progress
-                setProgress(((i + 1) / results.data.length) * 100);
               } catch (error) {
-                newErrors.push({
+                errors.push({
                   row: i + 2,
-                  message: `Failed to import row: ${error.message}`
+                  message: `Failed to import row: ${error.message}`,
                 });
               }
+              setProgress(((i + 1) / data.length) * 100);
             }
 
-            setErrors(newErrors);
-            setImportStatus(newErrors.length === 0 ? 'success' : 'error');
+            if (errors.length === 0) {
+              setImportStatus('success');
+              setErrors([]);
+            } else {
+              setImportStatus('error');
+              setErrors(errors);
+            }
+
             setIsProcessing(false);
-            
-            // Call onImportComplete if there were successful imports
-            if (successCount > 0 && onImportComplete) {
+
+            if (errors.length === 0 && onImportComplete) {
               onImportComplete();
             }
           },
@@ -101,80 +90,50 @@ const ImportModal = ({ onClose, onImportComplete }) => {
           }
         });
       } catch (error) {
-        console.error("Error processing CSV:", error);
         setErrors([{ row: 0, message: `Error processing CSV: ${error.message}` }]);
         setIsProcessing(false);
         setImportStatus('error');
       }
     };
-
     reader.readAsText(file);
   };
 
   return (
-    <div className="import-modal-overlay">
-      <div className="import-modal">
-        <div className="import-modal-header">
-          <h3>Import Sales Orders</h3>
-          <button className="import-modal-close" onClick={onClose}>×</button>
-        </div>
-
-        <div className="import-modal-body">
-          <div className="import-section">
-            <label className="file-input-label">
-              Choose CSV File
-              <input
-                type="file"
-                accept=".csv"
-                onChange={handleFileUpload}
-                className="file-input"
-              />
-            </label>
+    <div className="wo-import-modal">
+      <div className="wo-import-modal-content">
+        <button className="wo-close-button" onClick={onClose}>&times;</button>
+        <h3 className="wo-modal-title">Import Sales Orders</h3>
+        <input
+          type="file"
+          accept=".csv"
+          onChange={handleFileUpload}
+          className="wo-file-input"
+        />
+        {progress > 0 && (
+          <div className="wo-progress-container">
+            <progress className="wo-progress" value={progress} max="100" />
+            <div className="wo-progress-text">{Math.round(progress)}%</div>
           </div>
-
-          {isProcessing && (
-            <div className="progress-section">
-              <div className="progress-bar">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${progress}%` }}
-                ></div>
-              </div>
-              <p className="progress-text">Processing... {Math.round(progress)}%</p>
-            </div>
-          )}
-
-          {importStatus && (
-            <div className={`status-message ${importStatus}`}>
-              {importStatus === 'success'
-                ? 'Import completed successfully!'
-                : 'Import completed with errors'}
-            </div>
-          )}
-
-          {errors.length > 0 && (
-            <div className="error-section">
-              <h4>Errors:</h4>
-              <ul className="error-list">
-                {errors.map((error, index) => (
-                  <li key={index} className="error-item">
-                    Row {error.row}: {error.message}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="import-modal-footer">
-            <button
-              onClick={onClose}
-              className="modal-button"
-              disabled={isProcessing}
-            >
-              {errors.length === 0 ? 'Close' : 'Cancel'}
-            </button>
+        )}
+        {importStatus && (
+          <div className="wo-import-status">
+            {importStatus === 'success' 
+              ? 'Import successful! All rows processed.'
+              : `Import completed with ${errors.length} errors`}
           </div>
-        </div>
+        )}
+        {errors.length > 0 && (
+          <div className="wo-error-section">
+            <h4>Errors:</h4>
+            <ul>
+              {errors.map((error, index) => (
+                <li key={index}>
+                  Row {error.row}: {error.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
