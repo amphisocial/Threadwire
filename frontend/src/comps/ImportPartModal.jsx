@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import Papa from 'papaparse';
 
-const ImportPartModal = ({ onImportComplete }) => {
-    const [showImport, setShowImport] = useState(true);
+const ImportPartModal = ({ onClose, onImportComplete }) => {
+    
     const [progress, setProgress] = useState(0);
     const [status, setStatus] = useState('');
 
@@ -84,7 +84,7 @@ const ImportPartModal = ({ onImportComplete }) => {
     return (
         <div className="wo-import-modal">
             <div className="wo-import-modal-content">
-                <button className="wo-close-button" onClick={() => setShowImport(false)}>&times;</button>
+                <button className="wo-close-button" onClick={onClose}>&times;</button>
                 <h3 className="wo-modal-title">Import Parts Data</h3>
                 <input
                     type="file"
