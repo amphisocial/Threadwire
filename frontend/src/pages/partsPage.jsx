@@ -13,6 +13,42 @@ const PartsPage = () => {
   const [showBlockerPartsModal, setShowBlockerPartsModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [isEditingBlocker, setIsEditingBlocker] = useState(false);
+  const [parts, setParts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('authToken');
+    const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+    };
+  };
+
+  const fetchParts = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/parts', {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch parts');
+      }
+      
+      const data = await response.json();
+      setParts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching parts:', error);
+      setError(error.message);
+      setParts([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handlePartSelect = (part) => {
     setSelectedPart(part);
@@ -40,7 +76,7 @@ const PartsPage = () => {
       <div className="pm-header">
         <h2>Parts Management</h2>
         <button
-          className="pm-import-button"
+          className="wo-import-button"
           onClick={() => setShowImportPartModal(true)}
         >
           Import Parts

@@ -13,6 +13,7 @@ const SalesOrdersApp = () => {
   const [salesOrders, setSalesOrders] = useState([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const blockerModalRef = useRef(null);
 
 
   const getAuthHeaders = () => {
@@ -94,25 +95,26 @@ const SalesOrdersApp = () => {
       <Navbar />
       <div className="content-container">
         <h2>Sales Orders</h2>
-        <div className="button-group">
+        <div className="wo-section-navbar">
+        <button 
+            onClick={() => setShowImportModal(true)}
+            className="wo-import-button"
+          >
+            Import CSV
+          </button>
           <button 
             onClick={handleAddRiskIssue}
-            className="btn btn-primary"
+            className="wo-risk-button"
           >
             + Add Risk/Issue
           </button>
           <button 
             onClick={handleEditRiskIssue}
-            className="btn btn-primary"
+            className="wo-risk-button"
           >
             Edit Risk/Issue
           </button>
-          <button 
-            onClick={() => setShowImportModal(true)}
-            className="btn btn-success"
-          >
-            Import CSV
-          </button>
+          
         </div>
 
         {error && (
