@@ -22,7 +22,7 @@ body {
 }
 
 .content-container {
-  padding: 20px;
+  padding: 0;
   flex: 1;
 }
 
