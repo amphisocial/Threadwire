@@ -26,6 +26,7 @@ const RegistrationForm = () => {
   const [companySearch, setCompanySearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredCompanies, setFilteredCompanies] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState(null);
   const suggestionRef = useRef(null);
 
 
@@ -78,12 +79,42 @@ const RegistrationForm = () => {
   const handleCompanySearch = (e) => {
     const searchTerm = e.target.value;
     setCompanySearch(searchTerm);
+    setSelectedCompany(null);
+    setFormData({...formData, customerId: ''});
+
 
     const filtered = companies.filter(company =>
       company.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredCompanies(filtered);
     setShowSuggestions(true);
+  };
+
+  const checkCompanyStatus = async (companyId) => {
+    try {
+      const response = await fetch(`/api/user/company-status/${companyId}`);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await response.json();
+      
+      if (!data.canJoin) {
+        if (data.hasPowerUser && data.currentUserCount >= data.maxUsers) {
+          showToast('error', 'This company has reached its user limit');
+          setCompanySearch('');
+          setSelectedCompany(null);
+          setFormData({...formData, customerId: ''});
+        } else if (data.hasPowerUser) {
+          // Company has a power user but still has space
+          setSelectedCompany(data);
+          setFormData({...formData, customerId: companyId});
+        }
+      } else {
+        // Company can be joined
+        setSelectedCompany(data);
+        setFormData({...formData, customerId: companyId});
+      }
+    } catch (err) {
+      showToast('error', 'Failed to check company status: ' + err.message);
+    }
   };
 
   // Handle company selection
@@ -129,6 +160,10 @@ const RegistrationForm = () => {
           phone: '',
           customerId: ''
         });
+
+        setCompanySearch('');
+        setSelectedCompany(null);
+
         setTimeout(() => {
           navigate('/login');
         }, 2000);
@@ -285,6 +320,14 @@ const RegistrationForm = () => {
                 </div>
               )}
             </div>
+          {selectedCompany && (
+              <div className="company-status">
+                {selectedCompany.hasPowerUser ? 
+                  <span className="joining-company">Joining as a regular user</span> : 
+                  <span className="power-user-company">You'll be the admin of this company</span>
+                }
+              </div>
+            )}
           </div>
 
           <button type="submit">Register</button>

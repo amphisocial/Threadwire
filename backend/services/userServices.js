@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Company = require('../models/Company');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
@@ -20,6 +21,39 @@ const registerUser = async ({ firstName, lastName, userName, email, phone, passw
         // Hash the password
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        let company;
+        let isPowerUser = false;
+
+        if (customerId) {
+            // Check if company exists
+            company = await Company.findById(customerId);
+            if (!company) {
+                throw new Error('Company not found');
+            }
+
+            // Check if the company already has a power user
+            if (company.powerUserId) {
+                // Check if company has reached user limit
+                if (company.currentUserCount >= company.maxUsers) {
+                    throw new Error('This company has reached its user limit');
+                }
+                
+                // Regular user joining existing company - update company user count
+                company.currentUserCount += 1;
+                await company.save();
+            } else {
+                // First user for this company - make them a power user
+                isPowerUser = true;
+                
+                // Set company license details
+                company.licenseType = 'FREE';
+                company.maxUsers = 3; // 1 power user + 2 regular users
+                company.currentUserCount = 1;
+            }
+        } else {
+            throw new Error('Company ID is required');
+        }
+
         // Create new user
         const user = new User({
             firstName,
@@ -28,11 +62,17 @@ const registerUser = async ({ firstName, lastName, userName, email, phone, passw
             email,
             phone,
             password: hashedPassword,
-            customerId
+            customerId,
+            role: isPowerUser ? 'power_user' : 'regular_user'
         });
 
         // Save user to database
         await user.save();
+
+        if (isPowerUser) {
+            company.powerUserId = user._id;
+            await company.save();
+        }
 
         return { message: 'User registered successfully' };
     }
@@ -75,7 +115,7 @@ const loginUser = async ({ email, password, otp }) => {
 
     // Generate JWT token
     const token = jwt.sign(
-        { userId: user._id, email: user.email, username: user.userName, customerId: user.customerId },
+        { userId: user._id, email: user.email, username: user.userName, customerId: user.customerId, role: user.role },
         '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
         { expiresIn: '1h' }
     );
@@ -197,6 +237,64 @@ const completeProfile = async (userId, profileData) => {
     }
 };
 
+const checkCompanyStatus = async (companyId) => {
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            throw new Error('Company not found');
+        }
+        
+        return {
+            id: company._id,
+            name: company.name,
+            hasPowerUser: !!company.powerUserId,
+            currentUserCount: company.currentUserCount,
+            maxUsers: company.maxUsers,
+            canJoin: !company.powerUserId || (company.currentUserCount < company.maxUsers)
+        };
+    } catch (error) {
+        throw new Error(error.message || 'Failed to check company status');
+    }
+};
+
+const getCompanyUsers = async (userId) => {
+    try {
+        // Get user details
+        const user = await User.findById(userId);
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        // Get company details
+        const company = await Company.findById(user.customerId);
+        if (!company) {
+            throw new Error('Company not found');
+        }
+
+        // Check if user is power user
+        if (user.role !== 'power_user') {
+            throw new Error('Access denied. Only power users can view company users.');
+        }
+
+        // Get all users from the company
+        const companyUsers = await User.find({ customerId: company._id })
+            .select('-password')
+            .sort({ createdAt: -1 });
+
+        return {
+            users: companyUsers,
+            company: {
+                name: company.name,
+                maxUsers: company.maxUsers,
+                currentUserCount: company.currentUserCount,
+                licenseType: company.licenseType
+            }
+        };
+    } catch (error) {
+        throw new Error(error.message || 'Failed to retrieve company users');
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
@@ -204,5 +302,7 @@ module.exports = {
     enableMFA,
     disableMFA,
     verifyMFA,
-    completeProfile
+    completeProfile,
+    checkCompanyStatus,
+    getCompanyUsers
 };
