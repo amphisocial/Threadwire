@@ -34,7 +34,8 @@ const authenticateToken = async (req, res, next) => {
                     name: payload.name,
                     picture: payload.picture,
                     isGoogleUser: true,
-                    customerId: user.customerId
+                    customerId: user.customerId,
+                    role: user.role
                 };
                 return next();
             } catch (error) {
@@ -84,7 +85,8 @@ const authenticateToken = async (req, res, next) => {
                         email: decoded.email,
                         name: decoded.username,
                         isGoogleUser: false,
-                        customerId: user.customerId
+                        customerId: user.customerId,
+                        role: user.role
                     };
                 } else {
                     // Use consistent field names
@@ -93,7 +95,8 @@ const authenticateToken = async (req, res, next) => {
                         email: decoded.email,
                         name: decoded.username,
                         isGoogleUser: false,
-                        customerId: decoded.customerId
+                        customerId: decoded.customerId,
+                        role: decoded.role
                     };
                 }
                 return next();

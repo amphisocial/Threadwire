@@ -13,6 +13,7 @@ import PartsPage from "./pages/partsPage.jsx";
 import WorkOrders from "./pages/workOrders.jsx";
 import Chatbot from './pages/chatbot.jsx'; 
 import ProfileCompletion from './pages/profileCompletion.jsx';
+import UserManagement from "./pages/userManagement.jsx";
 
 function App() {
   return (
@@ -77,6 +78,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Chatbot />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/user-management"
+            element={
+              <ProtectedRoute>
+                <UserManagement />
               </ProtectedRoute>
             }
           />

@@ -67,6 +67,11 @@ const userSchema = new mongoose.Schema({
   },
   mfaEnabled: { type: Boolean, default: false },
   mfaSecret: { type: String, default: null },
+  role: {
+    type: String,
+    enum: ['power_user', 'regular_user'],
+    default: 'regular_user'
+  }
 }, { timestamps: true });
 
 userSchema.virtual('confirmPassword')

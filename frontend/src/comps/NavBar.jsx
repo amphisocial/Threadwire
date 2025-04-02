@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 
 const Navbar = () => {
-  const { logout } = useAuth();
+  const { logout, isPowerUser } = useAuth();
   const navigate = useNavigate();
   const getCurrentPage = () => {
     const path = window.location.pathname;
@@ -34,6 +34,9 @@ const Navbar = () => {
         break;
       case "chat":
         navigate('/chatbot');
+        break;
+      case "usermanagement":  // Add new case for user management
+        navigate('/user-management');
         break;
       default:
         console.error(`Unknown page: ${page}`);
@@ -86,6 +89,14 @@ const Navbar = () => {
       >
         Visualization
       </button>
+      {isPowerUser && (
+        <button
+          onClick={() => handleNavigation('usermanagement')}
+          className={currentPage === 'user-management' ? 'active' : ''}
+        >
+          User Management
+        </button>
+      )}
       <button
         onClick={logout}
       >

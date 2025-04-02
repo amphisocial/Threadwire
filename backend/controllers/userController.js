@@ -5,7 +5,7 @@ const Company = require('../models/Company');
 const registerUser = async (req, res) => {
   try {
     const user = await userService.registerUser(req.body);
-    res.status(201).json({ message: 'User registered successfully', userId: user._id });
+    res.status(201).json({ message: 'User registered successfully', userId: user._id, role: result.user.role });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -73,6 +73,55 @@ const completeProfile = async (req, res) => {
   }
 };
 
+const checkCompanyStatus = async (req, res) => {
+  try {
+      const { companyId } = req.params;
+      const status = await userService.checkCompanyStatus(companyId);
+      res.status(200).json(status);
+  } catch (error) {
+      res.status(400).json({ error: error.message });
+  }
+};
+
+const getCompanyUsers = async (req, res) => {
+  try {
+      const userId = req.user.id || req.user.userId;
+      const result = await userService.getCompanyUsers(userId);
+      res.status(200).json(result);
+  } catch (error) {
+      res.status(400).json({ error: error.message });
+  }
+};
+
+const verifyToken = (req, res) => {
+  try {
+      // Return user information including role
+      res.status(200).json({
+          valid: true,
+          user: {
+              userId: req.user.id || req.user.userId,
+              username: req.user.username || req.user.name,
+              email: req.user.email,
+              role: req.user.role,
+              customerId: req.user.customerId
+          }
+      });
+  } catch (error) {
+      res.status(403).json({ message: 'Invalid token' });
+  }
+};
+
+const checkPowerUser = (req, res) => {
+  try {
+      const role = req.user.role || '';
+      res.status(200).json({
+          isPowerUser: role === 'power_user'
+      });
+  } catch (error) {
+      res.status(403).json({ message: 'Authentication failed' });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -80,6 +129,10 @@ module.exports = {
   enableMFA,
   disableMFA,
   getAllCompanies,
-  completeProfile
+  completeProfile,
+  checkCompanyStatus,
+  getCompanyUsers,
+  verifyToken,
+  checkPowerUser
 };
 

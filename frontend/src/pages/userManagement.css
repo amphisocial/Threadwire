@@ -1,0 +1,179 @@
+/* components/UserManagement.css */
+.user-management-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  
+  .content-container {
+    padding: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  
+  .company-info-card {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .company-info-card h2 {
+    margin-top: 0;
+    color: #333;
+    margin-bottom: 16px;
+  }
+  
+  .company-info-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+  }
+  
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .stat-label {
+    font-size: 14px;
+    color: #6c757d;
+    margin-bottom: 4px;
+  }
+  
+  .stat-value {
+    font-size: 18px;
+    font-weight: 500;
+  }
+  
+  .section {
+    margin-bottom: 32px;
+  }
+  
+  .section h2 {
+    border-bottom: 1px solid #e3e3e3;
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+  }
+  
+  .table-responsive {
+    overflow-x: auto;
+  }
+  
+  .users-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+  }
+  
+  .users-table th, 
+  .users-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid #e3e3e3;
+  }
+  
+  .users-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
+  }
+  
+  .users-table tr:hover {
+    background-color: #f5f5f5;
+  }
+  
+  .badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  .badge.admin {
+    background-color: #cfe2ff;
+    color: #0d6efd;
+  }
+  
+  .badge.user {
+    background-color: #e2e3e5;
+    color: #6c757d;
+  }
+  
+  .toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+  }
+  
+  .toast {
+    min-width: 280px;
+    padding: 16px;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  
+  .toast.success {
+    background-color: #d1e7dd;
+    border-left: 4px solid #198754;
+  }
+  
+  .toast.error {
+    background-color: #f8d7da;
+    border-left: 4px solid #dc3545;
+  }
+  
+  .toast-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  
+  .toast-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: inherit;
+    opacity: 0.7;
+  }
+  
+  .toast-close:hover {
+    opacity: 1;
+  }
+  
+  .loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-size: 18px;
+    color: #6c757d;
+  }
+  
+  .no-data-message {
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 6px;
+    text-align: center;
+    color: #6c757d;
+  }
+  
+  @media (max-width: 768px) {
+    .company-info-stats {
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .users-table th, 
+    .users-table td {
+      padding: 8px 12px;
+    }
+  }
