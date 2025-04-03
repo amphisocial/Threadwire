@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
-import Navbar from './Navbar';
-import './UserManagement.css';
+import Navbar from '../comps/NavBar';
+import './userManagement.css';
 
 const UserManagement = () => {
   const navigate = useNavigate();
@@ -75,7 +75,7 @@ const UserManagement = () => {
   }
 
   return (
-    <div className="user-management-page">
+    <div className="app-container">
       <Navbar />
       
       {toast.show && (
@@ -98,11 +98,11 @@ const UserManagement = () => {
       )}
       
       <div className="content-container">
-        <h1>User Management</h1>
+        <h2>User Management</h2>
         
         {companyInfo && (
           <div className="company-info-card">
-            <h2>{companyInfo.name}</h2>
+            <h3>{companyInfo.name}</h3>
             <div className="company-info-stats">
               <div className="stat-item">
                 <span className="stat-label">Users:</span>

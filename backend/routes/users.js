@@ -14,8 +14,9 @@ router.get('/companies', userController.getAllCompanies);
 
 router.get('/verify-token', authenticateToken, userController.verifyToken);
 
-// Get User by ID
-router.get('/:id', userController.getUserById);
+router.get('/company-status/:companyId', userController.checkCompanyStatus);
+router.get('/company-users', authenticateToken, requirePowerUser, userController.getCompanyUsers);
+router.get('/check-power-user', authenticateToken, userController.checkPowerUser);
 
 router.post('/enable-mfa/:userId', userController.enableMFA);
 
@@ -24,10 +25,6 @@ router.post('/disable-mfa/:userId', userController.disableMFA);
 
 router.post('/complete-profile/:userId', authenticateToken, userController.completeProfile);
 
-router.get('/company-status/:companyId', userController.checkCompanyStatus);
-
-router.get('/company-users', authenticateToken, requirePowerUser, userController.getCompanyUsers);
-
-router.get('/check-power-user', authenticateToken, userController.checkPowerUser);
+router.get('/:id', userController.getUserById);
 
 module.exports = router;

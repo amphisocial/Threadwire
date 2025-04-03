@@ -5,7 +5,7 @@ const Company = require('../models/Company');
 const registerUser = async (req, res) => {
   try {
     const user = await userService.registerUser(req.body);
-    res.status(201).json({ message: 'User registered successfully', userId: user._id, role: result.user.role });
+    res.status(201).json({ message: 'User registered successfully', userId: user._id, role: user.role });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
