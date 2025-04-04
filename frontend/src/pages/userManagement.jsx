@@ -12,6 +12,8 @@ const UserManagement = () => {
   const [companyInfo, setCompanyInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState({ show: false, type: '', message: '' });
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     document.title = 'User Management';
@@ -63,6 +65,44 @@ const UserManagement = () => {
     }
   };
 
+  const handleInvite = async (e) => {
+    e.preventDefault();
+    
+    if (!inviteEmail.trim()) {
+      showToast('error', 'Please enter an email address');
+      return;
+    }
+    
+    try {
+      setInviting(true);
+      const token = localStorage.getItem('authToken');
+      const isGoogleAuth = localStorage.getItem('isGoogleAuth');
+      
+      const response = await fetch('/api/user/invitations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: inviteEmail })
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to send invitation');
+      }
+      
+      showToast('success', `Invitation sent to ${inviteEmail}`);
+      setInviteEmail('');
+      fetchCompanyUsers(); 
+    } catch (error) {
+      showToast('error', error.message);
+    } finally {
+      setInviting(false);
+    }
+  };
+
   const showToast = (type, message) => {
     setToast({ show: true, type, message });
     setTimeout(() => {
@@ -73,6 +113,9 @@ const UserManagement = () => {
   if (isLoading || loading) {
     return <div className="loading">Loading...</div>;
   }
+
+  const canInviteMore = companyInfo && companyInfo.currentUserCount < companyInfo.maxUsers;
+
 
   return (
     <div className="app-container">
@@ -115,6 +158,39 @@ const UserManagement = () => {
             </div>
           </div>
         )}
+
+<div className="section invite-section">
+          <h3>Invite New User</h3>
+          <form onSubmit={handleInvite} className="invite-form">
+            <div className="form-group">
+              <label htmlFor="inviteEmail">Email Address</label>
+              <div className="input-group">
+                <input
+                  type="email"
+                  id="inviteEmail"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="Enter email address"
+                  disabled={!canInviteMore || inviting}
+                  required
+                />
+                <button 
+                  type="submit" 
+                  className="invite-button"
+                  disabled={!canInviteMore || inviting || !inviteEmail.trim()}
+                >
+                  {inviting ? 'Sending...' : 'Send Invitation'}
+                </button>
+              </div>
+              {!canInviteMore && (
+                <p className="limit-warning">
+                  You've reached your user limit. Please upgrade your plan to add more users.
+                </p>
+              )}
+            </div>
+          </form>
+        </div>
+        
         
         <div className="section">
           <h2>Company Users</h2>

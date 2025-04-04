@@ -7,6 +7,7 @@ import { useAuth } from '../context/authContext';
 
 const RegistrationForm = () => {
   const { login } = useAuth();
+  const location = useLocation();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -29,6 +30,10 @@ const RegistrationForm = () => {
   const [selectedCompany, setSelectedCompany] = useState(null);
   const suggestionRef = useRef(null);
 
+  const [invitationToken, setInvitationToken] = useState('');
+  const [isInvitation, setIsInvitation] = useState(false);
+  const [invitationLoading, setInvitationLoading] = useState(false);
+
 
   const countryCodes = [
     { code: '+1', country: 'US' },
@@ -46,6 +51,47 @@ const RegistrationForm = () => {
     setTimeout(() => {
       setToast({ show: false, type: '', message: '' });
     }, 3000);
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+
+    if (token) {
+      setInvitationToken(token);
+      validateInvitation(token);
+    }
+  }, [location]);
+
+  const validateInvitation = async (token) => {
+    try {
+      setInvitationLoading(true);
+
+      const response = await fetch(`/api/user/invitations/validate?token=${token}`);
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Invalid invitation');
+      }
+
+      const data = await response.json();
+
+      // Set invitation data
+      setIsInvitation(true);
+      setFormData(prev => ({
+        ...prev,
+        email: data.email,
+        customerId: data.companyId
+      }));
+      setCompanySearch(data.companyName);
+
+      // Show welcome message
+      showToast('success', `Welcome! You've been invited to join ${data.companyName}`);
+    } catch (error) {
+      showToast('error', error.message);
+    } finally {
+      setInvitationLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -73,14 +119,16 @@ const RegistrationForm = () => {
         showToast('error', 'Failed to fetch companies: ' + err.message);
       }
     };
-    fetchCompanies();
-  }, []);
+    if (!isInvitation) {
+      fetchCompanies();
+    }
+  }, [isInvitation]);
 
   const handleCompanySearch = (e) => {
     const searchTerm = e.target.value;
     setCompanySearch(searchTerm);
     setSelectedCompany(null);
-    setFormData({...formData, customerId: ''});
+    setFormData({ ...formData, customerId: '' });
 
 
     const filtered = companies.filter(company =>
@@ -95,22 +143,22 @@ const RegistrationForm = () => {
       const response = await fetch(`/api/user/company-status/${companyId}`);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data = await response.json();
-      
+
       if (!data.canJoin) {
         if (data.hasPowerUser && data.currentUserCount >= data.maxUsers) {
           showToast('error', 'This company has reached its user limit');
           setCompanySearch('');
           setSelectedCompany(null);
-          setFormData({...formData, customerId: ''});
+          setFormData({ ...formData, customerId: '' });
         } else if (data.hasPowerUser) {
           // Company has a power user but still has space
           setSelectedCompany(data);
-          setFormData({...formData, customerId: companyId});
+          setFormData({ ...formData, customerId: companyId });
         }
       } else {
         // Company can be joined
         setSelectedCompany(data);
-        setFormData({...formData, customerId: companyId});
+        setFormData({ ...formData, customerId: companyId });
       }
     } catch (err) {
       showToast('error', 'Failed to check company status: ' + err.message);
@@ -125,6 +173,10 @@ const RegistrationForm = () => {
   };
 
   const handleChange = (e) => {
+    if (isInvitation && e.target.name === 'email') {
+      return;
+    }
+
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
@@ -134,10 +186,21 @@ const RegistrationForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+
+      if (!isInvitation && !formData.customerId) {
+        showToast('error', 'Please select a company');
+        return;
+      }
+
       const formDataWithCountryCode = {
         ...formData,
         phone: `${countryCode}${formData.phone}`
       };
+
+      if (isInvitation && invitationToken) {
+        formDataWithCountryCode.invitationToken = invitationToken;
+      }
+
       const response = await fetch('/api/user/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -204,13 +267,17 @@ const RegistrationForm = () => {
           setTimeout(() => {
             navigate(`/complete-profile/${data.userId}`);
           }, 1000);
-        } 
+        }
 
       }
     } catch (error) {
       showToast('error', "Google login failed. Try again.");
     }
   };
+
+  if (invitationLoading) {
+    return <div className="loading">Validating invitation...</div>;
+  }
 
   return (
     <div className="rootclass">
@@ -238,7 +305,7 @@ const RegistrationForm = () => {
         </a>
       </header>
       <div className="container">
-        <h2>Register</h2>
+        <h2>{isInvitation ? 'Complete Your Registration' : 'Register'}</h2>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>First Name</label>
@@ -257,7 +324,16 @@ const RegistrationForm = () => {
 
           <div className="form-group">
             <label>Email</label>
-            <input type="email" name="email" value={formData.email} onChange={handleChange} required />
+            <input 
+              type="email" 
+              name="email" 
+              value={formData.email} 
+              onChange={handleChange} 
+              disabled={isInvitation}
+              className={isInvitation ? 'disabled-input' : ''}
+              required 
+            />
+            {isInvitation && <small className="form-text">This email address was provided in your invitation</small>}
           </div>
 
           <div className="form-group">
@@ -297,30 +373,41 @@ const RegistrationForm = () => {
 
           <div className="form-group">
             <label>Company</label>
-            <div className="company-search-container" ref={suggestionRef}>
+            {isInvitation ? (
+              // For invited users, company is pre-selected and not changeable
               <input
                 type="text"
                 value={companySearch}
-                onChange={handleCompanySearch}
-                placeholder="Search for a company..."
-                className="company-search-input"
-                required
+                className="disabled-input"
+                disabled
               />
-              {showSuggestions && filteredCompanies.length > 0 && (
-                <div className="company-suggestions">
-                  {filteredCompanies.map((company) => (
-                    <div
-                      key={company._id}
-                      className="company-suggestion-item"
-                      onClick={() => handleCompanySelect(company)}
-                    >
-                      {company.name}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          {selectedCompany && (
+            ) : (
+              // For self-registration, allow company selection
+              <div className="company-search-container" ref={suggestionRef}>
+                <input
+                  type="text"
+                  value={companySearch}
+                  onChange={handleCompanySearch}
+                  placeholder="Search for a company..."
+                  className="company-search-input"
+                  required
+                />
+                {showSuggestions && filteredCompanies.length > 0 && (
+                  <div className="company-suggestions">
+                    {filteredCompanies.map((company) => (
+                      <div
+                        key={company._id}
+                        className="company-suggestion-item"
+                        onClick={() => handleCompanySelect(company)}
+                      >
+                        {company.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {selectedCompany && !isInvitation && (
               <div className="company-status">
                 {selectedCompany.hasPowerUser ? 
                   <span className="joining-company">Joining as a regular user</span> : 
@@ -328,16 +415,22 @@ const RegistrationForm = () => {
                 }
               </div>
             )}
+            {isInvitation && (
+              <small className="form-text">This company is pre-selected based on your invitation</small>
+            )}
           </div>
 
           <button type="submit">Register</button>
         </form>
 
-        <div className="divider">Or</div>
-
-        <GoogleOAuthProvider clientId="597032685964-tstm86dpp6ds4j9qiknm8enhiigt6j6r.apps.googleusercontent.com">
-          <GoogleLogin onSuccess={handleSuccess} onError={() => showToast('error', "Google Sign-In failed")} />
-        </GoogleOAuthProvider>
+        {!isInvitation && (
+          <>
+            <div className="divider">Or</div>
+            <GoogleOAuthProvider clientId="597032685964-tstm86dpp6ds4j9qiknm8enhiigt6j6r.apps.googleusercontent.com">
+              <GoogleLogin onSuccess={handleSuccess} onError={() => showToast('error', "Google Sign-In failed")} />
+            </GoogleOAuthProvider>
+          </>
+        )}
 
         <div className="register-link">
           Already have an account? <a href="/app/login">Login</a>
