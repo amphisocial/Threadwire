@@ -235,16 +235,19 @@
     cursor: pointer;
     font-weight: 500;
     transition: background-color 0.2s;
+    width: max-content;
   }
   
   .invite-button:hover:not(:disabled) {
     background-color: #0b5ed7;
+    width: max-content;
   }
   
   .invite-button:disabled {
     background-color: #6c757d;
     cursor: not-allowed;
     opacity: 0.65;
+    width: max-content;
   }
   
   .limit-warning {

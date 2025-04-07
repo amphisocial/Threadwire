@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './register.css';
 import { useAuth } from '../context/authContext';
 
