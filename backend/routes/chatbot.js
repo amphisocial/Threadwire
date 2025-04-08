@@ -3,9 +3,11 @@ const express = require('express');
 const router = express.Router();
 const chatbotController = require('../controllers/chatbotController');
 const { authenticateToken } = require('../services/authToken'); // Your existing auth middleware
+const trackApiUsage = require('../services/apiUsageTracker');
+
 
 // Main chatbot endpoint for queries
-router.post('/chat', authenticateToken, chatbotController.chatQuery);
+router.post('/chat', authenticateToken, requireScope('use:chatbot'), trackApiUsage, chatbotController.chatQuery);
 
 // Get metadata for filters and document types
 router.get('/metadata', authenticateToken, chatbotController.getMetadata);

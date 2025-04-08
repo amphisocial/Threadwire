@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const blockerController = require('../controllers/blockerController');
-const { authenticateToken } = require('../services/authToken')
+const { authenticateToken } = require('../services/authToken');
+const trackApiUsage = require('../services/apiUsageTracker');
+
 
 // Define endpoints
-router.post('/', authenticateToken, blockerController.createBlocker);
-router.get('/', authenticateToken, blockerController.getBlockers);
-router.get('/:id',authenticateToken, blockerController.getBlockerById);
-router.put('/:id',authenticateToken, blockerController.updateBlocker);
-router.delete('/:id',authenticateToken, blockerController.deleteBlocker);
+router.post('/', authenticateToken, requireScope('write:blockers'), trackApiUsage, blockerController.createBlocker);
+router.get('/', authenticateToken, requireScope('read:blockers'), trackApiUsage, blockerController.getBlockers);
+router.get('/:id',authenticateToken, requireScope('read:blockers'), trackApiUsage, blockerController.getBlockerById);
+router.put('/:id',authenticateToken, requireScope('write:blockers'), trackApiUsage, blockerController.updateBlocker);
+router.delete('/:id',authenticateToken, requireScope('delete:blockers'), trackApiUsage, blockerController.deleteBlocker);
 
 module.exports = router;
 

@@ -2,6 +2,8 @@
 const jwt = require('jsonwebtoken');
 const { verifyGoogleToken } = require('./googleAuth');
 const User = require('../models/User');
+const apiTokenService = require('../services/apiTokenService');
+
 
 
 const authenticateToken = async (req, res, next) => {
@@ -16,9 +18,9 @@ const authenticateToken = async (req, res, next) => {
         }
 
         // Check token type from headers or request
-        const isGoogleToken = req.headers['auth-type'] === 'google';
+        const tokenType = req.headers['auth-type'] || 'jwt';
 
-        if (isGoogleToken) {
+        if (tokenType === 'google') {
             try {
                 const payload = await verifyGoogleToken(token);
 
@@ -41,7 +43,25 @@ const authenticateToken = async (req, res, next) => {
             } catch (error) {
                 return res.status(403).json({ message: 'Invalid Google token.' });
             }
-        } else {
+        }
+        else if (tokenType === 'api') {
+            // API token verification
+            try {
+                const apiInfo = await apiTokenService.verifyApiToken(token);
+
+                req.customer = {
+                    id: apiInfo.customerId,
+                    scopes: apiInfo.scopes,
+                    tokenName: apiInfo.name,
+                    isApiRequest: true
+                };
+
+                return next();
+            } catch (error) {
+                return res.status(403).json({ message: 'Invalid API token: ' + error.message });
+            }
+        }
+        else {
             // Regular JWT verification
             try {
                 const decoded = jwt.verify(token, '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987');
@@ -110,4 +130,25 @@ const authenticateToken = async (req, res, next) => {
     }
 };
 
-module.exports = { authenticateToken };
+// Middleware to verify API scope
+const requireScope = (requiredScope) => {
+    return (req, res, next) => {
+        // Skip for user tokens
+        if (req.user) return next();
+        
+        // Check customer token scopes
+        if (!req.customer || !req.customer.scopes) {
+            return res.status(403).json({ message: 'No API scopes available' });
+        }
+        
+        if (req.customer.scopes.includes(requiredScope) || req.customer.scopes.includes('*')) {
+            return next();
+        }
+        
+        return res.status(403).json({ 
+            message: `API token missing required scope: ${requiredScope}` 
+        });
+    };
+};
+
+module.exports = { authenticateToken, requireScope };
