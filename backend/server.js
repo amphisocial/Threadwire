@@ -26,6 +26,7 @@ const graphRoutes = require('./routes/partgraph');
 const vectorService = require('./services/vectorService');
 const chatbotRoutes = require('./routes/chatbot');
 const chatSessionRoutes = require('./routes/chatSessionRoutes');
+const apiTokenRoutes = require('./routes/apiTokenRoutes');
 
 
 app.use('/parts', partsRoutes);
@@ -41,6 +42,7 @@ app.use('/user', userRoutes);
 app.use('/auth', authRoutes);
 app.use('/chatbot', chatbotRoutes);
 app.use('/chatsession', chatSessionRoutes);
+app.use('/api/tokens', apiTokenRoutes);
 
 
 

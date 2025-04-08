@@ -3,14 +3,16 @@ const express = require("express");
 const router = express.Router();
 const partController = require("../controllers/partsController");
 const { authenticateToken } = require('../services/authToken');
+const trackApiUsage = require('../services/apiUsageTracker');
+
 
 
 // CRUD routes for parts
-router.get("/", authenticateToken, partController.getParts);
-router.post("/", authenticateToken, partController.createPart);
-router.post("/import", authenticateToken, partController.importParts);
-router.put("/", authenticateToken, partController.updatePart); // Query parameters: partnumber, revision
-router.delete("/", authenticateToken, partController.deletePart); // Query parameters: partnumber, revision
-
+router.get("/", authenticateToken, requireScope('read:parts'),  trackApiUsage, partController.getParts);
+router.post("/", authenticateToken, requireScope('write:parts'), trackApiUsage, partController.createPart);
+router.post("/import", authenticateToken, requireScope('write:parts'), trackApiUsage, partController.importParts);
+router.put("/", authenticateToken, requireScope('write:parts'), trackApiUsage, partController.updatePart); // Query parameters: partnumber, revision
+router.delete("/", authenticateToken,requireScope('write:parts'), trackApiUsage, partController.deletePart); // Query parameters: partnumber, revision
+ 
 module.exports = router;
 
