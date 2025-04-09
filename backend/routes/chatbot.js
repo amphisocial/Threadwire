@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const chatbotController = require('../controllers/chatbotController');
-const { authenticateToken } = require('../services/authToken'); // Your existing auth middleware
+const { authenticateToken, requireScope } = require('../services/authToken'); // Your existing auth middleware
 const trackApiUsage = require('../services/apiUsageTracker');
 
 

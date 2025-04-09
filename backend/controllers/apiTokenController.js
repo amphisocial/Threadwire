@@ -14,7 +14,6 @@ const createApiToken = async (req, res) => {
       name,
       customerId,
       scopes,
-      expiresIn,
       createdBy
     });
     

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 import Navbar from '../comps/NavBar';
 import ApiTokenManagement from '../comps/ApiTokenManagement';
+import ApiAnalytics from '../comps/ApiAnalytics';
 import './userManagement.css';
 
 const UserManagement = () => {
@@ -142,7 +143,7 @@ const UserManagement = () => {
         </div>
       )}
 
-      <div className="content-container">
+      <div className="management-container">
         <h2>Company Management</h2>
 
         {companyInfo && (

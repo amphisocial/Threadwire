@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const partController = require("../controllers/partsController");
-const { authenticateToken } = require('../services/authToken');
+const { authenticateToken, requireScope } = require('../services/authToken');
 const trackApiUsage = require('../services/apiUsageTracker');
 
 

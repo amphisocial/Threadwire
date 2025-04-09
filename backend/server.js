@@ -42,7 +42,7 @@ app.use('/user', userRoutes);
 app.use('/auth', authRoutes);
 app.use('/chatbot', chatbotRoutes);
 app.use('/chatsession', chatSessionRoutes);
-app.use('/api/tokens', apiTokenRoutes);
+app.use('/tokens', apiTokenRoutes);
 
 
 

@@ -12,7 +12,7 @@ const generateTokenHash = (token) => {
 };
 
 // Create a new API token
-const createApiToken = async ({ name, customerId, scopes, expiresIn = '90d', createdBy }) => {
+const createApiToken = async ({ name, customerId, scopes, createdBy }) => {
   try {
     // Verify company exists
     const company = await Company.findById(customerId);

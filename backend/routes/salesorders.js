@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getSalesOrders, editSalesOrder, importSalesOrders } = require('../controllers/salesordersController');
-const { authenticateToken } = require('../services/authToken')
+const { authenticateToken, requireScope } = require('../services/authToken')
 const trackApiUsage = require('../services/apiUsageTracker');
 
 

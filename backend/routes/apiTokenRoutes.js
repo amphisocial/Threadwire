@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const apiTokenController = require('../controllers/apiTokenController');
-const { authenticateToken } = require('../middlewares/auth');
+const { authenticateToken } = require('../services/authToken');
 const { requirePowerUser } = require('../services/powerUserAuth');
 
 // Only power users can manage API tokens
