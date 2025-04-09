@@ -27,6 +27,7 @@ const vectorService = require('./services/vectorService');
 const chatbotRoutes = require('./routes/chatbot');
 const chatSessionRoutes = require('./routes/chatSessionRoutes');
 const apiTokenRoutes = require('./routes/apiTokenRoutes');
+const apiAnalyticsRoutes = require('./routes/apiAnalyticsRoutes');
 
 
 app.use('/parts', partsRoutes);
@@ -43,6 +44,8 @@ app.use('/auth', authRoutes);
 app.use('/chatbot', chatbotRoutes);
 app.use('/chatsession', chatSessionRoutes);
 app.use('/tokens', apiTokenRoutes);
+app.use('/analytics', apiAnalyticsRoutes);
+
 
 
 
