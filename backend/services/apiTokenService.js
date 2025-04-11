@@ -81,7 +81,7 @@ const createApiToken = async ({ name, customerId, scopes, createdBy }) => {
         customerId,
         type: 'api_token',
         name,
-        scopes
+        scopes: expandedScopes
       },
       JWT_SECRET,
       { expiresIn: '30d' }

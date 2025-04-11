@@ -7,8 +7,9 @@ exports.getParts = async (req, res) => {
   try {
     const filters = {};
     const { partnumber, description, revision, category, type, isbom } = req.query;
-
-    filters.customerId = req.user.customerId;
+    
+    
+    filters.customerId = req.user?.customerId || req.customer?.id;
 
     if (req.query.partnumber) filters.partnumber = new RegExp(req.query.partnumber, "i");
     if (description) filters.description = new RegExp(description, "i");

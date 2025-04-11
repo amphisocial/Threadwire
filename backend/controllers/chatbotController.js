@@ -14,7 +14,7 @@ exports.chatQuery = async (req, res) => {
   try {
     const { query, filters = {}, documentTypes = [] } = req.body;
 
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
     
     if (!customerId) {
       return res.status(400).json({ error: 'User is not associated with a customer' });
