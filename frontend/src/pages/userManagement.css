@@ -509,7 +509,7 @@ button:hover {
 }
 
 .date-filter {
-  display: flex;
+  
   gap: 15px;
   margin-bottom: 25px;
   align-items: flex-end;
@@ -523,6 +523,8 @@ button:hover {
   padding: 8px 16px;
   cursor: pointer;
   height: 38px;
+  margin-top: 31px;
+  width: fit-content;
 }
 
 .filter-button:hover {

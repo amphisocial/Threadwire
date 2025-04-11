@@ -4,7 +4,7 @@ import { useAuth } from '../context/authContext';
 
 const Tabs = ({ filters, onFilterChange }) => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, isPowerUser } = useAuth();
 
   const getCurrentPage = () => {
     const path = window.location.pathname;
@@ -37,13 +37,16 @@ const Tabs = ({ filters, onFilterChange }) => {
       case "chat":
         navigate('/chatbot');
         break;
+      case "usermanagement":  
+        navigate('/user-management');
+        break;
       default:
         console.error(`Unknown tab: ${tab}`);
     }
   };
 
   return (
-    <div className="tabs-container">
+    <div className="tabss-container">
       <nav className="navbar">
         <div className="home-icon" onClick={() => navigate('/chatbot')}>
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -88,6 +91,14 @@ const Tabs = ({ filters, onFilterChange }) => {
         >
           Visualization
         </button>
+        {isPowerUser && (
+        <button
+          onClick={() => handleNavigation('usermanagement')}
+          className={currentPage === 'user-management' ? 'active' : ''}
+        >
+          User Management
+        </button>
+        )}
         <button
           onClick={logout}
         >

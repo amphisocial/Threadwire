@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const ApiUsage = require('../models/ApiUsage');
 
 const getApiUsageByCompany = async (customerId, options = {}) => {
@@ -26,7 +27,7 @@ const getApiUsageSummary = async (customerId, options = {}) => {
   try {
     const { startDate, endDate } = options;
     
-    let matchStage = { customerId: mongoose.Types.ObjectId(customerId) };
+    let matchStage = { customerId: new mongoose.Types.ObjectId(customerId) };
     
     if (startDate || endDate) {
       matchStage.createdAt = {};
