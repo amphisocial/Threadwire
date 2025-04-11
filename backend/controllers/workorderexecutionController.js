@@ -12,7 +12,7 @@ const handleResponse = (res, err, data) => {
 const deleteWorkOrderExecution = async (req, res) => {
   try {
     const { id } = req.params;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
     
     // Check if the execution record belongs to the user's company
     const execution = await WorkOrderExecution.findOne({ _id: id, customerId });
@@ -31,8 +31,10 @@ const deleteWorkOrderExecution = async (req, res) => {
 
 const getWorkOrderExecutions = async (req, res) => {
   try {
+    const customerId = req.user?.customerId || req.customer?.id;
+
     const filter = {
-      customerId: req.user.customerId 
+      customerId: customerId 
     };
 
     if (req.query.workorder) {
@@ -65,9 +67,10 @@ const getWorkOrderExecutions = async (req, res) => {
 // Create a New WorkOrderExecution
 const createWorkOrderExecution = async (req, res) => {
   try {
+    const customerId = req.user?.customerId || req.customer?.id;
     const newWorkOrderExecution = new WorkOrderExecution({
       ...req.body,
-      customerId: req.user.customerId // Add user's company ID
+      customerId: customerId // Add user's company ID
     });
     const savedWorkOrderExecution = await newWorkOrderExecution.save();
 
@@ -92,7 +95,7 @@ const updateWorkOrderExecution = async (req, res) => {
     const { id } = req.params;
 
 
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
     
     // Check if the execution record belongs to the user's company
     const execution = await WorkOrderExecution.findOne({ _id: id, customerId });
@@ -129,7 +132,7 @@ const updateWorkOrderExecution = async (req, res) => {
 
 const importWorkOrderExecutions = async (req, res) => {
   const executionData = req.body;
-  const customerId = req.user.customerId;
+  const customerId = req.user?.customerId || req.customer?.id;
   console.log("payload in server:",executionData);
 
   try {

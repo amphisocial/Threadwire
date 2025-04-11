@@ -6,7 +6,7 @@ const WorkOrderExecution = require("../models/Workorderexecution");
 exports.getPartGraph = async (req, res) => {
     //const { partnumber, type } = req.query;
     const { partnumber, direction } = req.query;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     console.error("partnumber:", partnumber, "direction:", direction);
     if (!partnumber || !direction) {

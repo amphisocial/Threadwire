@@ -68,11 +68,13 @@ async function updateBlockerTags(blocker) {
   }
 }
 
+exports.updateBlockerTags = updateBlockerTags;
+
 // CREATE Blocker
 exports.createBlocker = async (req, res) => {
   try {
     const { title, description, type, relatedWorkOrders, relatedSalesOrders, relatedParts } = req.body;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const newBlocker = await Blocker.create({
       title,
@@ -102,7 +104,7 @@ exports.getBlockers = async (req, res) => {
   try {
     // Optionally, you could parse query parameters for filtering.
     // e.g. ?status=Open or ?type=Risk
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const filters = { 
       ...req.query,
@@ -125,7 +127,7 @@ exports.getBlockers = async (req, res) => {
 exports.getBlockerById = async (req, res) => {
   try {
     const blockerId = req.params.id;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const blocker = await Blocker.findOne({
       _id: blockerId,
@@ -147,7 +149,7 @@ exports.getBlockerById = async (req, res) => {
 exports.updateBlocker = async (req, res) => {
   try {
     const blockerId = req.params.id;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
     const updates = req.body; // e.g. { status, title, description, relatedWorkOrders, etc. }
 
     const existingBlocker = await Blocker.findOne({
@@ -182,7 +184,7 @@ exports.updateBlocker = async (req, res) => {
 exports.deleteBlocker = async (req, res) => {
   try {
     const blockerId = req.params.id;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const existingBlocker = await Blocker.findOne({
       _id: blockerId,

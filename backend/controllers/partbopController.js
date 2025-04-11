@@ -11,9 +11,12 @@ const handleResponse = (res, err, data) => {
 // PartBoP Controller
 const createPartBoP = async (req, res) => {
   try {
+
+    const customerId = req.user?.customerId || req.customer?.id;
+
     const newPartBoP = new PartBoP({
       ...req.body,
-      customerId: req.user.customerId // Add user's company ID
+      customerId: customerId 
     });
     const savedPartBoP = await newPartBoP.save();
     
@@ -34,7 +37,7 @@ const createPartBoP = async (req, res) => {
 const updatePartBoP = async (req, res) => {
   try {
     const { id } = req.params;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const partBoP = await PartBoP.findOne({ _id: id, customerId });
     
@@ -63,7 +66,7 @@ const updatePartBoP = async (req, res) => {
 const deletePartBoP = async (req, res) => {
   try {
     const { id } = req.params;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
     
     // Check if the PartBoP belongs to the user's company
     const partBoP = await PartBoP.findOne({ _id: id, customerId });
@@ -82,9 +85,12 @@ const deletePartBoP = async (req, res) => {
 const getPartBoPs = async (req, res) => {
   const filters = req.query;
   try {
+
+    const customerId = req.user?.customerId || req.customer?.id;
+
     // Build a dynamic filter object based on query parameters
     const filter = {
-      customerId: req.user.customerId // Add company filter
+      customerId: customerId // Add company filter
     };
 
     if (req.query.partnumber) {
@@ -108,7 +114,7 @@ const getPartBoPs = async (req, res) => {
 
 const importPartBoPs = async (req, res) => {
   const partBoPData = req.body;
-  const customerId = req.user.customerId;
+  const customerId = req.user?.customerId || req.customer?.id;
 
   console.log("Payload at server:",partBoPData);
 
