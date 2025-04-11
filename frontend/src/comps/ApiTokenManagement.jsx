@@ -202,22 +202,28 @@ const ApiTokenManagement = () => {
                     </div>
 
                     <div className="form-group">
-                        <label>Scopes</label>
-                        <div className="scopes-list">
+                        <label className="form-label">API Permissions</label>
+                        <div className="permissions-container">
                             {availableScopes.map((scope) => (
-                                <div key={scope.name} className="scope-item">
-                                    <label>
-                                        <input
-                                            type="checkbox"
-                                            checked={newToken.scopes.includes(scope.name)}
-                                            onChange={() => handleScopeChange(scope.name)}
-                                        />
-                                        <span className="scope-name">{scope.name}</span>
-                                    </label>
-                                    <span className="scope-description">{scope.description}</span>
+                                <div key={scope.name} className="permission-card">
+                                    <div className="permission-header">
+                                        <label className="toggle-switch">
+                                            <input
+                                                type="checkbox"
+                                                checked={newToken.scopes.includes(scope.name)}
+                                                onChange={() => handleScopeChange(scope.name)}
+                                            />
+                                            <span className="toggle-slider"></span>
+                                        </label>
+                                        <span className="permission-name">{scope.name}</span>
+                                    </div>
+                                    <p className="permission-description">{scope.description}</p>
                                 </div>
                             ))}
                         </div>
+                        <p className="permission-help-text">
+                            Select the permissions you want to grant to this API token. Choose only what's necessary for security.
+                        </p>
                     </div>
 
                     <div className="info-note">
