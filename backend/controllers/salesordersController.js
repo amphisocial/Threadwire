@@ -5,7 +5,7 @@ const vectorService = require('../services/vectorService');
 const getSalesOrders = async (req, res) => {
   try {
 
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const salesOrders = await SalesOrder.find({ customerId }).sort({ dueDate: 1 });
     res.status(200).json(salesOrders);
@@ -19,7 +19,7 @@ const editSalesOrder = async (req, res) => {
   try {
     const { ordernumber, linenumber } = req.body; // Extract ordernumber and linenumber from request body
 
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     if (!ordernumber || !linenumber) {
       return res.status(400).json({ message: 'Order number and line number are required.' });
@@ -55,7 +55,7 @@ const editSalesOrder = async (req, res) => {
 // POST: /api/salesorders/import
 const importSalesOrders = async (req, res) => {
   let salesOrders = req.body;
-  const customerId = req.user.customerId;
+  const customerId = req.user?.customerId || req.customer?.id;
 
   console.log("Payload being sent to API:", salesOrders);
   // Normalize single object to array

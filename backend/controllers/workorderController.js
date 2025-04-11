@@ -10,9 +10,10 @@ const handleResponse = (res, err, data) => {
 // WorkOrder Controller
 const createWorkOrder = async (req, res) => {
   try {
+    const customerId = req.user?.customerId || req.customer?.id;
     const newWorkOrder = new WorkOrder({
       ...req.body,
-      customerId: req.user.customerId
+      customerId: customerId
     });
     const savedWorkOrder = await newWorkOrder.save();
 
@@ -33,7 +34,7 @@ const createWorkOrder = async (req, res) => {
 const updateWorkOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const workOrder = await WorkOrder.findOne({ _id: id, customerId });
     
@@ -62,7 +63,7 @@ const updateWorkOrder = async (req, res) => {
 const deleteWorkOrder = async (req, res) => {
   try {
     const { id } = req.params;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
     
     // Check if the work order belongs to the user's company
     const workOrder = await WorkOrder.findOne({ _id: id, customerId });
@@ -80,9 +81,10 @@ const deleteWorkOrder = async (req, res) => {
 
 const getWorkOrders = async (req, res) => {
   try {
+    const customerId = req.user?.customerId || req.customer?.id;
     // Build a dynamic filter object based on query parameters
     const filter = {
-      customerId: req.user.customerId 
+      customerId: customerId 
     };
 
     if (req.query.workorder) {
@@ -110,7 +112,7 @@ const getWorkOrders = async (req, res) => {
 
 const importWorkorders = async (req, res) => {
   const workorderData = req.body;
-  const customerId = req.user.customerId;
+  const customerId = req.user?.customerId || req.customer?.id;
   console.log("payload at server:", workorderData);
   try {
     if (!workorderData.workorder || !workorderData.type || !workorderData.description || !workorderData.partnumber || !workorderData.salesorder) {

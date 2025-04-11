@@ -7,7 +7,7 @@ const SalesOrder = require('../models/SalesOrder');
 const Part = require('../models/Part');
 
 // A helper to check if all action items for a blocker are completed
-async function checkAndCloseBlocker(blockerId) {
+async function checkAndCloseBlocker(blockerId, customerId) {
   // Count how many action items for this blocker are NOT completed
   const notCompletedCount = await ActionItem.countDocuments({
     blockerId,
@@ -37,7 +37,7 @@ async function checkAndCloseBlocker(blockerId) {
 exports.createActionItem = async (req, res) => {
   try {
     const { blockerId, actionItem, assignedTo } = req.body;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const blocker = await Blocker.findOne({ _id: blockerId, customerId });
     if (!blocker) {
@@ -62,7 +62,7 @@ exports.createActionItem = async (req, res) => {
 exports.updateActionItem = async (req, res) => {
   try {
     const actionItemId = req.params.id;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
     const updates = req.body; // e.g. { status: 'Completed', remark: 'Done' }
 
     const existingActionItem = await ActionItem.findOne({
@@ -97,7 +97,7 @@ exports.updateActionItem = async (req, res) => {
 exports.deleteActionItem = async (req, res) => {
   try {
     const actionItemId = req.params.id;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const existingActionItem = await ActionItem.findOne({
       _id: actionItemId,
@@ -131,7 +131,7 @@ exports.deleteActionItem = async (req, res) => {
 // Existing getActionItems (fetches all with optional query filters)
 exports.getActionItems = async (req, res) => {
   try {
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
     const queryObj = { 
       ...req.query,
       customerId // Add company filter
@@ -150,7 +150,7 @@ exports.getActionItems = async (req, res) => {
 exports.getActionItemsByBlockerId = async (req, res) => {
   try {
     const { blockerId } = req.params;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const blocker = await Blocker.findOne({ _id: blockerId, customerId });
     if (!blocker) {
@@ -177,7 +177,7 @@ exports.getActionItemsByBlockerId = async (req, res) => {
 exports.getActionItemById = async (req, res) => {
   try {
     const itemId = req.params.id;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
 
     const actionItem = await ActionItem.findOne({
       _id: itemId,

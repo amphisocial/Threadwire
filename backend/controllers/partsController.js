@@ -28,9 +28,12 @@ exports.getParts = async (req, res) => {
 // POST Create new Part
 exports.createPart = async (req, res) => {
   try {
+
+    const customerId = req.user?.customerId || req.customer?.id;
+
     const part = new Part({
       ...req.body,
-      customerId: req.user.customerId
+      customerId: customerId
     });
     const savedPart = await part.save();
     
@@ -50,6 +53,8 @@ exports.createPart = async (req, res) => {
 // PUT Update Part by partnumber & revision
 exports.updatePart = async (req, res) => {
   try {
+    const customerId = req.user?.customerId || req.customer?.id;
+
     const { partnumber, revision } = req.query;
     const updatedPart = await Part.findOneAndUpdate(
       { partnumber, revision, customerId },
@@ -79,7 +84,8 @@ exports.updatePart = async (req, res) => {
 exports.deletePart = async (req, res) => {
   try {
     const { partnumber, revision } = req.query;
-    const customerId = req.user.customerId;
+    const customerId = req.user?.customerId || req.customer?.id;
+
     const deletedPart = await Part.findOneAndDelete({ partnumber, revision, customerId });
 
     if (!deletedPart) {
@@ -94,7 +100,8 @@ exports.deletePart = async (req, res) => {
 // Bulk import parts from CSV
 exports.importParts = async (req, res) => {
   const partData = req.body;
-  const customerId = req.user.customerId;
+  const customerId = req.user?.customerId || req.customer?.id;
+
 
   try {
     if (!partData.partnumber || !partData.revision || !partData.description) {
