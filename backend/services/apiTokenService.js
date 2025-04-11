@@ -11,6 +11,55 @@ const generateTokenHash = (token) => {
   return crypto.createHash('sha256').update(token).digest('hex');
 };
 
+const expandScopes = (selectedScopes) => {
+  const expandedScopes = [];
+  
+  if (selectedScopes.includes('read:data')) {
+      expandedScopes.push(
+          'read:parts', 
+          'read:workorders', 
+          'read:executions',
+          'read:sales',
+          'read:blockers',
+          'read:actions',
+          'read:graphs',
+          'read:bops',
+          'read:chatbot'
+      );
+  }
+  
+  if (selectedScopes.includes('write:data')) {
+      expandedScopes.push(
+          'write:parts', 
+          'write:workorders', 
+          'write:executions',
+          'write:sales',
+          'write:blockers',
+          'write:actions',
+          'write:bops',
+          'use:chatbot'
+      );
+  }
+  
+  if (selectedScopes.includes('delete:data')) {
+      expandedScopes.push(
+          'delete:parts', 
+          'delete:workorders', 
+          'delete:executions',
+          'delete:sales',
+          'delete:blockers',
+          'delete:actions',
+          'delete:bops'
+      );
+  }
+  
+  if (selectedScopes.includes('admin')) {
+      expandedScopes.push('*'); 
+  }
+  
+  return expandedScopes;
+};
+
 // Create a new API token
 const createApiToken = async ({ name, customerId, scopes, createdBy }) => {
   try {
@@ -19,6 +68,8 @@ const createApiToken = async ({ name, customerId, scopes, createdBy }) => {
     if (!company) {
       throw new Error('Company not found');
     }
+
+    const expandedScopes = expandScopes(scopes);
 
     
     const expiresAt = new Date();
@@ -43,7 +94,7 @@ const createApiToken = async ({ name, customerId, scopes, createdBy }) => {
       name,
       tokenIdentifier: tokenHash,
       customerId,
-      scopes,
+      scopes: expandedScopes,
       createdBy,
       expiresAt
     });
@@ -55,7 +106,7 @@ const createApiToken = async ({ name, customerId, scopes, createdBy }) => {
       id: apiToken._id,
       name: apiToken.name,
       customerId: apiToken.customerId,
-      scopes: apiToken.scopes,
+      scopes: expandedScopes,
       expiresAt: apiToken.expiresAt
     };
   } catch (error) {
@@ -139,5 +190,6 @@ module.exports = {
   createApiToken,
   getApiTokensByCompany,
   revokeApiToken,
-  verifyApiToken
+  verifyApiToken,
+  expandScopes
 };
