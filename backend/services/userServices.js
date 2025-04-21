@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
 
-const registerUser = async ({ firstName, lastName, userName, email, phone, password, confirmPassword, customerId }) => {
+const registerUser = async ({ firstName, lastName, userName, email, phone, password, confirmPassword, customerId, invitationToken }) => {
     try {
         // Password match validation
         if (password !== confirmPassword) {
@@ -23,6 +23,26 @@ const registerUser = async ({ firstName, lastName, userName, email, phone, passw
 
         let company;
         let isPowerUser = false;
+        let isFromInvitation = false;
+
+        // If there's an invitation token, validate it
+        if (invitationToken) {
+            const invitationService = require('./invitationService');
+            try {
+                // Validate invitation
+                const invitationData = await invitationService.validateInvitation(invitationToken);
+                
+                // Check if the email in the form matches the invited email
+                if (invitationData.email.toLowerCase() !== email.toLowerCase()) {
+                    throw new Error('The email address does not match the invitation');
+                }
+                
+                customerId = invitationData.companyId;
+                isFromInvitation = true;
+            } catch (error) {
+                throw new Error(`Invitation error: ${error.message}`);
+            }
+        }
 
         if (customerId) {
             // Check if company exists
@@ -72,6 +92,16 @@ const registerUser = async ({ firstName, lastName, userName, email, phone, passw
         if (isPowerUser) {
             company.powerUserId = user._id;
             await company.save();
+        }
+
+         // If registration is from invitation, process the invitation
+         if (isFromInvitation && invitationToken) {
+            try {
+                await require('./invitationService').processInvitation(invitationToken);
+            } catch (error) {
+                console.error('Error processing invitation:', error);
+                // Continue with registration even if processing invitation fails
+            }
         }
 
         return { message: 'User registered successfully' };

@@ -17,6 +17,8 @@ const UserManagement = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [activeTab, setActiveTab] = useState('users');
+  const [pendingInvitations, setPendingInvitations] = useState([]);
+  const [resendingInvitation, setResendingInvitation] = useState(null);
 
   useEffect(() => {
     document.title = 'User Management';
@@ -37,6 +39,7 @@ const UserManagement = () => {
       }
 
       fetchCompanyUsers();
+      fetchPendingInvitations();
     }
   }, [isLoading, isAuthenticated, isPowerUser, navigate]);
 
@@ -65,6 +68,31 @@ const UserManagement = () => {
     } catch (error) {
       showToast('error', error.message || 'Failed to load company information');
       setLoading(false);
+    }
+  };
+
+  const fetchPendingInvitations = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const isGoogleAuth = localStorage.getItem('isGoogleAuth');
+
+      const response = await fetch('/api/user/invitations/pending', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch pending invitations');
+      }
+
+      const data = await response.json();
+      setPendingInvitations(data.invitations);
+    } catch (error) {
+      console.error('Error fetching pending invitations:', error);
+      // Don't show toast for this - it's not critical
     }
   };
 
@@ -106,6 +134,35 @@ const UserManagement = () => {
     }
   };
 
+  const handleResendInvitation = async (invitationId) => {
+    try {
+      setResendingInvitation(invitationId);
+      const token = localStorage.getItem('authToken');
+      const isGoogleAuth = localStorage.getItem('isGoogleAuth');
+
+      const response = await fetch(`/api/user/invitations/${invitationId}/resend`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to resend invitation');
+      }
+
+      showToast('success', 'Invitation resent successfully');
+      fetchPendingInvitations();
+    } catch (error) {
+      showToast('error', error.message);
+    } finally {
+      setResendingInvitation(null);
+    }
+  };
+
   const showToast = (type, message) => {
     setToast({ show: true, type, message });
     setTimeout(() => {
@@ -144,7 +201,7 @@ const UserManagement = () => {
       )}
 
       <div className="management-container">
-        <h2>Company Management</h2>
+        <h2>User Management</h2>
 
         {companyInfo && (
           <div className="company-info-card">
@@ -218,6 +275,42 @@ const UserManagement = () => {
                     </div>
                   </form>
                 </div>
+
+                {pendingInvitations && pendingInvitations.length > 0 && (
+                  <div className="section">
+                    <h3>Pending Invitations</h3>
+                    <div className="table-responsive">
+                      <table className="users-table">
+                        <thead>
+                          <tr>
+                            <th>Email</th>
+                            <th>Invited On</th>
+                            <th>Expires</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pendingInvitations.map(invitation => (
+                            <tr key={invitation._id}>
+                              <td>{invitation.email}</td>
+                              <td>{new Date(invitation.createdAt).toLocaleDateString()}</td>
+                              <td>{new Date(invitation.expiresAt).toLocaleDateString()}</td>
+                              <td>
+                                <button
+                                  className="resend-button"
+                                  onClick={() => handleResendInvitation(invitation._id)}
+                                  disabled={resendingInvitation === invitation._id}
+                                >
+                                  {resendingInvitation === invitation._id ? 'Sending...' : 'Resend'}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
                 <div className="section">
                   <h3>Company Users</h3>

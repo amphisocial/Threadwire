@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
+const invitationController = require('../controllers/invitationController');
 const { authenticateToken } = require('../services/authToken');
 const { requirePowerUser } = require('../services/powerUserAuth');
 
@@ -26,5 +27,11 @@ router.post('/disable-mfa/:userId', userController.disableMFA);
 router.post('/complete-profile/:userId', authenticateToken, userController.completeProfile);
 
 router.get('/:id', userController.getUserById);
+
+router.post('/invitations', authenticateToken, requirePowerUser, invitationController.createInvitation);
+router.get('/invitations/validate', invitationController.validateInvitation);
+router.post('/invitations/process', invitationController.processInvitation);
+router.get('/invitations/pending', authenticateToken, requirePowerUser, invitationController.getPendingInvitations);
+router.post('/invitations/:invitationId/resend', authenticateToken, requirePowerUser, invitationController.resendInvitation);
 
 module.exports = router;
