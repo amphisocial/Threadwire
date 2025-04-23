@@ -99,42 +99,55 @@ const Chatbot = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, typingText]);
     
-    // Handle the word-by-word typing effect
+    
     useEffect(() => {
         if (!isTyping || !fullResponse) return;
         
-        const words = fullResponse.split(' ');
-        let currentWordIndex = typingText.split(' ').length;
+        if (typingText === '') {
+        // For the first word, take it directly from the response
+        const firstWord = fullResponse.split(' ')[0];
+        setTypingText(firstWord);
         
-        // If we've typed all words, stop typing
-        if (currentWordIndex >= words.length) {
-            setIsTyping(false);
-            return;
-        }
+        // Update message
+        setMessages(prev => {
+            const updatedMessages = [...prev];
+            const lastMessage = updatedMessages[updatedMessages.length - 1];
+            if (lastMessage && lastMessage.type === 'bot') {
+                lastMessage.text = firstWord;
+            }
+            return updatedMessages;
+        });
+        return;
+    }
+    
+    // Rest of your existing typing effect code...
+    const words = fullResponse.split(' ');
+    let currentWordIndex = typingText.split(' ').length;
+    
+    // If we've typed all words, stop typing
+    if (currentWordIndex >= words.length) {
+        setIsTyping(false);
+        return;
+    }
+    
+    // Add the next word
+    const nextWord = words[currentWordIndex];
+    
+    const timer = setTimeout(() => {
+        const newTypingText = `${typingText} ${nextWord}`;
+        setTypingText(newTypingText);
         
-        // Add the next word with appropriate spacing
-        const nextWord = words[currentWordIndex];
-        const shouldAddSpace = typingText.length > 0;
+        // Update with the complete text so far
+        setMessages(prev => {
+            const updatedMessages = [...prev];
+            const lastMessage = updatedMessages[updatedMessages.length - 1];
+            if (lastMessage && lastMessage.type === 'bot') {
+                lastMessage.text = newTypingText;
+            }
+            return updatedMessages;
+        });
+    }, 100);   
         
-        const timer = setTimeout(() => {
-            setTypingText(prev => 
-                shouldAddSpace ? `${prev} ${nextWord}` : nextWord
-            );
-            
-            // Update the last message with the current typing text
-            setMessages(prev => {
-                const updatedMessages = [...prev];
-                const lastMessage = updatedMessages[updatedMessages.length - 1];
-                
-                if (lastMessage && lastMessage.type === 'bot') {
-                    lastMessage.text = shouldAddSpace 
-                        ? `${typingText} ${nextWord}` 
-                        : nextWord;
-                }
-                
-                return updatedMessages;
-            });
-        }, 100); // Adjust timing as needed for desired speed
         
         return () => clearTimeout(timer);
     }, [isTyping, fullResponse, typingText]);
