@@ -93,6 +93,10 @@
   flex-shrink: 0;
 }
 
+.message.loadingg {
+  margin-top: -10px; /* Reduce the top margin specifically for loading messages */
+}
+
 .user-avatar {
   background-color: #0084ff;
   color: white;

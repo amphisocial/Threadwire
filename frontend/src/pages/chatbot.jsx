@@ -390,7 +390,7 @@ const Chatbot = () => {
                 )}
 
                 {isLoading && (
-                    <div className="message bot loading">
+                    <div className="message bot loadingg">
                         <div className="message-avatar">
                             <span className="bot-avatar">AI</span>
                         </div>
