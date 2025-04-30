@@ -1,21 +1,316 @@
+// // GraphView.jsx
+// import React, { useEffect, useRef, useState } from 'react';
+// import * as d3 from 'd3';
+// import NavBar from '../comps/NavBar';
+// import './graphView.css';
+
+// const GraphView = () => {
+//   const graphRef = useRef(null);
+//   const [partNumber, setPartNumber] = useState('');
+//   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
+//   const [loading, setLoading] = useState(false);
+//   const [error, setError] = useState(null);
+  
+//   // Constants for graph layout
+//   const rectWidth = 150;
+//   const rectHeight = 50;
+//   const rowSpacing = 150;
+
+//   const getAuthHeaders = () => {
+//     const token = localStorage.getItem('authToken');
+//     const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
+//     return {
+//       'Authorization': `Bearer ${token}`,
+//       'Content-Type': 'application/json',
+//       ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+//     };
+//   };
+
+//   const fetchGraphData = async (partNumber, direction) => {
+//     setLoading(true);
+//     setError(null);
+//     try {
+//       const response = await fetch(`/api/partgraph?partnumber=${partNumber}&direction=${direction}`, {
+//         method: 'GET',
+//         headers: getAuthHeaders(),
+//       });
+      
+//       if (!response.ok) {
+//         throw new Error(`HTTP error! status: ${response.status}`);
+//       }
+//       const data = await response.json();
+//       setLoading(false);
+//       return data;
+//     } catch (error) {
+//       setError(`Error fetching graph data: ${error.message}`);
+//       setLoading(false);
+//       return { nodes: [], links: [] };
+//     }
+//   };
+
+//   const getNodeColor = (type) => {
+//     switch (type) {
+//       case "part":
+//         return "#4CAF50";
+//       case "salesorder":
+//         return "#FF9800";
+//       case "workorder":
+//         return "#2196F3";
+//       case "execution":
+//         return "#9C27B0";
+//       case "partbop":
+//         return "#FF5733";
+//       default:
+//         return "#757575";
+//     }
+//   };
+
+//   useEffect(() => {
+
+//     document.title = 'Visualization';
+//     if (!graphRef.current || !graphData.nodes.length) return;
+
+//     const treeContainer = d3.select(graphRef.current);
+//     const width = graphRef.current.clientWidth;
+//     const height = graphRef.current.clientHeight;
+//     const centerX = width / 2;
+
+//     // Clear existing SVG
+//     treeContainer.selectAll("*").remove();
+
+//     // Initialize SVG and group container
+//     const svg = treeContainer
+//       .append("svg")
+//       .attr("width", width)
+//       .attr("height", height)
+//       .attr("class", "graph-svg");
+
+//     const g = svg.append("g");
+
+//     // Initialize force simulation
+//     const simulation = d3.forceSimulation()
+//       .force("link", d3.forceLink().id(d => d.id).distance(200))
+//       .force("charge", d3.forceManyBody().strength(-500))
+//       .force("center", d3.forceCenter(width / 2, height / 2))
+//       .force("collision", d3.forceCollide().radius(80));
+
+//     // Position nodes in rows
+//     const rootNode = graphData.nodes.find(node => node.type === "part");
+//     if (rootNode) {
+//       rootNode.fx = centerX;
+//       rootNode.fy = rowSpacing;
+//     }
+
+//     const workOrders = graphData.nodes.filter(node => node.type === "workorder");
+//     workOrders.forEach((node, i) => {
+//       node.fx = (width / (workOrders.length + 1)) * (i + 1);
+//       node.fy = rowSpacing * 2;
+//     });
+
+//     const partOperations = graphData.nodes.filter(node => node.type === "partbop");
+//     partOperations.forEach((node, i) => {
+//       node.fx = (width / (partOperations.length + 1)) * (i + 1);
+//       node.fy = rowSpacing * 3;
+//     });
+
+//     // Render links
+//     const links = g
+//       .selectAll(".link")
+//       .data(graphData.links)
+//       .join("line")
+//       .attr("class", "graph-link");
+
+//     // Render nodes
+//     const nodes = g
+//       .selectAll(".node")
+//       .data(graphData.nodes)
+//       .join(enter => {
+//         const node = enter.append("g")
+//           .attr("class", "graph-node")
+//           .call(d3.drag()
+//             .on("start", (event, d) => {
+//               if (!event.active) simulation.alphaTarget(0.3).restart();
+//               d.fx = d.x;
+//               d.fy = d.y;
+//             })
+//             .on("drag", (event, d) => {
+//               d.fx = event.x;
+//               d.fy = event.y;
+//             })
+//             .on("end", (event, d) => {
+//               if (!event.active) simulation.alphaTarget(0);
+//               d.fx = null;
+//               d.fy = null;
+//             }));
+
+//         node.append("rect")
+//           .attr("width", rectWidth)
+//           .attr("height", rectHeight)
+//           .attr("rx", 5)
+//           .attr("fill", d => getNodeColor(d.type))
+//           .attr("stroke", "black");
+
+//         node.append("text")
+//           .attr("x", rectWidth / 2)
+//           .attr("y", rectHeight / 2)
+//           .attr("text-anchor", "middle")
+//           .attr("dominant-baseline", "middle")
+//           .text(d => d.label);
+
+//         return node;
+//       });
+
+//     // Handle node clicks for expanding graph
+//     nodes.on("click", async (event, d) => {
+//       const boundingBox = event.target.getBoundingClientRect();
+//       const clickX = event.clientX - boundingBox.left;
+
+//       const newData = await fetchGraphData(
+//         d.id,
+//         clickX < rectWidth / 2 ? "left" : "right"
+//       );
+      
+//       setGraphData(prevData => ({
+//         nodes: [...prevData.nodes, ...newData.nodes.filter(
+//           newNode => !prevData.nodes.some(
+//             existingNode => existingNode.id === newNode.id
+//           )
+//         )],
+//         links: [...prevData.links, ...newData.links.filter(
+//           newLink => !prevData.links.some(
+//             existingLink => 
+//               existingLink.source === newLink.source &&
+//               existingLink.target === newLink.target
+//           )
+//         )]
+//       }));
+//     });
+
+//     // Update positions on simulation tick
+//     simulation.on("tick", () => {
+//       links
+//         .attr("x1", d => d.source.x + rectWidth / 2)
+//         .attr("y1", d => d.source.y + rectHeight)
+//         .attr("x2", d => d.target.x + rectWidth / 2)
+//         .attr("y2", d => d.target.y);
+
+//       nodes.attr("transform", d => `translate(${d.x},${d.y})`);
+//     });
+
+//     // Update simulation with current data
+//     simulation.nodes(graphData.nodes);
+//     simulation.force("link").links(graphData.links);
+//     simulation.alpha(1).restart();
+
+//     // Cleanup
+//     return () => {
+//       simulation.stop();
+//     };
+//   }, [graphData]);
+
+//   const handleSearch = async () => {
+//     if (!partNumber.trim()) return;
+    
+//     try {
+//       const data = await fetchGraphData(partNumber.trim(), "initial");
+//       setGraphData(data);
+//     } catch (error) {
+//       setError("Error searching for part: " + error.message);
+//     }
+//   };
+
+//   const handleKeyPress = (e) => {
+//     if (e.key === 'Enter') {
+//       handleSearch();
+//     }
+//   };
+
+//   return (
+//     <div className="app-container">
+//       <NavBar />
+      
+//       <div className="main-content">
+//         <div className="search-container">
+//           <div className="search-bar">
+//             <input
+//               type="text"
+//               value={partNumber}
+//               onChange={(e) => setPartNumber(e.target.value)}
+//               onKeyDown={handleKeyPress}
+//               placeholder="Enter Part Number"
+//               className="search-input"
+//             />
+//             <button
+//               onClick={handleSearch}
+//               disabled={loading}
+//               className="search-button"
+//             >
+//               {loading ? 'Searching...' : 'Search'}
+//             </button>
+//           </div>
+          
+//           {error && (
+//             <div className="error-message">
+//               {error}
+//             </div>
+//           )}
+//         </div>
+
+//         <div
+//           ref={graphRef}
+//           className="graph-container"
+//         />
+//       </div>
+//     </div>
+//   );
+// };
+
+// export default GraphView;
+
+
+
 // GraphView.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import NavBar from '../comps/NavBar';
 import './graphView.css';
+import { Search } from 'lucide-react';
 
 const GraphView = () => {
-  const graphRef = useRef(null);
-  const [partNumber, setPartNumber] = useState('');
+  // State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchType, setSearchType] = useState('All');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showResults, setShowResults] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedEntityTypes, setSelectedEntityTypes] = useState(['All']);
+  const [entityColors, setEntityColors] = useState({
+    'Product': '#8b5cf6',
+    'Sales Order': '#f472b6',
+    'Work Order': '#000000',
+    'Risk': '#f59e0b',
+    'Issues': '#ef4444',
+    'Project': '#10b981',
+    'Customer': '#3b82f6',
+    'BOM': '#f472b6',
+    'All': '#6366f1',
+    // Add other entity types as needed
+  });
   
-  // Constants for graph layout
-  const rectWidth = 150;
-  const rectHeight = 50;
-  const rowSpacing = 150;
+  // Refs
+  const graphRef = useRef(null);
+  const tooltipRef = useRef(null);
+  
+  // Entity types list
+  const entityTypes = [
+    'Product', 'Sales Order', 'Work Order', 'Risk', 
+    'Issues', 'Project', 'Customer', 'All'
+  ];
 
+  // Authentication headers
   const getAuthHeaders = () => {
     const token = localStorage.getItem('authToken');
     const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
@@ -26,11 +321,15 @@ const GraphView = () => {
     };
   };
 
-  const fetchGraphData = async (partNumber, direction) => {
+  // Search handler
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
     setLoading(true);
     setError(null);
+    
     try {
-      const response = await fetch(`/api/partgraph?partnumber=${partNumber}&direction=${direction}`, {
+      const response = await fetch(`/api/partgraph/search?query=${encodeURIComponent(searchQuery)}&type=${encodeURIComponent(searchType)}`, {
         method: 'GET',
         headers: getAuthHeaders(),
       });
@@ -38,228 +337,393 @@ const GraphView = () => {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const data = await response.json();
-      setLoading(false);
-      return data;
-    } catch (error) {
-      setError(`Error fetching graph data: ${error.message}`);
-      setLoading(false);
-      return { nodes: [], links: [] };
-    }
-  };
-
-  const getNodeColor = (type) => {
-    switch (type) {
-      case "part":
-        return "#4CAF50";
-      case "salesorder":
-        return "#FF9800";
-      case "workorder":
-        return "#2196F3";
-      case "execution":
-        return "#9C27B0";
-      case "partbop":
-        return "#FF5733";
-      default:
-        return "#757575";
-    }
-  };
-
-  useEffect(() => {
-
-    document.title = 'Visualization';
-    if (!graphRef.current || !graphData.nodes.length) return;
-
-    const treeContainer = d3.select(graphRef.current);
-    const width = graphRef.current.clientWidth;
-    const height = graphRef.current.clientHeight;
-    const centerX = width / 2;
-
-    // Clear existing SVG
-    treeContainer.selectAll("*").remove();
-
-    // Initialize SVG and group container
-    const svg = treeContainer
-      .append("svg")
-      .attr("width", width)
-      .attr("height", height)
-      .attr("class", "graph-svg");
-
-    const g = svg.append("g");
-
-    // Initialize force simulation
-    const simulation = d3.forceSimulation()
-      .force("link", d3.forceLink().id(d => d.id).distance(200))
-      .force("charge", d3.forceManyBody().strength(-500))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(80));
-
-    // Position nodes in rows
-    const rootNode = graphData.nodes.find(node => node.type === "part");
-    if (rootNode) {
-      rootNode.fx = centerX;
-      rootNode.fy = rowSpacing;
-    }
-
-    const workOrders = graphData.nodes.filter(node => node.type === "workorder");
-    workOrders.forEach((node, i) => {
-      node.fx = (width / (workOrders.length + 1)) * (i + 1);
-      node.fy = rowSpacing * 2;
-    });
-
-    const partOperations = graphData.nodes.filter(node => node.type === "partbop");
-    partOperations.forEach((node, i) => {
-      node.fx = (width / (partOperations.length + 1)) * (i + 1);
-      node.fy = rowSpacing * 3;
-    });
-
-    // Render links
-    const links = g
-      .selectAll(".link")
-      .data(graphData.links)
-      .join("line")
-      .attr("class", "graph-link");
-
-    // Render nodes
-    const nodes = g
-      .selectAll(".node")
-      .data(graphData.nodes)
-      .join(enter => {
-        const node = enter.append("g")
-          .attr("class", "graph-node")
-          .call(d3.drag()
-            .on("start", (event, d) => {
-              if (!event.active) simulation.alphaTarget(0.3).restart();
-              d.fx = d.x;
-              d.fy = d.y;
-            })
-            .on("drag", (event, d) => {
-              d.fx = event.x;
-              d.fy = event.y;
-            })
-            .on("end", (event, d) => {
-              if (!event.active) simulation.alphaTarget(0);
-              d.fx = null;
-              d.fy = null;
-            }));
-
-        node.append("rect")
-          .attr("width", rectWidth)
-          .attr("height", rectHeight)
-          .attr("rx", 5)
-          .attr("fill", d => getNodeColor(d.type))
-          .attr("stroke", "black");
-
-        node.append("text")
-          .attr("x", rectWidth / 2)
-          .attr("y", rectHeight / 2)
-          .attr("text-anchor", "middle")
-          .attr("dominant-baseline", "middle")
-          .text(d => d.label);
-
-        return node;
-      });
-
-    // Handle node clicks for expanding graph
-    nodes.on("click", async (event, d) => {
-      const boundingBox = event.target.getBoundingClientRect();
-      const clickX = event.clientX - boundingBox.left;
-
-      const newData = await fetchGraphData(
-        d.id,
-        clickX < rectWidth / 2 ? "left" : "right"
-      );
       
-      setGraphData(prevData => ({
-        nodes: [...prevData.nodes, ...newData.nodes.filter(
-          newNode => !prevData.nodes.some(
-            existingNode => existingNode.id === newNode.id
-          )
-        )],
-        links: [...prevData.links, ...newData.links.filter(
-          newLink => !prevData.links.some(
-            existingLink => 
-              existingLink.source === newLink.source &&
-              existingLink.target === newLink.target
-          )
-        )]
-      }));
-    });
-
-    // Update positions on simulation tick
-    simulation.on("tick", () => {
-      links
-        .attr("x1", d => d.source.x + rectWidth / 2)
-        .attr("y1", d => d.source.y + rectHeight)
-        .attr("x2", d => d.target.x + rectWidth / 2)
-        .attr("y2", d => d.target.y);
-
-      nodes.attr("transform", d => `translate(${d.x},${d.y})`);
-    });
-
-    // Update simulation with current data
-    simulation.nodes(graphData.nodes);
-    simulation.force("link").links(graphData.links);
-    simulation.alpha(1).restart();
-
-    // Cleanup
-    return () => {
-      simulation.stop();
-    };
-  }, [graphData]);
-
-  const handleSearch = async () => {
-    if (!partNumber.trim()) return;
-    
-    try {
-      const data = await fetchGraphData(partNumber.trim(), "initial");
-      setGraphData(data);
+      const results = await response.json();
+      setSearchResults(results);
+      setShowResults(true);
+      setLoading(false);
     } catch (error) {
-      setError("Error searching for part: " + error.message);
+      setError(`Error searching: ${error.message}`);
+      setLoading(false);
     }
   };
 
+  // Handle key press for search
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       handleSearch();
     }
   };
 
+  // Handle search result selection
+  const handleResultSelect = async (item) => {
+    setSelectedItem(item);
+    setShowResults(false);
+    await fetchGraphData(item.id);
+  };
+
+  // Fetch graph data
+  const fetchGraphData = async (itemId, keepExisting = false) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Convert selected entity types to a comma-separated string
+      const entityTypesParam = selectedEntityTypes.join(',');
+      
+      const response = await fetch(`/api/partgraph?id=${encodeURIComponent(itemId)}&entityTypes=${encodeURIComponent(entityTypesParam)}`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Process the returned data
+      let newNodes = data.nodes || [];
+      let newLinks = data.links || [];
+      
+      // If keepExisting is true, merge with existing graph data
+      if (keepExisting) {
+        // Add nodes without duplicates
+        const existingNodeIds = graphData.nodes.map(n => n.id);
+        newNodes = [
+          ...graphData.nodes,
+          ...newNodes.filter(n => !existingNodeIds.includes(n.id))
+        ];
+        
+        // Add links without duplicates
+        const existingLinkKeys = graphData.links.map(l => `${l.source}-${l.target}`);
+        newLinks = [
+          ...graphData.links,
+          ...newLinks.filter(l => {
+            const sourceId = typeof l.source === 'object' ? l.source.id : l.source;
+            const targetId = typeof l.target === 'object' ? l.target.id : l.target;
+            return !existingLinkKeys.includes(`${sourceId}-${targetId}`);
+          })
+        ];
+      }
+      
+      setGraphData({ nodes: newNodes, links: newLinks });
+      setLoading(false);
+    } catch (error) {
+      setError(`Error fetching graph data: ${error.message}`);
+      setLoading(false);
+    }
+  };
+
+  // Handle entity type selection
+  const handleEntityTypeSelect = (type) => {
+    // If "All" is selected, select only "All"
+    if (type === 'All') {
+      setSelectedEntityTypes(['All']);
+    } else {
+      // If currently "All" is selected and user selects something else,
+      // replace "All" with the new selection
+      if (selectedEntityTypes.includes('All')) {
+        setSelectedEntityTypes([type]);
+      } else {
+        // Toggle the selection
+        if (selectedEntityTypes.includes(type)) {
+          setSelectedEntityTypes(selectedEntityTypes.filter(t => t !== type));
+        } else {
+          setSelectedEntityTypes([...selectedEntityTypes, type]);
+        }
+      }
+    }
+  };
+
+  // Clear all selections
+  const handleClearAll = () => {
+    setSelectedEntityTypes([]);
+  };
+
+  // Handle color change for entity type
+  const handleColorChange = (type, color) => {
+    setEntityColors({
+      ...entityColors,
+      [type]: color
+    });
+  };
+
+  // Effect to update graph when entity type selection changes
+  useEffect(() => {
+    if (selectedItem) {
+      fetchGraphData(selectedItem.id);
+    }
+  }, [selectedEntityTypes]);
+
+  // Effect to render graph visualization
+  useEffect(() => {
+    document.title = 'Thread Visualization';
+    
+    if (!graphRef.current || !graphData.nodes.length) return;
+    
+    // Clear existing SVG
+    d3.select(graphRef.current).selectAll("*").remove();
+    
+    const svg = d3.select(graphRef.current).append("svg")
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .attr("class", "graph-svg");
+    
+    const width = graphRef.current.clientWidth;
+    const height = graphRef.current.clientHeight;
+    const tooltip = d3.select(tooltipRef.current);
+    
+    // Create a force simulation
+    const simulation = d3.forceSimulation(graphData.nodes)
+      .force("link", d3.forceLink(graphData.links)
+        .id(d => d.id)
+        .distance(150))
+      .force("charge", d3.forceManyBody().strength(-800))
+      .force("center", d3.forceCenter(width / 2, height / 2));
+    
+    // Prepare link data for D3
+    const linkData = graphData.links.map(link => {
+      // If link.source or link.target are strings, find the corresponding nodes
+      const sourceNode = typeof link.source === 'string' 
+        ? graphData.nodes.find(n => n.id === link.source) 
+        : link.source;
+      
+      const targetNode = typeof link.target === 'string' 
+        ? graphData.nodes.find(n => n.id === link.target) 
+        : link.target;
+      
+      return {
+        ...link,
+        source: sourceNode || link.source,
+        target: targetNode || link.target
+      };
+    });
+    
+    // Add links
+    const link = svg.append("g")
+      .selectAll("line")
+      .data(linkData)
+      .enter().append("line")
+      .attr("class", "graph-link");
+    
+    // Add nodes
+    const node = svg.append("g")
+      .selectAll(".node")
+      .data(graphData.nodes)
+      .enter().append("g")
+      .attr("class", "graph-node")
+      .call(d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended))
+      .on("mouseover", (event, d) => {
+        tooltip
+          .style("opacity", 1)
+          .html(`<div class="tooltip-content"><strong>${d.label || d.id}</strong><br>${d.description || d.type}</div>`)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY - 28) + "px");
+      })
+      .on("mouseout", () => {
+        tooltip.style("opacity", 0);
+      })
+      .on("dblclick", (event, d) => {
+        fetchGraphData(d.id, true);
+      });
+    
+    // Add rounded rectangles to nodes
+    node.append("rect")
+      .attr("width", d => (d.label || d.id).length * 9 + 20)
+      .attr("height", 30)
+      .attr("rx", 15)
+      .attr("ry", 15)
+      .attr("x", d => -((d.label || d.id).length * 9 + 20) / 2)
+      .attr("y", -15)
+      .attr("fill", d => entityColors[d.type] || "#888");
+    
+    // Add labels to nodes
+    node.append("text")
+      .text(d => d.label || d.id)
+      .attr("text-anchor", "middle")
+      .attr("dy", 5)
+      .attr("fill", "white")
+      .style("font-size", "12px")
+      .style("pointer-events", "none");
+    
+    // Simulation tick function
+    simulation.on("tick", () => {
+      link
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+      
+      node.attr("transform", d => `translate(${d.x},${d.y})`);
+    });
+    
+    // Drag functions
+    function dragstarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+    
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+    
+    function dragended(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+    
+    // Cleanup
+    return () => {
+      simulation.stop();
+    };
+  }, [graphData, entityColors]);
+
   return (
     <div className="app-container">
       <NavBar />
       
       <div className="main-content">
-        <div className="search-container">
-          <div className="search-bar">
-            <input
-              type="text"
-              value={partNumber}
-              onChange={(e) => setPartNumber(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder="Enter Part Number"
-              className="search-input"
-            />
-            <button
-              onClick={handleSearch}
-              disabled={loading}
-              className="search-button"
+        {/* Left Sidebar */}
+        <div className="sidebar">
+          <div className="sidebar-section">
+            <div className="sidebar-title">Thread Level</div>
+            
+            {/* Entity Type Filters */}
+            {entityTypes.map((type) => (
+              <div key={type} className="entity-type-item">
+                <div className="entity-type-name">{type}</div>
+                
+                <div className="entity-type-controls">
+                  {/* Color Picker */}
+                  <div 
+                    className="color-picker-wrapper"
+                    style={{ backgroundColor: entityColors[type] }}
+                  >
+                    <input
+                      type="color"
+                      value={entityColors[type]}
+                      onChange={(e) => handleColorChange(type, e.target.value)}
+                      className="color-picker"
+                    />
+                  </div>
+                  
+                  {/* Checkbox */}
+                  <div 
+                    className={`entity-checkbox ${selectedEntityTypes.includes(type) ? 'checked' : ''}`}
+                    onClick={() => handleEntityTypeSelect(type)}
+                  >
+                    {selectedEntityTypes.includes(type) && (
+                      <span className="checkbox-check">✓</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {/* Clear All Button */}
+            <button 
+              className="clear-all-button"
+              onClick={handleClearAll}
             >
-              {loading ? 'Searching...' : 'Search'}
+              Clear All
             </button>
           </div>
+        </div>
+        
+        {/* Main Content Area */}
+        <div className="visualization-container">
+          {/* Search Bar */}
+          <div className="search-container">
+            <div className="search-bar">
+              <div className="search-input-wrapper">
+                <Search className="search-icon" size={18} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  placeholder="Search All"
+                  className="search-input"
+                />
+                
+                {/* Search Type Dropdown */}
+                <select
+                  value={searchType}
+                  onChange={(e) => setSearchType(e.target.value)}
+                  className="search-type-select"
+                >
+                  <option value="All">All</option>
+                  {entityTypes.filter(type => type !== 'All').map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <button
+                onClick={handleSearch}
+                disabled={loading}
+                className="search-button"
+              >
+                <Search size={18} />
+              </button>
+            </div>
+            
+            {/* Search Results Dropdown */}
+            {showResults && searchResults.length > 0 && (
+              <div className="search-results">
+                {searchResults.map((result) => (
+                  <div
+                    key={result.id}
+                    className="search-result-item"
+                    onClick={() => handleResultSelect(result)}
+                  >
+                    <div className="result-id">{result.id}</div>
+                    <div className="result-type">{result.type}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {error && (
+              <div className="error-message">
+                {error}
+              </div>
+            )}
+          </div>
           
-          {error && (
-            <div className="error-message">
-              {error}
+          {/* Loading Indicator */}
+          {loading && (
+            <div className="loading-overlay">
+              <div className="loading-spinner"></div>
             </div>
           )}
+          
+          {/* Empty State */}
+          {!loading && !error && graphData.nodes.length === 0 && (
+            <div className="empty-state">
+              Search for an item to visualize its relationships
+            </div>
+          )}
+          
+          {/* Graph Container */}
+          <div
+            ref={graphRef}
+            className="graph-container"
+          />
+          
+          {/* Tooltip */}
+          <div 
+            ref={tooltipRef} 
+            className="tooltip"
+          ></div>
         </div>
-
-        <div
-          ref={graphRef}
-          className="graph-container"
-        />
       </div>
     </div>
   );
