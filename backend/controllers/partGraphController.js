@@ -214,44 +214,119 @@ exports.searchEntities = async (req, res) => {
 
 // Determine the entity type of a given ID
 async function determineEntityType(id, customerId) {
+    console.log(`Determining entity type for ID: "${id}", customerId: "${customerId}"`);
+    
     // Check each model to find which one contains the ID
     try {
         // Check for Part
+        console.log("Checking if it's a Part...");
         const part = await Part.findOne({ 
             partnumber: id, 
             customerId 
         });
-        if (part) return 'Product';
-
-        // Check for Sales Order
-        const salesOrder = await SalesOrder.findOne({ 
-            $or: [{ ordernumber: id }, { _id: id }],
-            customerId 
-        });
-        if (salesOrder) return 'Sales Order';
-
-        // Check for Work Order
-        const workOrder = await WorkOrder.findOne({ 
-            $or: [{ workorder: id }, { _id: id }],
-            customerId 
-        });
-        if (workOrder) return 'Work Order';
-
-        // Check for Blocker (Risk or Issue)
-        const blocker = await Blocker.findOne({ 
-            _id: id,
-            customerId 
-        });
-        if (blocker) {
-            return blocker.type; // 'Risk' or 'Issue'
+        if (part) {
+            console.log("Found as Part");
+            return 'Product';
         }
 
-        // Check for Company (Customer)
-        const company = await Company.findOne({ 
-            $or: [{ _id: id }, { name: id }]
+        // Check for Sales Order - looking up by ordernumber first, then _id
+        console.log("Checking if it's a Sales Order...");
+        const salesOrder = await SalesOrder.findOne({ 
+            ordernumber: id,
+            customerId 
         });
-        if (company) return 'Customer';
+        if (salesOrder) {
+            console.log("Found as Sales Order by ordernumber");
+            return 'Sales Order';
+        }
 
+        // Check for Work Order - looking up by workorder first, then _id
+        console.log("Checking if it's a Work Order...");
+        const workOrder = await WorkOrder.findOne({ 
+            workorder: id,
+            customerId 
+        });
+        if (workOrder) {
+            console.log("Found as Work Order by workorder");
+            return 'Work Order';
+        }
+
+        // Try ObjectId lookups if the ID looks like an ObjectId
+        if (/^[0-9a-fA-F]{24}$/.test(id)) {
+            console.log("Trying ObjectId lookups...");
+            
+            // Check for Sales Order by _id
+            const salesOrderById = await SalesOrder.findOne({ 
+                _id: id,
+                customerId 
+            });
+            if (salesOrderById) {
+                console.log("Found as Sales Order by _id");
+                return 'Sales Order';
+            }
+            
+            // Check for Work Order by _id
+            const workOrderById = await WorkOrder.findOne({ 
+                _id: id,
+                customerId 
+            });
+            if (workOrderById) {
+                console.log("Found as Work Order by _id");
+                return 'Work Order';
+            }
+            
+            // Check for Blocker (Risk or Issue)
+            const blocker = await Blocker.findOne({ 
+                _id: id,
+                customerId 
+            });
+            if (blocker) {
+                console.log(`Found as Blocker of type ${blocker.type}`);
+                return blocker.type; // 'Risk' or 'Issue'
+            }
+            
+            // Check for Company (Customer)
+            const companyById = await Company.findOne({ 
+                _id: id 
+            });
+            if (companyById) {
+                console.log("Found as Customer by _id");
+                return 'Customer';
+            }
+        }
+
+        // Check for Company (Customer) by name
+        console.log("Checking if it's a Customer by name...");
+        const company = await Company.findOne({ 
+            name: id
+        });
+        if (company) {
+            console.log("Found as Customer by name");
+            return 'Customer';
+        }
+        
+        // Try a more permissive search for Work Orders - some may have different field names
+        console.log("Trying broader work order search...");
+        const anyWorkOrder = await WorkOrder.findOne({
+            $or: [
+                { workorder: id },
+                { workOrderId: id },
+                { wo: id }
+            ],
+            customerId
+        });
+        if (anyWorkOrder) {
+            console.log("Found as Work Order through broader search");
+            return 'Work Order';
+        }
+        
+        // Special handling for Operation
+        if (id.startsWith('OP') || /^[A-Z0-9]{2,10}$/.test(id)) {
+            console.log("Assuming it's an Operation based on format");
+            return 'Operation';
+        }
+
+        console.log("Entity type not determined for ID:", id);
         return null; // Not found in any collection
     } catch (error) {
         console.error("Error determining entity type:", error);

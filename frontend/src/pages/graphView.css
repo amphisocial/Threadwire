@@ -179,6 +179,7 @@
   justify-content: center;
   cursor: pointer;
   transition: background-color 0.2s;
+  padding: 0;
 }
 
 .search-button:hover {
