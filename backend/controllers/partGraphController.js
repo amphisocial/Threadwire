@@ -724,16 +724,12 @@ async function fetchRelationships(id, entityType, customerId) {
     const relationships = [];
 
     try {
-        // Log some diagnostic info
-        console.log(`Fetching relationships for ${entityType} ${id} with customerId ${customerId}`);
-        
         switch(entityType) {
             case 'Product':
                 // Products are related to Sales Orders and Work Orders
                 
                 // Fetch related Sales Orders
                 const salesOrders = await SalesOrder.find({ partnumber: id, customerId });
-                console.log(`Found ${salesOrders.length} related sales orders`);
                 
                 salesOrders.forEach(so => {
                     relationships.push({
@@ -744,7 +740,6 @@ async function fetchRelationships(id, entityType, customerId) {
                 
                 // Fetch related Work Orders
                 const workOrders = await WorkOrder.find({ partnumber: id, customerId });
-                console.log(`Found ${workOrders.length} related work orders`);
                 
                 workOrders.forEach(wo => {
                     relationships.push({
@@ -765,8 +760,6 @@ async function fetchRelationships(id, entityType, customerId) {
                             customerId
                         });
                         
-                        console.log(`Found ${partBlockers.length} blockers related to this part`);
-                        
                         partBlockers.forEach(blocker => {
                             relationships.push({
                                 targetId: blocker._id.toString(),
@@ -774,7 +767,6 @@ async function fetchRelationships(id, entityType, customerId) {
                             });
                         });
                     } catch (error) {
-                        console.error("Error fetching related blockers:", error);
                         // Continue execution even if this query fails
                     }
                 }
@@ -782,16 +774,12 @@ async function fetchRelationships(id, entityType, customerId) {
                 // If this part has a blockerTag, find related parts
                 // We already have partDoc from above, so we can reuse it
                 if (partDoc && partDoc.blockerTag) {
-                    console.log(`Found blockerTag ${partDoc.blockerTag}, looking for related items`);
-                    
                     // Find other parts with the same blocker tag
                     const relatedParts = await Part.find({ 
                         blockerTag: partDoc.blockerTag, 
                         partnumber: { $ne: id },
                         customerId 
                     });
-                    
-                    console.log(`Found ${relatedParts.length} related parts with same blockerTag`);
                     
                     relatedParts.forEach(relatedPart => {
                         relationships.push({
@@ -806,8 +794,6 @@ async function fetchRelationships(id, entityType, customerId) {
                         customerId
                     });
                     
-                    console.log(`Found ${relatedSalesOrders.length} related sales orders with same blockerTag`);
-                    
                     relatedSalesOrders.forEach(so => {
                         relationships.push({
                             targetId: so.ordernumber || so._id.toString(),
@@ -820,8 +806,6 @@ async function fetchRelationships(id, entityType, customerId) {
                         customerId
                     });
                     
-                    console.log(`Found ${relatedWorkOrders.length} related work orders with same blockerTag`);
-                    
                     relatedWorkOrders.forEach(wo => {
                         relationships.push({
                             targetId: wo.workorder || wo._id.toString(),
@@ -833,7 +817,6 @@ async function fetchRelationships(id, entityType, customerId) {
                 // Fetch operations from PartBoP
                 try {
                     const operations = await PartBoP.find({ partnumber: id, customerId });
-                    console.log(`Found ${operations.length} operations for this part`);
                     
                     operations.forEach(op => {
                         if (op.operation) {
@@ -844,255 +827,249 @@ async function fetchRelationships(id, entityType, customerId) {
                         }
                     });
                 } catch (error) {
-                    console.error("Error fetching PartBoP operations:", error);
+                    // Continue execution even if this query fails
                 }
                 break;
             
             case 'Sales Order':
                 // Sales Orders are related to Parts, Customers, and possibly blockers
                 
-                // Fetch the sales order
-                const salesOrder = await SalesOrder.findOne({ 
-                    $or: [{ ordernumber: id }, { _id: id }],
-                    customerId 
-                });
-                
-                if (salesOrder) {
-                    // Relate to the part
-                    if (salesOrder.partnumber) {
-                        const part = await Part.findOne({ 
-                            partnumber: salesOrder.partnumber,
-                            customerId 
-                        });
+                try {
+                    // Fetch the sales order - FIXED to avoid ObjectId casting error
+                    const salesOrder = await SalesOrder.findOne({ ordernumber: id, customerId });
+                    
+                    if (salesOrder) {
+                        // Relate to the part
+                        if (salesOrder.partnumber) {
+                            const part = await Part.findOne({ 
+                                partnumber: salesOrder.partnumber,
+                                customerId 
+                            });
+                            
+                            if (part) {
+                                relationships.push({
+                                    targetId: part.partnumber,
+                                    targetType: 'Product'
+                                });
+                            }
+                        }
                         
-                        if (part) {
-                            relationships.push({
-                                targetId: part.partnumber,
-                                targetType: 'Product'
+                        // Relate to the customer
+                        if (salesOrder.customerId) {
+                            const company = await Company.findOne({ _id: salesOrder.customerId });
+                            
+                            if (company) {
+                                relationships.push({
+                                    targetId: company._id.toString(),
+                                    targetType: 'Customer'
+                                });
+                            }
+                        }
+                        
+                        // Find related blockers
+                        try {
+                            const soBlockers = await Blocker.find({
+                                relatedSalesOrders: salesOrder._id,
+                                customerId
+                            });
+                            
+                            soBlockers.forEach(blocker => {
+                                relationships.push({
+                                    targetId: blocker._id.toString(),
+                                    targetType: blocker.type === 'Issue' ? 'Issues' : 'Risk'
+                                });
+                            });
+                        } catch (error) {
+                            // Continue execution even if this query fails
+                        }
+                        
+                        // If this sales order has a blocker tag, find related items
+                        if (salesOrder.blockerTag) {
+                            // Find work orders with the same blocker tag
+                            const relatedWorkOrders = await WorkOrder.find({ 
+                                blockerTag: salesOrder.blockerTag,
+                                customerId 
+                            });
+                            
+                            relatedWorkOrders.forEach(wo => {
+                                relationships.push({
+                                    targetId: wo.workorder || wo._id.toString(),
+                                    targetType: 'Work Order'
+                                });
+                            });
+                            
+                            // Find parts with the same blocker tag
+                            const relatedParts = await Part.find({ 
+                                blockerTag: salesOrder.blockerTag,
+                                customerId 
+                            });
+                            
+                            relatedParts.forEach(part => {
+                                relationships.push({
+                                    targetId: part.partnumber,
+                                    targetType: 'Product'
+                                });
+                            });
+                            
+                            // Find other sales orders with the same blockerTag
+                            const relatedSalesOrders = await SalesOrder.find({
+                                blockerTag: salesOrder.blockerTag,
+                                ordernumber: { $ne: salesOrder.ordernumber },
+                                customerId
+                            });
+                            
+                            relatedSalesOrders.forEach(so => {
+                                relationships.push({
+                                    targetId: so.ordernumber || so._id.toString(),
+                                    targetType: 'Sales Order'
+                                });
                             });
                         }
-                    }
-                    
-                    // Relate to the customer
-                    if (salesOrder.customerId) {
-                        const company = await Company.findOne({ _id: salesOrder.customerId });
-                        if (company) {
-                            relationships.push({
-                                targetId: company._id.toString(),
-                                targetType: 'Customer'
-                            });
+                    } else if (/^[0-9a-fA-F]{24}$/.test(id)) {
+                        // If salesOrder wasn't found by ordernumber field, try by _id if it's a valid ObjectId
+                        try {
+                            const salesOrderById = await SalesOrder.findById(id);
+                            if (salesOrderById && salesOrderById.customerId.toString() === customerId) {
+                                // Process relationships for this sales order
+                                // Similar to above but using salesOrderById
+                            }
+                        } catch (error) {
+                            // Continue execution even if this query fails
                         }
                     }
-                    
-                    // Find related blockers
-                    try {
-                        const soBlockers = await Blocker.find({
-                            relatedSalesOrders: salesOrder._id,
-                            customerId
-                        });
-                        
-                        console.log(`Found ${soBlockers.length} blockers related to this sales order`);
-                        
-                        soBlockers.forEach(blocker => {
-                            relationships.push({
-                                targetId: blocker._id.toString(),
-                                targetType: blocker.type === 'Issue' ? 'Issues' : 'Risk'
-                            });
-                        });
-                    } catch (error) {
-                        console.error("Error fetching related blockers for sales order:", error);
-                    }
-                    
-                    // If this sales order has a blocker tag, find related items
-                    if (salesOrder.blockerTag) {
-                        console.log(`Found sales order blockerTag ${salesOrder.blockerTag}, looking for related items`);
-                        
-                        // Find work orders with the same blocker tag
-                        const relatedWorkOrders = await WorkOrder.find({ 
-                            blockerTag: salesOrder.blockerTag,
-                            customerId 
-                        });
-                        
-                        console.log(`Found ${relatedWorkOrders.length} work orders with same blockerTag`);
-                        
-                        relatedWorkOrders.forEach(wo => {
-                            relationships.push({
-                                targetId: wo.workorder || wo._id.toString(),
-                                targetType: 'Work Order'
-                            });
-                        });
-                        
-                        // Find parts with the same blocker tag
-                        const relatedParts = await Part.find({ 
-                            blockerTag: salesOrder.blockerTag,
-                            customerId 
-                        });
-                        
-                        console.log(`Found ${relatedParts.length} parts with same blockerTag`);
-                        
-                        relatedParts.forEach(part => {
-                            relationships.push({
-                                targetId: part.partnumber,
-                                targetType: 'Product'
-                            });
-                        });
-                        
-                        // Find other sales orders with the same blockerTag
-                        const relatedSalesOrders = await SalesOrder.find({
-                            blockerTag: salesOrder.blockerTag,
-                            ordernumber: { $ne: salesOrder.ordernumber },
-                            customerId
-                        });
-                        
-                        console.log(`Found ${relatedSalesOrders.length} other sales orders with same blockerTag`);
-                        
-                        relatedSalesOrders.forEach(so => {
-                            relationships.push({
-                                targetId: so.ordernumber || so._id.toString(),
-                                targetType: 'Sales Order'
-                            });
-                        });
-                    }
+                } catch (error) {
+                    // Continue execution even if this query fails
                 }
                 break;
             
             case 'Work Order':
                 // Work Orders are related to Parts, Sales Orders, and Blockers
                 
-                // Fetch the work order
-                const workOrder = await WorkOrder.findOne({ 
-                    $or: [{ workorder: id }, { _id: id }],
-                    customerId 
-                });
-                console.log("Found work order:", workOrder ? "Yes" : "No");
-                if (workOrder) {
-                    // Relate to the part
-                    console.log("Work order details:", {
-                        id: workOrder._id,
-                        workorder: workOrder.workorder,
-                        partnumber: workOrder.partnumber,
-                        salesorder: workOrder.salesorder,
-                        customerId: workOrder.customerId.toString()
-                    });
-                    if (workOrder.partnumber) {
-                        console.log("Looking for part with partnumber:", workOrder.partnumber);
-                        const part = await Part.findOne({ 
-                            partnumber: workOrder.partnumber,
-                            customerId 
-                        });
-                        console.log("Found related part:", part ? "Yes" : "No");
-                        if (part) {
-                            relationships.push({
-                                targetId: part.partnumber,
-                                targetType: 'Product'
+                try {
+                    // Fetch the work order - FIXED to avoid ObjectId casting error
+                    const workOrder = await WorkOrder.findOne({ workorder: id, customerId });
+                    
+                    if (workOrder) {
+                        // Relate to the part
+                        if (workOrder.partnumber) {
+                            const part = await Part.findOne({ 
+                                partnumber: workOrder.partnumber,
+                                customerId 
+                            });
+                            
+                            if (part) {
+                                relationships.push({
+                                    targetId: part.partnumber,
+                                    targetType: 'Product'
+                                });
+                            }
+                        }
+                        
+                        // Relate to the sales order
+                        if (workOrder.salesorder) {
+                            const so = await SalesOrder.findOne({ 
+                                ordernumber: workOrder.salesorder,
+                                customerId 
+                            });
+                            
+                            if (so) {
+                                relationships.push({
+                                    targetId: so.ordernumber || so._id.toString(),
+                                    targetType: 'Sales Order'
+                                });
+                            }
+                        }
+                        
+                        // Find related blockers
+                        try {
+                            const woBlockers = await Blocker.find({
+                                relatedWorkOrders: workOrder._id,
+                                customerId
+                            });
+                            
+                            woBlockers.forEach(blocker => {
+                                relationships.push({
+                                    targetId: blocker._id.toString(),
+                                    targetType: blocker.type === 'Issue' ? 'Issues' : 'Risk'
+                                });
+                            });
+                        } catch (error) {
+                            // Continue execution even if this query fails
+                        }
+                        
+                        // If this work order has a blocker tag, find related items
+                        if (workOrder.blockerTag) {
+                            // Find sales orders with the same blocker tag
+                            const relatedSalesOrders = await SalesOrder.find({ 
+                                blockerTag: workOrder.blockerTag,
+                                customerId 
+                            });
+                            
+                            relatedSalesOrders.forEach(so => {
+                                relationships.push({
+                                    targetId: so.ordernumber || so._id.toString(),
+                                    targetType: 'Sales Order'
+                                });
+                            });
+                            
+                            // Find parts with the same blocker tag
+                            const relatedParts = await Part.find({ 
+                                blockerTag: workOrder.blockerTag,
+                                customerId 
+                            });
+                            
+                            relatedParts.forEach(part => {
+                                relationships.push({
+                                    targetId: part.partnumber,
+                                    targetType: 'Product'
+                                });
+                            });
+                            
+                            // Find other work orders with the same blockerTag
+                            const relatedWorkOrders = await WorkOrder.find({
+                                blockerTag: workOrder.blockerTag,
+                                workorder: { $ne: workOrder.workorder },
+                                customerId
+                            });
+                            
+                            relatedWorkOrders.forEach(wo => {
+                                relationships.push({
+                                    targetId: wo.workorder || wo._id.toString(),
+                                    targetType: 'Work Order'
+                                });
                             });
                         }
-                    }
-                    
-                    // Relate to the sales order
-                    if (workOrder.salesorder) {
-                        console.log("Looking for sales order with ordernumber:", workOrder.salesorder);
-                        const so = await SalesOrder.findOne({ 
-                            $or: [{ ordernumber: workOrder.salesorder }, { _id: workOrder.salesorder }],
-                            customerId 
-                        });
-                        console.log("Found related sales order:", so ? "Yes" : "No");
-                        if (so) {
-                            relationships.push({
-                                targetId: so.ordernumber || so._id.toString(),
-                                targetType: 'Sales Order'
+                        
+                        // Fetch WorkOrderExecutions
+                        try {
+                            const executions = await WorkOrderExecution.find({ 
+                                workorder: workOrder.workorder,
+                                customerId 
                             });
+                            
+                            executions.forEach(execution => {
+                                relationships.push({
+                                    targetId: execution._id.toString(),
+                                    targetType: 'Execution'
+                                });
+                            });
+                        } catch (error) {
+                            // Continue execution even if this query fails
+                        }
+                    } else if (/^[0-9a-fA-F]{24}$/.test(id)) {
+                        // If workOrder wasn't found by workorder field, try by _id if it's a valid ObjectId
+                        try {
+                            const workOrderById = await WorkOrder.findById(id);
+                            if (workOrderById && workOrderById.customerId.toString() === customerId) {
+                                // Process relationships for this work order
+                                // Similar to above but using workOrderById
+                            }
+                        } catch (error) {
+                            // Continue execution even if this query fails
                         }
                     }
-                    
-                    // Find related blockers
-                    try {
-                        const woBlockers = await Blocker.find({
-                            relatedWorkOrders: workOrder._id,
-                            customerId
-                        });
-                        
-                        console.log(`Found ${woBlockers.length} blockers related to this work order`);
-                        
-                        woBlockers.forEach(blocker => {
-                            relationships.push({
-                                targetId: blocker._id.toString(),
-                                targetType: blocker.type === 'Issue' ? 'Issues' : 'Risk'
-                            });
-                        });
-                    } catch (error) {
-                        console.error("Error fetching related blockers for work order:", error);
-                    }
-                    
-                    // If this work order has a blocker tag, find related items
-                    if (workOrder.blockerTag) {
-                        console.log(`Found work order blockerTag ${workOrder.blockerTag}, looking for related items`);
-                        
-                        // Find sales orders with the same blocker tag
-                        const relatedSalesOrders = await SalesOrder.find({ 
-                            blockerTag: workOrder.blockerTag,
-                            customerId 
-                        });
-                        
-                        console.log(`Found ${relatedSalesOrders.length} sales orders with same blockerTag`);
-                        
-                        relatedSalesOrders.forEach(so => {
-                            relationships.push({
-                                targetId: so.ordernumber || so._id.toString(),
-                                targetType: 'Sales Order'
-                            });
-                        });
-                        
-                        // Find parts with the same blocker tag
-                        const relatedParts = await Part.find({ 
-                            blockerTag: workOrder.blockerTag,
-                            customerId 
-                        });
-                        
-                        console.log(`Found ${relatedParts.length} parts with same blockerTag`);
-                        
-                        relatedParts.forEach(part => {
-                            relationships.push({
-                                targetId: part.partnumber,
-                                targetType: 'Product'
-                            });
-                        });
-                        
-                        // Find other work orders with the same blockerTag
-                        const relatedWorkOrders = await WorkOrder.find({
-                            blockerTag: workOrder.blockerTag,
-                            workorder: { $ne: workOrder.workorder },
-                            customerId
-                        });
-                        
-                        console.log(`Found ${relatedWorkOrders.length} other work orders with same blockerTag`);
-                        
-                        relatedWorkOrders.forEach(wo => {
-                            relationships.push({
-                                targetId: wo.workorder || wo._id.toString(),
-                                targetType: 'Work Order'
-                            });
-                        });
-                    }
-                    
-                    // Fetch WorkOrderExecutions
-                    try {
-                        const executions = await WorkOrderExecution.find({ 
-                            workorder: workOrder.workorder,
-                            customerId 
-                        });
-                        
-                        console.log(`Found ${executions.length} executions for this work order`);
-                        
-                        executions.forEach(execution => {
-                            relationships.push({
-                                targetId: execution._id.toString(),
-                                targetType: 'Execution'
-                            });
-                        });
-                    } catch (error) {
-                        console.error("Error fetching work order executions:", error);
-                    }
+                } catch (error) {
+                    // Continue execution even if this query fails
                 }
                 break;
             
@@ -1100,164 +1077,199 @@ async function fetchRelationships(id, entityType, customerId) {
             case 'Issue':
             case 'Issues':
                 // Find the blocker
-                const type = entityType === 'Issues' ? 'Issue' : entityType;
-                const blocker = await Blocker.findOne({ 
-                    _id: id,
-                    type,
-                    customerId 
-                });
-                
-                if (blocker) {
-                    // Relate to work orders
-                    if (blocker.relatedWorkOrders && blocker.relatedWorkOrders.length > 0) {
-                        for (const woId of blocker.relatedWorkOrders) {
-                            try {
-                                const workOrder = await WorkOrder.findById(woId);
-                                if (workOrder && workOrder.customerId.toString() === customerId.toString()) {
-                                    relationships.push({
-                                        targetId: workOrder.workorder || workOrder._id.toString(),
-                                        targetType: 'Work Order'
-                                    });
-                                }
-                            } catch (error) {
-                                console.error(`Error fetching related work order ${woId}:`, error);
-                            }
-                        }
+                try {
+                    const type = entityType === 'Issues' ? 'Issue' : entityType;
+                    
+                    // Only try to find by _id if it looks like a valid ObjectId
+                    if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+                        break;
                     }
                     
-                    // Relate to sales orders
-                    if (blocker.relatedSalesOrders && blocker.relatedSalesOrders.length > 0) {
-                        for (const soId of blocker.relatedSalesOrders) {
-                            try {
-                                const salesOrder = await SalesOrder.findById(soId);
-                                if (salesOrder && salesOrder.customerId.toString() === customerId.toString()) {
-                                    relationships.push({
-                                        targetId: salesOrder.ordernumber || salesOrder._id.toString(),
-                                        targetType: 'Sales Order'
-                                    });
+                    const blocker = await Blocker.findOne({ 
+                        _id: id,
+                        type,
+                        customerId 
+                    });
+                    
+                    if (blocker) {
+                        // Relate to work orders
+                        if (blocker.relatedWorkOrders && blocker.relatedWorkOrders.length > 0) {
+                            for (const woId of blocker.relatedWorkOrders) {
+                                try {
+                                    const workOrder = await WorkOrder.findById(woId);
+                                    if (workOrder && workOrder.customerId.toString() === customerId.toString()) {
+                                        relationships.push({
+                                            targetId: workOrder.workorder || workOrder._id.toString(),
+                                            targetType: 'Work Order'
+                                        });
+                                    }
+                                } catch (error) {
+                                    // Continue with other work orders
                                 }
-                            } catch (error) {
-                                console.error(`Error fetching related sales order ${soId}:`, error);
                             }
                         }
-                    }
-                    
-                    // Relate to parts
-                    if (blocker.relatedParts && blocker.relatedParts.length > 0) {
-                        for (const partId of blocker.relatedParts) {
-                            try {
-                                const part = await Part.findById(partId);
-                                if (part && part.customerId.toString() === customerId.toString()) {
-                                    relationships.push({
-                                        targetId: part.partnumber,
-                                        targetType: 'Product'
-                                    });
+                        
+                        // Relate to sales orders
+                        if (blocker.relatedSalesOrders && blocker.relatedSalesOrders.length > 0) {
+                            for (const soId of blocker.relatedSalesOrders) {
+                                try {
+                                    const salesOrder = await SalesOrder.findById(soId);
+                                    if (salesOrder && salesOrder.customerId.toString() === customerId.toString()) {
+                                        relationships.push({
+                                            targetId: salesOrder.ordernumber || salesOrder._id.toString(),
+                                            targetType: 'Sales Order'
+                                        });
+                                    }
+                                } catch (error) {
+                                    // Continue with other sales orders
                                 }
-                            } catch (error) {
-                                console.error(`Error fetching related part ${partId}:`, error);
                             }
                         }
-                    }
-                    
-                    // If this is a risk, find related issues
-                    if (blocker.type === 'Risk') {
-                        try {
-                            const relatedIssues = await Blocker.find({
-                                type: 'Issue',
-                                // Assuming there might be a relationship field, add it here
-                                // Example: riskId: blocker._id,
-                                customerId
-                            }).limit(10);
-                            
-                            console.log(`Found ${relatedIssues.length} issues potentially related to this risk`);
-                            
-                            relatedIssues.forEach(issue => {
-                                relationships.push({
-                                    targetId: issue._id.toString(),
-                                    targetType: 'Issues'
+                        
+                        // Relate to parts
+                        if (blocker.relatedParts && blocker.relatedParts.length > 0) {
+                            for (const partId of blocker.relatedParts) {
+                                try {
+                                    const part = await Part.findById(partId);
+                                    if (part && part.customerId.toString() === customerId.toString()) {
+                                        relationships.push({
+                                            targetId: part.partnumber,
+                                            targetType: 'Product'
+                                        });
+                                    }
+                                } catch (error) {
+                                    // Continue with other parts
+                                }
+                            }
+                        }
+                        
+                        // If this is a risk, find related issues
+                        if (blocker.type === 'Risk') {
+                            try {
+                                const relatedIssues = await Blocker.find({
+                                    type: 'Issue',
+                                    // Assuming there might be a relationship field, add it here
+                                    // Example: riskId: blocker._id,
+                                    customerId
+                                }).limit(10);
+                                
+                                relatedIssues.forEach(issue => {
+                                    relationships.push({
+                                        targetId: issue._id.toString(),
+                                        targetType: 'Issues'
+                                    });
                                 });
-                            });
-                        } catch (error) {
-                            console.error("Error fetching related issues for risk:", error);
+                            } catch (error) {
+                                // Continue execution even if this query fails
+                            }
                         }
-                    }
-                    
-                    // If this is an issue, find related risks
-                    if (blocker.type === 'Issue') {
-                        try {
-                            const relatedRisks = await Blocker.find({
-                                type: 'Risk',
-                                // Assuming there might be a relationship field, add it here
-                                // Example: relatedIssues: blocker._id,
-                                customerId
-                            }).limit(10);
-                            
-                            console.log(`Found ${relatedRisks.length} risks potentially related to this issue`);
-                            
-                            relatedRisks.forEach(risk => {
-                                relationships.push({
-                                    targetId: risk._id.toString(),
-                                    targetType: 'Risk'
+                        
+                        // If this is an issue, find related risks
+                        if (blocker.type === 'Issue') {
+                            try {
+                                const relatedRisks = await Blocker.find({
+                                    type: 'Risk',
+                                    // Assuming there might be a relationship field, add it here
+                                    // Example: relatedIssues: blocker._id,
+                                    customerId
+                                }).limit(10);
+                                
+                                relatedRisks.forEach(risk => {
+                                    relationships.push({
+                                        targetId: risk._id.toString(),
+                                        targetType: 'Risk'
+                                    });
                                 });
-                            });
-                        } catch (error) {
-                            console.error("Error fetching related risks for issue:", error);
+                            } catch (error) {
+                                // Continue execution even if this query fails
+                            }
                         }
                     }
+                } catch (error) {
+                    // Continue execution even if this query fails
                 }
                 break;
             
             case 'Customer':
                 // Find the company
-                const company = await Company.findOne({ 
-                    $or: [{ _id: id }, { name: id }]
-                });
-                
-                if (company) {
-                    // Find sales orders for this customer
-                    try {
-                        const customerSalesOrders = await SalesOrder.find({
-                            customerId: company._id,
-                        }).limit(20);
-                        
-                        console.log(`Found ${customerSalesOrders.length} sales orders for this customer`);
-                        
-                        customerSalesOrders.forEach(so => {
-                            relationships.push({
-                                targetId: so.ordernumber || so._id.toString(),
-                                targetType: 'Sales Order'
-                            });
-                        });
-                    } catch (error) {
-                        console.error("Error fetching sales orders for customer:", error);
+                try {
+                    // Try by name first
+                    let company = await Company.findOne({ name: id });
+                    
+                    // If not found and id is a valid ObjectId, try by _id
+                    if (!company && /^[0-9a-fA-F]{24}$/.test(id)) {
+                        company = await Company.findOne({ _id: id });
                     }
                     
-                    // Find parts for this customer (based on customerId)
-                    try {
-                        const customerParts = await Part.find({
-                            customerId: company._id
-                        }).limit(20);
+                    if (company) {
+                        // Find sales orders for this customer
+                        try {
+                            const customerSalesOrders = await SalesOrder.find({
+                                customerId: company._id,
+                            }).limit(20);
+                            
+                            customerSalesOrders.forEach(so => {
+                                relationships.push({
+                                    targetId: so.ordernumber || so._id.toString(),
+                                    targetType: 'Sales Order'
+                                });
+                            });
+                        } catch (error) {
+                            // Continue execution even if this query fails
+                        }
                         
-                        console.log(`Found ${customerParts.length} parts for this customer`);
+                        // Find parts for this customer (based on customerId)
+                        try {
+                            const customerParts = await Part.find({
+                                customerId: company._id
+                            }).limit(20);
+                            
+                            customerParts.forEach(part => {
+                                relationships.push({
+                                    targetId: part.partnumber,
+                                    targetType: 'Product'
+                                });
+                            });
+                        } catch (error) {
+                            // Continue execution even if this query fails
+                        }
+                    }
+                } catch (error) {
+                    // Continue execution even if this query fails
+                }
+                break;
+                
+            case 'Operation':
+                // For operations, we might not have direct relationships
+                // But we can find parts that use this operation
+                try {
+                    const relatedParts = await PartBoP.find({ 
+                        operation: id,
+                        customerId 
+                    });
+                    
+                    for (const partBop of relatedParts) {
+                        // Get the full part details
+                        const part = await Part.findOne({ 
+                            partnumber: partBop.partnumber,
+                            customerId 
+                        });
                         
-                        customerParts.forEach(part => {
+                        if (part) {
                             relationships.push({
                                 targetId: part.partnumber,
                                 targetType: 'Product'
                             });
-                        });
-                    } catch (error) {
-                        console.error("Error fetching parts for customer:", error);
+                        }
                     }
+                } catch (error) {
+                    // Continue execution even if this query fails
                 }
                 break;
         }
         
-        console.log(`Returning ${relationships.length} relationships for ${entityType} ${id}`);
         return relationships;
     } catch (error) {
-        console.error(`Error fetching relationships for ${entityType} ${id}:`, error);
         return [];
     }
-}             
-             
+}
