@@ -829,6 +829,30 @@ async function fetchRelationships(id, entityType, customerId) {
                 } catch (error) {
                     // Continue execution even if this query fails
                 }
+                
+                // NEW: Relate to customers who have purchased this part
+                try {
+                    // Find distinct customers who have ordered this part via sales orders
+                    const customerIds = await SalesOrder.find({ 
+                        partnumber: id, 
+                        customerId 
+                    }).distinct('customerId');
+                    
+                    // Process only valid ObjectId values
+                    for (const customerIdValue of customerIds) {
+                        if (customerIdValue) {
+                            const company = await Company.findOne({ _id: customerIdValue });
+                            if (company) {
+                                relationships.push({
+                                    targetId: company._id.toString(),
+                                    targetType: 'Customer'
+                                });
+                            }
+                        }
+                    }
+                } catch (error) {
+                    // Continue execution even if this query fails
+                }
                 break;
             
             case 'Sales Order':
@@ -925,6 +949,19 @@ async function fetchRelationships(id, entityType, customerId) {
                                 });
                             });
                         }
+                        
+                        // NEW: Find related work orders by salesorder field
+                        const linkedWorkOrders = await WorkOrder.find({ 
+                            salesorder: id,
+                            customerId 
+                        });
+                        
+                        linkedWorkOrders.forEach(wo => {
+                            relationships.push({
+                                targetId: wo.workorder || wo._id.toString(),
+                                targetType: 'Work Order'
+                            });
+                        });
                     } else if (/^[0-9a-fA-F]{24}$/.test(id)) {
                         // If salesOrder wasn't found by ordernumber field, try by _id if it's a valid ObjectId
                         try {
@@ -976,6 +1013,29 @@ async function fetchRelationships(id, entityType, customerId) {
                                 relationships.push({
                                     targetId: so.ordernumber || so._id.toString(),
                                     targetType: 'Sales Order'
+                                });
+                                
+                                // NEW: Relate to the customer through sales order
+                                if (so.customerId) {
+                                    const company = await Company.findOne({ _id: so.customerId });
+                                    if (company) {
+                                        relationships.push({
+                                            targetId: company._id.toString(),
+                                            targetType: 'Customer'
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // NEW: Relate directly to customer if work order has a customer field
+                        if (workOrder.customer_id || workOrder.clientId || workOrder.customerId) {
+                            const customerIdField = workOrder.customer_id || workOrder.clientId || workOrder.customerId;
+                            const company = await Company.findOne({ _id: customerIdField });
+                            if (company) {
+                                relationships.push({
+                                    targetId: company._id.toString(),
+                                    targetType: 'Customer'
                                 });
                             }
                         }
@@ -1119,6 +1179,17 @@ async function fetchRelationships(id, entityType, customerId) {
                                             targetId: salesOrder.ordernumber || salesOrder._id.toString(),
                                             targetType: 'Sales Order'
                                         });
+                                        
+                                        // NEW: Relate to customers through sales orders
+                                        if (salesOrder.customerId) {
+                                            const company = await Company.findOne({ _id: salesOrder.customerId });
+                                            if (company) {
+                                                relationships.push({
+                                                    targetId: company._id.toString(),
+                                                    targetType: 'Customer'
+                                                });
+                                            }
+                                        }
                                     }
                                 } catch (error) {
                                     // Continue with other sales orders
@@ -1228,6 +1299,61 @@ async function fetchRelationships(id, entityType, customerId) {
                                 relationships.push({
                                     targetId: part.partnumber,
                                     targetType: 'Product'
+                                });
+                            });
+                        } catch (error) {
+                            // Continue execution even if this query fails
+                        }
+                        
+                        // NEW: Find work orders for this customer
+                        try {
+                            // Direct connection if work orders have customerId
+                            const directWorkOrders = await WorkOrder.find({
+                                customerId: company._id
+                            }).limit(20);
+                            
+                            directWorkOrders.forEach(wo => {
+                                relationships.push({
+                                    targetId: wo.workorder || wo._id.toString(),
+                                    targetType: 'Work Order'
+                                });
+                            });
+                            
+                            // Also find work orders through sales orders
+                            const customerSalesOrderIds = await SalesOrder.find({
+                                customerId: company._id,
+                            }).distinct('ordernumber');
+                            
+                            if (customerSalesOrderIds.length > 0) {
+                                const indirectWorkOrders = await WorkOrder.find({
+                                    salesorder: { $in: customerSalesOrderIds },
+                                    customerId
+                                }).limit(20);
+                                
+                                indirectWorkOrders.forEach(wo => {
+                                    if (!relationships.some(r => r.targetId === (wo.workorder || wo._id.toString()) && r.targetType === 'Work Order')) {
+                                        relationships.push({
+                                            targetId: wo.workorder || wo._id.toString(),
+                                            targetType: 'Work Order'
+                                        });
+                                    }
+                                });
+                            }
+                        } catch (error) {
+                            // Continue execution even if this query fails
+                        }
+                        
+                        // NEW: Find risks and issues for this customer
+                        try {
+                            // Through related parts and orders
+                            const customerBlockers = await Blocker.find({
+                                customerId: company._id
+                            }).limit(20);
+                            
+                            customerBlockers.forEach(blocker => {
+                                relationships.push({
+                                    targetId: blocker._id.toString(),
+                                    targetType: blocker.type === 'Issue' ? 'Issues' : 'Risk'
                                 });
                             });
                         } catch (error) {
