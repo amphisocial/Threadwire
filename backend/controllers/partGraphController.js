@@ -964,15 +964,23 @@ async function fetchRelationships(id, entityType, customerId) {
                     $or: [{ workorder: id }, { _id: id }],
                     customerId 
                 });
-                
+                console.log("Found work order:", workOrder ? "Yes" : "No");
                 if (workOrder) {
                     // Relate to the part
+                    console.log("Work order details:", {
+                        id: workOrder._id,
+                        workorder: workOrder.workorder,
+                        partnumber: workOrder.partnumber,
+                        salesorder: workOrder.salesorder,
+                        customerId: workOrder.customerId.toString()
+                    });
                     if (workOrder.partnumber) {
+                        console.log("Looking for part with partnumber:", workOrder.partnumber);
                         const part = await Part.findOne({ 
                             partnumber: workOrder.partnumber,
                             customerId 
                         });
-                        
+                        console.log("Found related part:", part ? "Yes" : "No");
                         if (part) {
                             relationships.push({
                                 targetId: part.partnumber,
@@ -983,11 +991,12 @@ async function fetchRelationships(id, entityType, customerId) {
                     
                     // Relate to the sales order
                     if (workOrder.salesorder) {
+                        console.log("Looking for sales order with ordernumber:", workOrder.salesorder);
                         const so = await SalesOrder.findOne({ 
                             $or: [{ ordernumber: workOrder.salesorder }, { _id: workOrder.salesorder }],
                             customerId 
                         });
-                        
+                        console.log("Found related sales order:", so ? "Yes" : "No");
                         if (so) {
                             relationships.push({
                                 targetId: so.ordernumber || so._id.toString(),
