@@ -31,6 +31,27 @@ const googleAuth = async (req, res) => {
 
             // Check if profile is complete
             isProfileComplete = Boolean(user.phone && user.userName && user.customerId);
+
+            const jwtToken = jwt.sign(
+                { 
+                    userId: user._id, 
+                    email: user.email, 
+                    username: user.userName,
+                    customerId: user.customerId,
+                    role: user.role
+                },
+                '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
+                { expiresIn: '1h' }
+            );
+            
+            return res.status(200).json({
+                message: 'User authenticated successfully',
+                token: jwtToken,
+                userId: user._id,
+                username: user.userName,
+                isProfileComplete
+            });
+
         } else {
             const baseUserName = email.split('@')[0];
             let userName = baseUserName.replace(/[^a-zA-Z0-9]/g, '');
@@ -53,21 +74,33 @@ const googleAuth = async (req, res) => {
                 });
 
                 await user.save();
+
+                const jwtToken = jwt.sign(
+                    { 
+                        userId: user._id, 
+                        email: user.email, 
+                        username: user.userName,
+                        customerId: user.customerId,
+                        role: user.role || 'regular_user' // Default role if not set
+                    },
+                    '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
+                    { expiresIn: '24h' }
+                );
+                
+                return res.status(200).json({
+                    message: 'User registered successfully',
+                    token: jwtToken,
+                    userId: user._id,
+                    username: user.userName,
+                    isProfileComplete: false
+                });
+
             } catch (userError) {
                 console.error('User creation error:', userError);
                 return res.status(400).json({ message: userError.message });
             }
         }
 
-
-
-        return res.status(200).json({
-            message: 'User authenticated successfully',
-            user,
-            token: token,
-            userId: user._id,
-            isProfileComplete
-        });
     } catch (error) {
         console.error('Google auth error:', error);
         return res.status(401).json({ message: error.message });
