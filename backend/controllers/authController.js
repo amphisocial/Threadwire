@@ -68,7 +68,9 @@ const googleAuth = async (req, res) => {
             // Determine user role and company based on invitation
             const invitationToken = req.query.token;
             let companyId = null;
-            let userRole = 'power_user'; // Default to power_user for self-registrations
+            let company = null;
+            let isPowerUser = false;
+            let isFromInvitation = false;
 
             if (invitationToken) {
                 try {
@@ -82,15 +84,47 @@ const googleAuth = async (req, res) => {
                     }
                     
                     companyId = invitationData.companyId;
-                    userRole = 'regular_user'; // For invited users
-                    email_from_invitation = invitationData.email;
+                    isFromInvitation = true;
                     
-                    await invitationService.processInvitation(invitationToken);
+                    
+                    
                 } catch (invitationError) {
                     return res.status(400).json({ 
                         message: `Invitation error: ${invitationError.message}`
                     });
                 }
+            }
+
+            if (customerId) {
+                // Check if company exists
+                company = await Company.findById(customerId);
+                if (!company) {
+                    return res.status(400).json({ message: 'Company not found' });
+                }
+
+                // Check if the company already has a power user
+                if (company.powerUserId) {
+                    // Check if company has reached user limit
+                    if (company.currentUserCount >= company.maxUsers) {
+                        return res.status(400).json({ message: 'This company has reached its user limit' });
+                    }
+                    
+                    // Regular user joining existing company - update company user count
+                    company.currentUserCount += 1;
+                    await company.save();
+                } else {
+                    // First user for this company - make them a power user
+                    isPowerUser = true;
+                    
+                    // Set company license details
+                    company.licenseType = 'FREE';
+                    company.maxUsers = 3; // 1 power user + 2 regular users
+                    company.currentUserCount = 1;
+                }
+            } else {
+                // For Google auth without companyId, we'll set it during profile completion
+                // But we need to flag that profile is incomplete
+                isProfileComplete = false;
             }
             
             // This is a registration request, so create a new user
@@ -114,18 +148,26 @@ const googleAuth = async (req, res) => {
                     userName,
                     profilePic: picture,
                     customerId: companyId, // Will be null for non-invited users
-                    role: userRole // 'power_user' for self-registration, 'regular_user' for invited users
-                });
+                    role: isPowerUser ? 'power_user' : 'regular_user'
 
-                await user.save();
 
+
+                  await user.save();
                 // If the user is a power user and has a company, update company's powerUserId
-                if (userRole === 'power_user' && companyId) {
-                    const company = await Company.findById(companyId);
-                    if (company && !company.powerUserId) {
+                if (isPowerUser && companyId) {
+                    
                         company.powerUserId = user._id;
-                        company.currentUserCount = 1;
+                       
                         await company.save();
+                    }
+                }
+
+                if (isFromInvitation && invitationToken) {
+                    try {
+                        await require('../services/invitationService').processInvitation(invitationToken);
+                    } catch (error) {
+                        console.error('Error processing invitation:', error);
+                        // Continue with registration even if processing invitation fails
                     }
                 }
 
