@@ -66,10 +66,8 @@ const googleAuth = async (req, res) => {
                 });
             }
             
-            // Variables to determine user role and company
+            // Variables for invitation handling
             let customerId = null;
-            let company = null;
-            let isPowerUser = false;
             let isFromInvitation = false;
             
             // Process invitation token if provided
@@ -89,43 +87,22 @@ const googleAuth = async (req, res) => {
                     
                     customerId = invitationData.companyId;
                     isFromInvitation = true;
+                    
+                    // For invited users, we need to check if the company exists
+                    const company = await Company.findById(customerId);
+                    if (!company) {
+                        return res.status(400).json({ message: 'Company not found' });
+                    }
+                    
+                    // Check if company has reached user limit
+                    if (company.powerUserId && company.currentUserCount >= company.maxUsers) {
+                        return res.status(400).json({ message: 'This company has reached its user limit' });
+                    }
                 } catch (invitationError) {
                     return res.status(400).json({ 
                         message: `Invitation error: ${invitationError.message}`
                     });
                 }
-            }
-
-            if (customerId) {
-                // Check if company exists
-                company = await Company.findById(customerId);
-                if (!company) {
-                    return res.status(400).json({ message: 'Company not found' });
-                }
-
-                // Check if the company already has a power user
-                if (company.powerUserId) {
-                    // Check if company has reached user limit
-                    if (company.currentUserCount >= company.maxUsers) {
-                        return res.status(400).json({ message: 'This company has reached its user limit' });
-                    }
-                    
-                    // Regular user joining existing company - update company user count
-                    company.currentUserCount += 1;
-                    await company.save();
-                } else {
-                    // First user for this company - make them a power user
-                    isPowerUser = true;
-                    
-                    // Set company license details
-                    company.licenseType = 'FREE';
-                    company.maxUsers = 3; // 1 power user + 2 regular users
-                    company.currentUserCount = 1;
-                }
-            } else {
-                // For Google auth without companyId, we'll set it during profile completion
-                // But we need to flag that profile is incomplete
-                isProfileComplete = false;
             }
             
             // Create new user with minimal information
@@ -140,6 +117,8 @@ const googleAuth = async (req, res) => {
             }
 
             try {
+                // For Google sign-ups, we create the user with minimal info first
+                // The role will be determined during profile completion based on the selected company
                 user = new User({
                     googleId,
                     email,
@@ -147,22 +126,24 @@ const googleAuth = async (req, res) => {
                     lastName,
                     userName,
                     profilePic: picture,
-                    customerId, // Will be null for non-invited users until profile completion
-                    role: isPowerUser ? 'power_user' : 'regular_user'
+                    customerId, // Will be null unless from invitation
+                    // Don't set role yet for users without an invitation - it will be set during profile completion
+                    ...(isFromInvitation && { role: 'regular_user' })
                 });
 
                 await user.save();
-
-                // If the user is a power user and has a company, update company's powerUserId
-                if (isPowerUser && company) {
-                    company.powerUserId = user._id;
-                    await company.save();
-                }
 
                 // If registration is from invitation, process the invitation
                 if (isFromInvitation && invitationToken) {
                     try {
                         await require('../services/invitationService').processInvitation(invitationToken);
+                        
+                        // Update company user count for invited users
+                        const company = await Company.findById(customerId);
+                        if (company) {
+                            company.currentUserCount += 1;
+                            await company.save();
+                        }
                     } catch (error) {
                         console.error('Error processing invitation:', error);
                         // Continue with registration even if processing invitation fails
@@ -182,9 +163,8 @@ const googleAuth = async (req, res) => {
                     { expiresIn: '24h' }
                 );
                 
-                // Check if profile is complete - for Google users
-                // Profile is complete only if they have company ID
-                isProfileComplete = Boolean(customerId);
+                // Profile is complete only if from invitation with customerId
+                isProfileComplete = Boolean(isFromInvitation && customerId);
                 
                 return res.status(201).json({
                     message: 'User registered successfully',
@@ -206,56 +186,98 @@ const googleAuth = async (req, res) => {
     }
 };
 
-// Add a new function to handle profile completion
-const completeProfile = async (req, res) => {
+const completeProfile = async (userId, profileData) => {
     try {
-        const { userId } = req.params;
-        const { userName, phone, customerId } = req.body;
+        const { userName, phone, customerId } = profileData;
 
-        // Check if user exists
+        // Find the user
         const user = await User.findById(userId);
         if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+            throw new Error('User not found');
         }
 
-        // Update user fields if provided
+        // Check if userName is unique (if provided)
         if (userName) {
-            // Check if userName is unique
             const existingUser = await User.findOne({ userName, _id: { $ne: userId } });
             if (existingUser) {
-                return res.status(400).json({ error: 'Username already exists' });
+                throw new Error('Username already exists');
             }
             user.userName = userName;
         }
 
-        let formattedPhone = phone;
-        if (phone && !phone.startsWith('+')) {
-            formattedPhone = `+${phone}`;
-        }
-
-        // Check if phone is unique (if changed)
-        if (formattedPhone) {
-            const existingUser = await User.findOne({ phone: formattedPhone, _id: { $ne: userId } });
+        // Check if phone is unique (if provided)
+        if (phone) {
+            const existingUser = await User.findOne({ phone, _id: { $ne: userId } });
             if (existingUser) {
-                return res.status(400).json({ error: 'Phone number already exists' });
+                throw new Error('Phone number already exists');
             }
-            user.phone = formattedPhone;
+            user.phone = phone;
         }
 
+        // Update customerId if provided
         if (customerId) {
+            // Find the company
+            const company = await Company.findById(customerId);
+            if (!company) {
+                throw new Error('Company not found');
+            }
+
+            // Determine if user should be a power user
+            let isPowerUser = false;
+            
+            // If the company doesn't have a power user yet, this user becomes one
+            if (!company.powerUserId) {
+                isPowerUser = true;
+                
+                // Set company license details for new companies
+                company.licenseType = 'FREE';
+                company.maxUsers = 3; // 1 power user + 2 regular users
+                company.currentUserCount = 1;
+                
+                // Set this user as the power user
+                company.powerUserId = user._id;
+                await company.save();
+            } else {
+                // Company already has a power user
+                
+                // Check if company has reached user limit
+                if (company.currentUserCount >= company.maxUsers) {
+                    throw new Error('This company has reached its user limit');
+                }
+                
+                // Regular user joining existing company - update company user count
+                company.currentUserCount += 1;
+                await company.save();
+            }
+            
+            // Set user role and customerId
+            user.role = isPowerUser ? 'power_user' : 'regular_user';
             user.customerId = customerId;
         }
 
         // Save the updated user
         await user.save();
 
+        // Generate JWT token
+        const token = jwt.sign(
+            { 
+                userId: user._id, 
+                email: user.email, 
+                username: user.userName,
+                customerId: user.customerId,
+                role: user.role
+            },
+            '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
+            { expiresIn: '1h' }
+        );
 
-        return res.status(200).json({
+        return {
+            token,
             userId: user._id,
             message: 'Profile completed successfully'
-        });
+        };
     } catch (error) {
-        return res.status(500).json({ error: error.message || 'Failed to complete profile' });
+        throw new Error(error.message || 'Failed to complete profile');
     }
 };
 
