@@ -189,9 +189,10 @@ const googleAuth = async (req, res) => {
 
 const completeProfile = async (userId, profileData) => {
     try {
-        const { userName, phone, customerId, companyName } = profileData;
-         
+        const { userName, phone, customerId } = profileData;
+
         console.log(`Profile completion for user ${userId} with company ${customerId}`);
+
         // Find the user
         const user = await User.findById(userId);
         if (!user) {
@@ -216,39 +217,39 @@ const completeProfile = async (userId, profileData) => {
             user.phone = phone;
         }
 
-        let isPowerUser = false;
-        let company = null;
-
         // Update customerId if provided
         if (customerId) {
-            console.log(`Using existing company with ID: ${customerId}`);
-            
             // Find the company
-            company = await Company.findById(customerId);
+            const company = await Company.findById(customerId);
             if (!company) {
                 throw new Error('Company not found');
             }
 
-            console.log('Company found:', {
-                id: company._id,
-                name: company.name,
-                powerUserId: company.powerUserId,
-                currentUserCount: company.currentUserCount,
-                maxUsers: company.maxUsers
+            console.log(`Found company: ${company.name}, powerUserId: ${company.powerUserId}`);
+
+            // IMPORTANT: Check if this company has any power users
+            // Query the User collection directly
+            const powerUserCheck = await User.findOne({ 
+                customerId: company._id, 
+                role: 'power_user'
             });
 
-            // Check if this company already has a power user
-            if (!company.powerUserId) {
-                console.log('Company has no power user yet. Setting this user as power user.');
-                isPowerUser = true;
+            console.log(`Power user check result: ${powerUserCheck ? 'Has power user' : 'No power user'}`);
+
+            let shouldBePowerUser = false;
+            
+            // If there's no power user for this company yet, make this user the power user
+            if (!powerUserCheck) {
+                console.log(`No power user found for company. Setting user ${userId} as power user`);
+                shouldBePowerUser = true;
                 
-                // Set company license details
-                company.licenseType = 'FREE';
-                company.maxUsers = 3; // 1 power user + 2 regular users
-                company.currentUserCount = 1;
+                // Update company settings
                 company.powerUserId = user._id;
+                if (!company.licenseType) company.licenseType = 'FREE';
+                if (!company.maxUsers) company.maxUsers = 3;
+                company.currentUserCount = 1;
             } else {
-                console.log('Company already has a power user');
+                console.log(`Company already has power user ${powerUserCheck._id}`);
                 
                 // Check if company has reached user limit
                 if (company.currentUserCount >= company.maxUsers) {
@@ -258,45 +259,43 @@ const completeProfile = async (userId, profileData) => {
                 // Regular user joining existing company
                 company.currentUserCount += 1;
             }
-        } else if (companyName) {
-            // Create a new company if companyName is provided but customerId isn't
-            console.log(`Creating new company: ${companyName}`);
             
-            // This user will be the power user of the new company
-            isPowerUser = true;
-            
-            // Create new company
-            company = new Company({
-                name: companyName,
-                licenseType: 'FREE',
-                maxUsers: 3, // 1 power user + 2 regular users
-                currentUserCount: 1
-                // powerUserId will be set after user is saved
-            });
-            
-            // Save the new company to get an ID
+            // Save company changes
             await company.save();
-            console.log(`New company created with ID: ${company._id}`);
             
-            // Now we have a company ID to assign to the user
-            company.powerUserId = user._id;
-            await company.save();
+            // Set user fields - IMPORTANT: We use direct MongoDB update to bypass Mongoose defaults
+            user.customerId = customerId;
+            
+            // CRITICAL FIX: Force set the role with MongoDB's updateOne to bypass Mongoose defaults
+            if (shouldBePowerUser) {
+                console.log('Explicitly setting user as power_user');
+                await User.updateOne(
+                    { _id: user._id },
+                    { $set: { role: 'power_user' } }
+                );
+                // Also update the local user object
+                user.role = 'power_user';
+            } else {
+                console.log('Setting user as regular_user');
+                await User.updateOne(
+                    { _id: user._id },
+                    { $set: { role: 'regular_user' } }
+                );
+                // Also update the local user object
+                user.role = 'regular_user';
+            }
+            
+            console.log(`User role explicitly set to: ${shouldBePowerUser ? 'power_user' : 'regular_user'}`);
         } else {
-            throw new Error('Either customerId or companyName is required');
+            throw new Error('Company ID is required');
         }
-        
-        // Update user with company and role information
-        user.customerId = company._id;
-        user.role = isPowerUser ? 'power_user' : 'regular_user';
-        console.log(`Setting user role to: ${user.role}`);
-        
-        // Save the updated user
+
+        // Save the updated user for other fields
         await user.save();
-        console.log('User saved with updated profile');
         
-        // Save any company changes
-        await company.save();
-        console.log('Company saved with updated information');
+        // Double-check the saved user's role
+        const savedUser = await User.findById(userId);
+        console.log(`Verified user role after save: ${savedUser.role}`);
 
         // Generate JWT token
         const token = jwt.sign(
@@ -305,7 +304,7 @@ const completeProfile = async (userId, profileData) => {
                 email: user.email, 
                 username: user.userName,
                 customerId: user.customerId,
-                role: user.role
+                role: user.role // Use the explicitly set role
             },
             '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
             { expiresIn: '1h' }
@@ -314,6 +313,7 @@ const completeProfile = async (userId, profileData) => {
         return {
             token,
             userId: user._id,
+            role: savedUser.role, // Return the verified role
             message: 'Profile completed successfully'
         };
     } catch (error) {
