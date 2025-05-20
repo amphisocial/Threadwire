@@ -13,7 +13,7 @@ const LoginForm = () => {
 
     useEffect(() => {
         document.title = 'Login';
-      }, []);
+    }, []);
 
     const navigate = useNavigate();
 
@@ -56,11 +56,11 @@ const LoginForm = () => {
                         login(data.token);
                         localStorage.setItem('userId', data.userId);
                         localStorage.setItem('username', data.username);
-                        
+
                     }
-                        setTimeout(() => {
-                            navigate('/chatbot');
-                          }, 1000);
+                    setTimeout(() => {
+                        navigate('/chatbot');
+                    }, 1000);
                 }
             }
         } catch (err) {
@@ -73,26 +73,36 @@ const LoginForm = () => {
         try {
             const res = await fetch("/api/auth/google", {
                 method: "POST",
-                headers: { 
-		"Auth-Type": "google",	
-                "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json"
+                },
                 body: JSON.stringify({ token: response.credential }),
             });
 
             const data = await res.json();
 
             if (!res.ok) {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('isGoogleAuth');
+                localStorage.removeItem('userId');
+                localStorage.removeItem('username');
                 showToast('error', data.message || 'Google login failed');
             } else {
                 showToast('success', 'Google login successful!');
                 if (data.token) {
                     login(data.token, true);
+                    localStorage.setItem('userId', data.userId);
+                    localStorage.setItem('username', data.username || data.userName);
                     setTimeout(() => {
-                            navigate('/chatbot');
-                          }, 1000);
+                        navigate('/chatbot');
+                    }, 1000);
                 }
             }
         } catch (error) {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('isGoogleAuth');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('username');
             showToast('error', "Google login failed. Try again.");
         }
     };
