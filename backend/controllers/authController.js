@@ -23,13 +23,15 @@ const googleAuth = async (req, res) => {
         let isNewUser = false;
         
         if (user) {
+            // Existing user logic
+            
             // If user exists but doesn't have googleId, update it
             if (!user.googleId) {
                 user.googleId = googleId;
                 await user.save();
             }
 
-            // Check if profile is complete
+            // Check if profile is complete - need username, phone, and customerId
             isProfileComplete = Boolean(user.phone && user.userName && user.customerId);
 
             const jwtToken = jwt.sign(
@@ -54,40 +56,39 @@ const googleAuth = async (req, res) => {
                 isNewUser: false
             });
         } else {
-            // Check if this request is specifically for registration
+            // Check if this is a registration request
             const isRegistration = req.query.registration === 'true';
             
             if (!isRegistration) {
-                // Not a registration flow - return error for non-existent user
                 return res.status(403).json({ 
-                    message: 'User not found in the system. Please register first.',
+                    message: 'User not found. Please register first.',
                     needsRegistration: true
                 });
             }
             
-            // Determine user role and company based on invitation
-            const invitationToken = req.query.token;
-            let companyId = null;
+            // Variables to determine user role and company
+            let customerId = null;
             let company = null;
             let isPowerUser = false;
             let isFromInvitation = false;
-
+            
+            // Process invitation token if provided
+            const invitationToken = req.query.token;
+            
             if (invitationToken) {
                 try {
                     const invitationService = require('../services/invitationService');
                     const invitationData = await invitationService.validateInvitation(invitationToken);
                     
+                    // Check if the email matches the invited email
                     if (invitationData.email.toLowerCase() !== email.toLowerCase()) {
                         return res.status(400).json({ 
                             message: 'The email address does not match the invitation.'
                         });
                     }
                     
-                    companyId = invitationData.companyId;
+                    customerId = invitationData.companyId;
                     isFromInvitation = true;
-                    
-                    
-                    
                 } catch (invitationError) {
                     return res.status(400).json({ 
                         message: `Invitation error: ${invitationError.message}`
@@ -127,7 +128,7 @@ const googleAuth = async (req, res) => {
                 isProfileComplete = false;
             }
             
-            // This is a registration request, so create a new user
+            // Create new user with minimal information
             isNewUser = true;
             const baseUserName = email.split('@')[0];
             let userName = baseUserName.replace(/[^a-zA-Z0-9]/g, '');
@@ -138,7 +139,6 @@ const googleAuth = async (req, res) => {
                 counter++;
             }
 
-            // Create the new user
             try {
                 user = new User({
                     googleId,
@@ -147,21 +147,19 @@ const googleAuth = async (req, res) => {
                     lastName,
                     userName,
                     profilePic: picture,
-                    customerId: companyId, // Will be null for non-invited users
+                    customerId, // Will be null for non-invited users until profile completion
                     role: isPowerUser ? 'power_user' : 'regular_user'
+                });
 
+                await user.save();
 
-
-                  await user.save();
                 // If the user is a power user and has a company, update company's powerUserId
-                if (isPowerUser && companyId) {
-                    
-                        company.powerUserId = user._id;
-                       
-                        await company.save();
-                    }
+                if (isPowerUser && company) {
+                    company.powerUserId = user._id;
+                    await company.save();
                 }
 
+                // If registration is from invitation, process the invitation
                 if (isFromInvitation && invitationToken) {
                     try {
                         await require('../services/invitationService').processInvitation(invitationToken);
@@ -171,6 +169,7 @@ const googleAuth = async (req, res) => {
                     }
                 }
 
+                // Generate JWT
                 const jwtToken = jwt.sign(
                     { 
                         userId: user._id, 
@@ -180,9 +179,12 @@ const googleAuth = async (req, res) => {
                         role: user.role
                     },
                     '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
-                    { expiresIn: '1h' }
+                    { expiresIn: '24h' }
                 );
-
+                
+                // Check if profile is complete - for Google users
+                // Profile is complete only if they have company ID
+                isProfileComplete = Boolean(customerId);
                 
                 return res.status(201).json({
                     message: 'User registered successfully',
@@ -190,7 +192,7 @@ const googleAuth = async (req, res) => {
                     tokenType: 'jwt',
                     userId: user._id,
                     username: user.userName,
-                    isProfileComplete: Boolean(companyId), // If they have a companyId, profile might be considered complete
+                    isProfileComplete,
                     isNewUser: true
                 });
             } catch (userError) {
