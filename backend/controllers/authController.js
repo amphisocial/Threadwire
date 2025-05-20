@@ -56,7 +56,6 @@ const googleAuth = async (req, res) => {
         } else {
             // Check if this request is specifically for registration
             const isRegistration = req.query.registration === 'true';
-            const invitationToken = req.query.token;
             
             if (!isRegistration) {
                 // Not a registration flow - return error for non-existent user
@@ -67,16 +66,15 @@ const googleAuth = async (req, res) => {
             }
             
             // Determine user role and company based on invitation
+            const invitationToken = req.query.token;
             let companyId = null;
             let userRole = 'power_user'; // Default to power_user for self-registrations
 
             if (invitationToken) {
                 try {
-                    // Use your invitation service to validate the token
                     const invitationService = require('../services/invitationService');
                     const invitationData = await invitationService.validateInvitation(invitationToken);
                     
-                    // Check if the email matches the invited email
                     if (invitationData.email.toLowerCase() !== email.toLowerCase()) {
                         return res.status(400).json({ 
                             message: 'The email address does not match the invitation.'
@@ -84,9 +82,9 @@ const googleAuth = async (req, res) => {
                     }
                     
                     companyId = invitationData.companyId;
-                    userRole = 'regular_user'; // Set role to regular_user for invited users
+                    userRole = 'regular_user'; // For invited users
+                    email_from_invitation = invitationData.email;
                     
-                    // Process the invitation (mark as accepted)
                     await invitationService.processInvitation(invitationToken);
                 } catch (invitationError) {
                     return res.status(400).json({ 
@@ -140,8 +138,9 @@ const googleAuth = async (req, res) => {
                         role: user.role
                     },
                     '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
-                    { expiresIn: '24h' }
+                    { expiresIn: '1h' }
                 );
+
                 
                 return res.status(201).json({
                     message: 'User registered successfully',
