@@ -1,6 +1,7 @@
 const { verifyGoogleToken } = require('../services/googleAuth');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const Company = require('../models/Company');
 
 const googleAuth = async (req, res) => {
     const { token } = req.body;
@@ -188,8 +189,9 @@ const googleAuth = async (req, res) => {
 
 const completeProfile = async (userId, profileData) => {
     try {
-        const { userName, phone, customerId } = profileData;
-
+        const { userName, phone, customerId, companyName } = profileData;
+         
+        console.log(`Profile completion for user ${userId} with company ${customerId}`);
         // Find the user
         const user = await User.findById(userId);
         if (!user) {
@@ -214,49 +216,87 @@ const completeProfile = async (userId, profileData) => {
             user.phone = phone;
         }
 
+        let isPowerUser = false;
+        let company = null;
+
         // Update customerId if provided
         if (customerId) {
+            console.log(`Using existing company with ID: ${customerId}`);
+            
             // Find the company
-            const company = await Company.findById(customerId);
+            company = await Company.findById(customerId);
             if (!company) {
                 throw new Error('Company not found');
             }
 
-            // Determine if user should be a power user
-            let isPowerUser = false;
-            
-            // If the company doesn't have a power user yet, this user becomes one
+            console.log('Company found:', {
+                id: company._id,
+                name: company.name,
+                powerUserId: company.powerUserId,
+                currentUserCount: company.currentUserCount,
+                maxUsers: company.maxUsers
+            });
+
+            // Check if this company already has a power user
             if (!company.powerUserId) {
+                console.log('Company has no power user yet. Setting this user as power user.');
                 isPowerUser = true;
                 
-                // Set company license details for new companies
+                // Set company license details
                 company.licenseType = 'FREE';
                 company.maxUsers = 3; // 1 power user + 2 regular users
                 company.currentUserCount = 1;
-                
-                // Set this user as the power user
                 company.powerUserId = user._id;
-                await company.save();
             } else {
-                // Company already has a power user
+                console.log('Company already has a power user');
                 
                 // Check if company has reached user limit
                 if (company.currentUserCount >= company.maxUsers) {
                     throw new Error('This company has reached its user limit');
                 }
                 
-                // Regular user joining existing company - update company user count
+                // Regular user joining existing company
                 company.currentUserCount += 1;
-                await company.save();
             }
+        } else if (companyName) {
+            // Create a new company if companyName is provided but customerId isn't
+            console.log(`Creating new company: ${companyName}`);
             
-            // Set user role and customerId
-            user.role = isPowerUser ? 'power_user' : 'regular_user';
-            user.customerId = customerId;
+            // This user will be the power user of the new company
+            isPowerUser = true;
+            
+            // Create new company
+            company = new Company({
+                name: companyName,
+                licenseType: 'FREE',
+                maxUsers: 3, // 1 power user + 2 regular users
+                currentUserCount: 1
+                // powerUserId will be set after user is saved
+            });
+            
+            // Save the new company to get an ID
+            await company.save();
+            console.log(`New company created with ID: ${company._id}`);
+            
+            // Now we have a company ID to assign to the user
+            company.powerUserId = user._id;
+            await company.save();
+        } else {
+            throw new Error('Either customerId or companyName is required');
         }
-
+        
+        // Update user with company and role information
+        user.customerId = company._id;
+        user.role = isPowerUser ? 'power_user' : 'regular_user';
+        console.log(`Setting user role to: ${user.role}`);
+        
         // Save the updated user
         await user.save();
+        console.log('User saved with updated profile');
+        
+        // Save any company changes
+        await company.save();
+        console.log('Company saved with updated information');
 
         // Generate JWT token
         const token = jwt.sign(
@@ -277,6 +317,7 @@ const completeProfile = async (userId, profileData) => {
             message: 'Profile completed successfully'
         };
     } catch (error) {
+        console.error('Profile completion error:', error);
         throw new Error(error.message || 'Failed to complete profile');
     }
 };
