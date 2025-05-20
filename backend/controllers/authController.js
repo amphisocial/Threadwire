@@ -11,7 +11,6 @@ const googleAuth = async (req, res) => {
 
     try {
         const payload = await verifyGoogleToken(token);
-
         const { sub: googleId, email, name, picture } = payload;
 
         const nameParts = name ? name.split(' ') : ['User'];
@@ -21,7 +20,8 @@ const googleAuth = async (req, res) => {
         // Check if user exists in the database
         let user = await User.findOne({ email });
         let isProfileComplete = false;
-
+        let isNewUser = false;
+        
         if (user) {
             // If user exists but doesn't have googleId, update it
             if (!user.googleId) {
@@ -50,10 +50,53 @@ const googleAuth = async (req, res) => {
                 tokenType: 'jwt',
                 userId: user._id,
                 username: user.userName,
-                isProfileComplete
+                isProfileComplete,
+                isNewUser: false
             });
-
         } else {
+            // Check if this request is specifically for registration
+            const isRegistration = req.query.registration === 'true';
+            const invitationToken = req.query.token;
+            
+            if (!isRegistration) {
+                // Not a registration flow - return error for non-existent user
+                return res.status(403).json({ 
+                    message: 'User not found in the system. Please register first.',
+                    needsRegistration: true
+                });
+            }
+            
+            // Determine user role and company based on invitation
+            let companyId = null;
+            let userRole = 'power_user'; // Default to power_user for self-registrations
+
+            if (invitationToken) {
+                try {
+                    // Use your invitation service to validate the token
+                    const invitationService = require('../services/invitationService');
+                    const invitationData = await invitationService.validateInvitation(invitationToken);
+                    
+                    // Check if the email matches the invited email
+                    if (invitationData.email.toLowerCase() !== email.toLowerCase()) {
+                        return res.status(400).json({ 
+                            message: 'The email address does not match the invitation.'
+                        });
+                    }
+                    
+                    companyId = invitationData.companyId;
+                    userRole = 'regular_user'; // Set role to regular_user for invited users
+                    
+                    // Process the invitation (mark as accepted)
+                    await invitationService.processInvitation(invitationToken);
+                } catch (invitationError) {
+                    return res.status(400).json({ 
+                        message: `Invitation error: ${invitationError.message}`
+                    });
+                }
+            }
+            
+            // This is a registration request, so create a new user
+            isNewUser = true;
             const baseUserName = email.split('@')[0];
             let userName = baseUserName.replace(/[^a-zA-Z0-9]/g, '');
             let counter = 1;
@@ -63,7 +106,7 @@ const googleAuth = async (req, res) => {
                 counter++;
             }
 
-            // Create a new user if they don't exist
+            // Create the new user
             try {
                 user = new User({
                     googleId,
@@ -71,10 +114,22 @@ const googleAuth = async (req, res) => {
                     firstName,
                     lastName,
                     userName,
-                    profilePic: picture
+                    profilePic: picture,
+                    customerId: companyId, // Will be null for non-invited users
+                    role: userRole // 'power_user' for self-registration, 'regular_user' for invited users
                 });
 
                 await user.save();
+
+                // If the user is a power user and has a company, update company's powerUserId
+                if (userRole === 'power_user' && companyId) {
+                    const company = await Company.findById(companyId);
+                    if (company && !company.powerUserId) {
+                        company.powerUserId = user._id;
+                        company.currentUserCount = 1;
+                        await company.save();
+                    }
+                }
 
                 const jwtToken = jwt.sign(
                     { 
@@ -82,26 +137,26 @@ const googleAuth = async (req, res) => {
                         email: user.email, 
                         username: user.userName,
                         customerId: user.customerId,
-                        role: user.role || 'regular_user' // Default role if not set
+                        role: user.role
                     },
                     '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
                     { expiresIn: '24h' }
                 );
                 
-                return res.status(200).json({
+                return res.status(201).json({
                     message: 'User registered successfully',
                     token: jwtToken,
+                    tokenType: 'jwt',
                     userId: user._id,
                     username: user.userName,
-                    isProfileComplete: false
+                    isProfileComplete: Boolean(companyId), // If they have a companyId, profile might be considered complete
+                    isNewUser: true
                 });
-
             } catch (userError) {
                 console.error('User creation error:', userError);
                 return res.status(400).json({ message: userError.message });
             }
         }
-
     } catch (error) {
         console.error('Google auth error:', error);
         return res.status(401).json({ message: error.message });
