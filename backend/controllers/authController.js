@@ -54,7 +54,8 @@ const googleAuth = async (req, res) => {
                 userId: user._id,
                 username: user.userName,
                 isProfileComplete,
-                isNewUser: false
+                isNewUser: false,
+                role: user.role 
             });
         } else {
             // Check if this is a registration request
@@ -75,7 +76,7 @@ const googleAuth = async (req, res) => {
             const invitationToken = req.query.token;
 
             if (invitationToken) {
-                try {
+                try {user.role
                     const invitationService = require('../services/invitationService');
                     const invitationData = await invitationService.validateInvitation(invitationToken);
 
@@ -243,6 +244,16 @@ const completeProfile = async (userId, profileData) => {
                 company.licenseType = 'FREE';
                 company.maxUsers = 3; // 1 power user + 2 regular users
                 company.currentUserCount = 1;
+            company.powerUserId = user._id;
+            }
+
+            // Save company changes FIRST
+            try {
+                await company.save();
+                console.log(`Company saved. isPowerUser: ${isPowerUser}, powerUserId: ${company.powerUserId}`);
+            } catch (companyError) {
+                console.error('Error saving company:', companyError);
+                throw new Error(`Failed to update company: ${companyError.message}`);
             }
 
             // Update user fields
@@ -278,7 +289,7 @@ const completeProfile = async (userId, profileData) => {
             token,
             userId: user._id,
             role: user.role,
-            message: 'Profile completed successfully'
+            message: 'Profile completed successfulluy'
         };
     } catch (error) {
         console.error('Profile completion error:', error);
