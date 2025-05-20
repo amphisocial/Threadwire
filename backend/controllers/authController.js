@@ -47,6 +47,7 @@ const googleAuth = async (req, res) => {
             return res.status(200).json({
                 message: 'User authenticated successfully',
                 token: jwtToken,
+                tokenType: 'jwt',
                 userId: user._id,
                 username: user.userName,
                 isProfileComplete
