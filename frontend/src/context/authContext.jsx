@@ -17,7 +17,6 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem('authToken');
-      const isGoogleAuth = localStorage.getItem('isGoogleAuth');
 
       if (!token) {
         setIsAuthenticated(false);
@@ -30,7 +29,6 @@ export const AuthProvider = ({ children }) => {
       const response = await fetch('/api/user/verify-token', {
         headers: {
           'Authorization': `Bearer ${token}`,
-          ...(isGoogleAuth && { 'Auth-Type': 'google' }),
           'Content-Type': 'application/json'
         }
       });
@@ -67,7 +65,6 @@ export const AuthProvider = ({ children }) => {
       } else {
         // If token verification fails, clear it
         localStorage.removeItem('authToken');
-        localStorage.removeItem('isGoogleAuth');
         setIsAuthenticated(false);
         setUser(null);
         setIsPowerUser(false);
@@ -75,7 +72,6 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Auth check failed:', error);
       localStorage.removeItem('authToken');
-      localStorage.removeItem('isGoogleAuth');
       setIsAuthenticated(false);
       setUser(null);
       setIsPowerUser(false);
@@ -87,16 +83,11 @@ export const AuthProvider = ({ children }) => {
   const login = async (token, isGoogle = false) => {
     try {
       localStorage.setItem('authToken', token);
-      if (isGoogle) {
-        localStorage.setItem('isGoogleAuth', 'true');
-      } else {
-        localStorage.removeItem('isGoogleAuth'); // Remove it completely for regular login
-      }
+      localStorage.removeItem('isGoogleAuth');
 
       const response = await fetch('/api/user/verify-token', {
         headers: {
           'Authorization': `Bearer ${token}`,
-          ...(isGoogle && { 'Auth-Type': 'google' }),
           'Content-Type': 'application/json'
         }
       });

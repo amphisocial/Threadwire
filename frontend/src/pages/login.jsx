@@ -71,7 +71,12 @@ const LoginForm = () => {
 
     const handleGoogleSuccess = async (response) => {
         try {
-            const res = await fetch("/api/auth/google", {
+            // Get invitation token from URL if present
+            const urlParams = new URLSearchParams(window.location.search);
+            const invitationToken = urlParams.get('token');
+
+            // First try logging in
+            let res = await fetch("/api/auth/google", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -79,34 +84,83 @@ const LoginForm = () => {
                 body: JSON.stringify({ token: response.credential }),
             });
 
-            const data = await res.json();
+            let data = await res.json();
 
-            if (!res.ok) {
+            // If login fails because user doesn't exist, try registration
+            if (res.status === 403 && data.needsRegistration) {
+                // Ask user if they want to register
+                const wantToRegister = window.confirm('You don\'t have an account yet. Would you like to register?');
+
+                if (wantToRegister) {
+                    // Try registration with invitation token if available
+                    const registrationUrl = invitationToken
+                        ? `/api/auth/google?registration=true&token=${invitationToken}`
+                        : "/api/auth/google?registration=true";
+
+                    res = await fetch(registrationUrl, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ token: response.credential }),
+                    });
+
+                    data = await res.json();
+
+                    if (!res.ok) {
+                        // Clear any local storage items to ensure clean state
+                        localStorage.removeItem('authToken');
+                        localStorage.removeItem('userId');
+                        localStorage.removeItem('username');
+                        showToast('error', data.message || 'Registration failed');
+                        return;
+                    }
+
+                    showToast('success', 'Registration successful!');
+                } else {
+                    showToast('info', 'Login canceled. Please register to continue.');
+                    return;
+                }
+            } else if (!res.ok) {
+                // Handle other errors
                 localStorage.removeItem('authToken');
-                localStorage.removeItem('isGoogleAuth');
                 localStorage.removeItem('userId');
                 localStorage.removeItem('username');
-                showToast('error', data.message || 'Google login failed');
+                showToast('error', data.message || 'Authentication failed');
+                return;
             } else {
-                showToast('success', 'Google login successful!');
-                if (data.token) {
-                    login(data.token, true);
-                    localStorage.setItem('userId', data.userId);
-                    localStorage.setItem('username', data.username || data.userName);
-                    setTimeout(() => {
+                // Successful login
+                showToast('success', 'Login successful!');
+            }
+
+            // Process successful authentication (login or registration)
+            if (data.token) {
+                // Store token and user info
+                localStorage.setItem('authToken', data.token);
+                localStorage.setItem('userId', data.userId);
+                localStorage.setItem('username', data.username || data.userName);
+
+                // Update auth context
+                login(data.token, false); // false because we're using JWT tokens
+
+                // Redirect based on profile status
+                setTimeout(() => {
+                    if (data.isNewUser || !data.isProfileComplete) {
+                        navigate('/complete-profile');
+                    } else {
                         navigate('/chatbot');
-                    }, 1000);
-                }
+                    }
+                }, 1000);
             }
         } catch (error) {
+            console.error('Google auth error:', error);
+            // Clear storage on errors
             localStorage.removeItem('authToken');
-            localStorage.removeItem('isGoogleAuth');
             localStorage.removeItem('userId');
             localStorage.removeItem('username');
-            showToast('error', "Google login failed. Try again.");
+            showToast('error', "Authentication failed. Please try again.");
         }
     };
-
     return (
         <div className="rootclass">
             {toast.show && (
