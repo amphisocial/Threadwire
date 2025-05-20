@@ -98,7 +98,7 @@ const LoginForm = () => {
             } else {
                 // Show appropriate message based on whether it's login or registration
                 if (data.isNewUser) {
-                    showToast('success', 'Account created successfully!');
+                    showToast('success', 'Update Profile to complete registration!');
                 } else {
                     showToast('success', 'Login successful!');
                 }
@@ -125,7 +125,7 @@ const LoginForm = () => {
         }
     };
 
-    
+
     return (
         <div className="rootclass">
             {toast.show && (
