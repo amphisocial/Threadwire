@@ -238,7 +238,17 @@ const RegistrationForm = () => {
 
   const handleSuccess = async (response) => {
     try {
-      const res = await fetch("/api/auth/google", {
+      // Get invitation token from URL if present
+      const urlParams = new URLSearchParams(location.search);
+      const invitationToken = urlParams.get('token');
+
+      // Build the URL with registration flag
+      const authUrl = invitationToken
+        ? `/api/auth/google?registration=true&token=${invitationToken}`
+        : "/api/auth/google?registration=true";
+
+      // Send the Google credential to our backend
+      const res = await fetch(authUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: response.credential }),
@@ -250,11 +260,16 @@ const RegistrationForm = () => {
         if (data.message) {
           showToast('error', data.message);
         } else {
-          showToast('error', 'Google login failed');
+          showToast('error', 'Google authentication failed');
         }
       } else {
-        showToast('success', 'Google login successful!');
-        await login(data.token, true);
+        if (data.isNewUser) {
+          showToast('success', 'Account created successfully!');
+        } else {
+          showToast('success', 'Login successful!');
+        }
+
+        await login(data.token, false); // false because we're using JWT tokens
 
         // Check if profile is complete
         if (data.isProfileComplete) {
@@ -268,10 +283,9 @@ const RegistrationForm = () => {
             navigate(`/complete-profile/${data.userId}`);
           }, 1000);
         }
-
       }
     } catch (error) {
-      showToast('error', "Google login failed. Try again.");
+      showToast('error', "Google authentication failed. Try again.");
     }
   };
 
@@ -324,14 +338,14 @@ const RegistrationForm = () => {
 
           <div className="form-group">
             <label>Email</label>
-            <input 
-              type="email" 
-              name="email" 
-              value={formData.email} 
-              onChange={handleChange} 
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
               disabled={isInvitation}
               className={isInvitation ? 'disabled-input' : ''}
-              required 
+              required
             />
             {isInvitation && <small className="form-text">This email address was provided in your invitation</small>}
           </div>
@@ -409,8 +423,8 @@ const RegistrationForm = () => {
             )}
             {selectedCompany && !isInvitation && (
               <div className="company-status">
-                {selectedCompany.hasPowerUser ? 
-                  <span className="joining-company">Joining as a regular user</span> : 
+                {selectedCompany.hasPowerUser ?
+                  <span className="joining-company">Joining as a regular user</span> :
                   <span className="power-user-company">You'll be the admin of this company</span>
                 }
               </div>
