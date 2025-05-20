@@ -242,17 +242,60 @@ const completeProfile = async (userId, profileData) => {
             user.phone = phone;
         }
 
-        // Update customerId if provided
         if (customerId) {
-            user.customerId = customerId;
-        }
+            // Find the company
+            const company = await Company.findById(customerId);
+            if (!company) {
+                throw new Error('Company not found');
+            }
 
-        // Save the updated user
-        await user.save();
+            let isPowerUser = false;
+
+            // Check if the company already has a power user
+            if (company.powerUserId) {
+                // Check if company has reached user limit
+                if (company.currentUserCount >= company.maxUsers) {
+                    throw new Error('This company has reached its user limit');
+                }
+                
+                // Regular user joining existing company - update company user count
+                company.currentUserCount += 1;
+                await company.save();
+            } else {
+                // First user for this company - make them a power user
+                isPowerUser = true;
+                
+                // Set company license details
+                company.licenseType = 'FREE';
+                company.maxUsers = 3; // 1 power user + 2 regular users
+                company.currentUserCount = 1;
+            }
+
+            // Update user fields
+            user.customerId = customerId;
+            user.role = isPowerUser ? 'power_user' : 'regular_user';
+
+            // Save the user
+            await user.save();
+
+            // If this user is a power user, update the company
+            if (isPowerUser) {
+                company.powerUserId = user._id;
+                await company.save();
+            }
+        } else {
+            throw new Error('Company ID is required');
+        }
 
         // Generate JWT token
         const token = jwt.sign(
-            { userId: user._id, email: user.email, username: user.userName },
+            {
+                userId: user._id,
+                email: user.email,
+                username: user.userName,
+                customerId: user.customerId,
+                role: user.role
+            },
             '8f5517c1d9c176bfc1b57d3dd7e35588201ec54c553be38fc2959466fc9a8987',
             { expiresIn: '1h' }
         );
@@ -260,9 +303,11 @@ const completeProfile = async (userId, profileData) => {
         return {
             token,
             userId: user._id,
+            role: user.role,
             message: 'Profile completed successfully'
         };
     } catch (error) {
+        console.error('Profile completion error:', error);
         throw new Error(error.message || 'Failed to complete profile');
     }
 };
