@@ -4,7 +4,7 @@ import { useAuth } from '../context/authContext';
 import './register.css'; 
 
 const ProfileCompletion = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, login } = useAuth();
   const { userId } = useParams();
   const navigate = useNavigate();
   
@@ -138,6 +138,10 @@ const ProfileCompletion = () => {
       } else {
         showToast('success', 'Profile completed successfully!');
         
+        if (data.token) {
+                localStorage.setItem('authToken', data.token);
+                await login(data.token, false);
+        }
         // Navigate to home after successful profile completion
         setTimeout(() => {
           navigate('/home');
