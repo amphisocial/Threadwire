@@ -1,163 +1,3 @@
-// const Part = require("../models/Part");
-// const SalesOrder = require("../models/SalesOrder");
-// const WorkOrder = require("../models/Workorder");
-// const WorkOrderExecution = require("../models/Workorderexecution");
-
-// exports.getPartGraph = async (req, res) => {
-//     //const { partnumber, type } = req.query;
-//     const { partnumber, direction } = req.query;
-//     const customerId = req.user?.customerId || req.customer?.id;
-
-//     console.error("partnumber:", partnumber, "direction:", direction);
-//     if (!partnumber || !direction) {
-//         return res.status(400).json({ error: "Missing partnumber or direction parameter" });
-//     }
-
-//     try {
-//         const graphData = await fetchGraphData(partnumber, direction, customerId);
-//         res.status(200).json(graphData);
-//     } catch (error) {
-//         console.error("Error fetching part graph:", error);
-//         res.status(500).json({ error: "Internal server error" });
-//     }
-// };
-
-// async function fetchLinksForPart(part, direction) {
-//     const nodes = [];
-//     const links = [];
-
-//     try {
-//         if (direction === "left") {
-//             // Fetch sales orders for the part
-//             const salesOrders = await SalesOrder.find({ partnumber: part.partnumber, customerId });
-//             console.error("Found sales orders:", salesOrders);
-
-//             salesOrders.forEach((so) => {
-//                 console.error("Found sales orders:", so.ordernumber, so.linenumber);
-//                 nodes.push({
-//                     id: so._id,
-//                     label: `Sales Order: ${so.ordernumber}`,
-//                     type: "salesorder",
-//                 });
-
-//                 links.push({
-//                     source: part.partnumber,
-//                     target: so._id,
-//                 });
-//             });
-//         } else if (direction === "right") {
-//             // Fetch PartBoP and WorkOrders for the part
-//             const [partBoPs, workOrders] = await Promise.all([
-//                 WorkOrder.PartBoP.find({ 
-//                     partnumber: part.partnumber,
-//                     customerId // Add company filter
-//                 }),
-//                 WorkOrder.WorkOrder.find({ 
-//                     partnumber: part.partnumber,
-//                     customerId // Add company filter
-//                 }),
-//             ]);
-//             console.error("Found PartBoPs:", partBoPs);
-//             console.error("Found WorkOrders:", workOrders);
-
-//             // Add PartBoP operations
-//             partBoPs.forEach((bop) => {
-//                 nodes.push({
-//                     id: bop.operation,
-//                     label: `Operation: ${bop.operation}`,
-//                     type: "partbop",
-//                 });
-
-//                 links.push({
-//                     source: part.partnumber,
-//                     target: bop.operation,
-//                 });
-//             });
-
-//             // Add WorkOrders
-//             workOrders.forEach((wo) => {
-//                 nodes.push({
-//                     id: wo.workorder,
-//                     label: `Work Order: ${wo.workorder}`,
-//                     type: "workorder",
-//                 });
-
-//                 links.push({
-//                     source: part.partnumber,
-//                     target: wo.workorder,
-//                 });
-//             });
-//         } else if (direction === "execution") {
-//             // Fetch WorkOrderExecutions for the workorder
-//             const workOrderExecutions = await WorkOrderExecution.find({
-//                 workorder: part.partnumber,
-//                 customerId
-//             });
-//             console.error("Found WorkOrderExecutions:", workOrderExecutions);
-
-//             workOrderExecutions.forEach((execution) => {
-//                 nodes.push({
-//                     id: execution.executionId,
-//                     label: `Execution: ${execution.executionId}`,
-//                     type: "execution",
-//                 });
-
-//                 links.push({
-//                     source: part.partnumber,
-//                     target: execution.executionId,
-//                 });
-//             });
-//         }
-//     } catch (error) {
-//         console.error(`Error fetching links for ${direction}:`, error);
-//     }
-
-//     return { nodes, links };
-// }
-// async function fetchGraphData(partnumber, direction, customerId) {
-//     const nodes = [];
-//     const links = [];
-
-//     try {
-//         const filters = {
-//             customerId // Add company filter
-//         };
-//         if (partnumber) filters.partnumber = new RegExp(partnumber, "i");
-
-//         console.error("Filter value is:", filters.partnumber);
-
-//         const parts = await Part.find(filters);
-//         console.error("Found parts:", parts);
-
-//         // Iterate through parts and fetch links based on direction
-//         for (const pt of parts) {
-//             console.error("Processing part:", pt.partnumber);
-
-//             // Add the part as the root node
-//             nodes.push({
-//                 id: pt.partnumber,
-//                 label: `Part: ${pt.partnumber}`,
-//                 type: "part",
-//             });
-
-//             // Fetch links based on the direction
-//             const fetchedLinks = await fetchLinksForPart(pt, direction, customerId);
-
-//             // Merge fetched nodes and links
-//             nodes.push(...fetchedLinks.nodes);
-//             links.push(...fetchedLinks.links);
-//         }
-
-//         console.error("Final nodes array:", nodes);
-//         console.error("Final links array:", links);
-
-//         return { nodes, links };
-//     } catch (error) {
-//         console.error("Error fetching graph data:", error);
-//         return { nodes: [], links: [] };
-//     }
-// }
-
 const Part = require("../models/Part");
 const SalesOrder = require("../models/SalesOrder");
 const { WorkOrder, PartBoP } = require("../models/Workorder");
@@ -1397,5 +1237,342 @@ async function fetchRelationships(id, entityType, customerId) {
         return relationships;
     } catch (error) {
         return [];
+    }
+}
+
+// Add this method to your existing partGraphController.js
+
+// Get detailed information about a specific node
+exports.getNodeDetails = async (req, res) => {
+    const { id, type } = req.query;
+    const customerId = req.user?.customerId || req.customer?.id;
+
+    if (!id || !type) {
+        return res.status(400).json({ error: "Missing id or type parameter" });
+    }
+
+    try {
+        let nodeDetails = null;
+
+        switch(type) {
+            case 'Product':
+                nodeDetails = await getProductDetails(id, customerId);
+                break;
+            
+            case 'Sales Order':
+                nodeDetails = await getSalesOrderDetails(id, customerId);
+                break;
+            
+            case 'Work Order':
+                nodeDetails = await getWorkOrderDetails(id, customerId);
+                break;
+            
+            case 'Risk':
+            case 'Issues':
+                nodeDetails = await getBlockerDetails(id, type, customerId);
+                break;
+            
+            case 'Customer':
+                nodeDetails = await getCustomerDetails(id, customerId);
+                break;
+            
+            case 'Operation':
+                nodeDetails = await getOperationDetails(id, customerId);
+                break;
+            
+            default:
+                return res.status(400).json({ error: "Unknown entity type" });
+        }
+
+        if (!nodeDetails) {
+            return res.status(404).json({ error: "Node not found" });
+        }
+
+        res.status(200).json(nodeDetails);
+    } catch (error) {
+        console.error("Error fetching node details:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+};
+
+// Helper function to get product details
+async function getProductDetails(id, customerId) {
+    try {
+        const part = await Part.findOne({ partnumber: id, customerId });
+        if (!part) return null;
+
+        // Get additional statistics
+        const salesOrderCount = await SalesOrder.countDocuments({ partnumber: id, customerId });
+        const workOrderCount = await WorkOrder.countDocuments({ partnumber: id, customerId });
+        const blockerCount = await Blocker.countDocuments({ relatedParts: part._id, customerId });
+
+        return {
+            ...part.toObject(),
+            id: part.partnumber,
+            type: 'Product',
+            statistics: {
+                salesOrders: salesOrderCount,
+                workOrders: workOrderCount,
+                blockers: blockerCount
+            }
+        };
+    } catch (error) {
+        console.error("Error fetching product details:", error);
+        return null;
+    }
+}
+
+// Helper function to get sales order details
+async function getSalesOrderDetails(id, customerId) {
+    try {
+        let salesOrder = await SalesOrder.findOne({ ordernumber: id, customerId });
+        
+        if (!salesOrder && /^[0-9a-fA-F]{24}$/.test(id)) {
+            salesOrder = await SalesOrder.findOne({ _id: id, customerId });
+        }
+        
+        if (!salesOrder) return null;
+
+        // Get related customer information
+        let customer = null;
+        if (salesOrder.customerId) {
+            customer = await Company.findOne({ _id: salesOrder.customerId });
+        }
+
+        // Get related part information
+        let part = null;
+        if (salesOrder.partnumber) {
+            part = await Part.findOne({ partnumber: salesOrder.partnumber, customerId });
+        }
+
+        // Get related work orders
+        const relatedWorkOrders = await WorkOrder.find({ 
+            salesorder: salesOrder.ordernumber,
+            customerId 
+        }).limit(5);
+
+        return {
+            ...salesOrder.toObject(),
+            id: salesOrder.ordernumber || salesOrder._id.toString(),
+            type: 'Sales Order',
+            relatedCustomer: customer ? {
+                name: customer.name,
+                address: customer.address
+            } : null,
+            relatedPart: part ? {
+                partnumber: part.partnumber,
+                description: part.description
+            } : null,
+            relatedWorkOrders: relatedWorkOrders.map(wo => ({
+                workorder: wo.workorder,
+                status: wo.status,
+                description: wo.description
+            }))
+        };
+    } catch (error) {
+        console.error("Error fetching sales order details:", error);
+        return null;
+    }
+}
+
+// Helper function to get work order details
+async function getWorkOrderDetails(id, customerId) {
+    try {
+        let workOrder = await WorkOrder.findOne({ workorder: id, customerId });
+        
+        if (!workOrder && /^[0-9a-fA-F]{24}$/.test(id)) {
+            workOrder = await WorkOrder.findOne({ _id: id, customerId });
+        }
+        
+        if (!workOrder) return null;
+
+        // Get related sales order
+        let salesOrder = null;
+        if (workOrder.salesorder) {
+            salesOrder = await SalesOrder.findOne({ 
+                ordernumber: workOrder.salesorder,
+                customerId 
+            });
+        }
+
+        // Get related part
+        let part = null;
+        if (workOrder.partnumber) {
+            part = await Part.findOne({ partnumber: workOrder.partnumber, customerId });
+        }
+
+        // Get work order executions
+        const executions = await WorkOrderExecution.find({ 
+            workorder: workOrder.workorder,
+            customerId 
+        }).limit(10);
+
+        return {
+            ...workOrder.toObject(),
+            id: workOrder.workorder || workOrder._id.toString(),
+            type: 'Work Order',
+            relatedSalesOrder: salesOrder ? {
+                ordernumber: salesOrder.ordernumber,
+                customer_name: salesOrder.customer_name,
+                program: salesOrder.program
+            } : null,
+            relatedPart: part ? {
+                partnumber: part.partnumber,
+                description: part.description
+            } : null,
+            executions: executions.map(exe => ({
+                executionId: exe.executionId,
+                status: exe.status,
+                startDate: exe.startDate,
+                endDate: exe.endDate
+            }))
+        };
+    } catch (error) {
+        console.error("Error fetching work order details:", error);
+        return null;
+    }
+}
+
+// Helper function to get blocker details
+async function getBlockerDetails(id, type, customerId) {
+    try {
+        if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+            return null;
+        }
+
+        const actualType = type === 'Issues' ? 'Issue' : type;
+        const blocker = await Blocker.findOne({ 
+            _id: id,
+            type: actualType,
+            customerId 
+        });
+        
+        if (!blocker) return null;
+
+        // Get related entities
+        const relatedParts = [];
+        const relatedSalesOrders = [];
+        const relatedWorkOrders = [];
+
+        if (blocker.relatedParts && blocker.relatedParts.length > 0) {
+            const parts = await Part.find({ 
+                _id: { $in: blocker.relatedParts },
+                customerId 
+            });
+            relatedParts.push(...parts.map(p => ({
+                partnumber: p.partnumber,
+                description: p.description
+            })));
+        }
+
+        if (blocker.relatedSalesOrders && blocker.relatedSalesOrders.length > 0) {
+            const salesOrders = await SalesOrder.find({ 
+                _id: { $in: blocker.relatedSalesOrders },
+                customerId 
+            });
+            relatedSalesOrders.push(...salesOrders.map(so => ({
+                ordernumber: so.ordernumber,
+                customer_name: so.customer_name
+            })));
+        }
+
+        if (blocker.relatedWorkOrders && blocker.relatedWorkOrders.length > 0) {
+            const workOrders = await WorkOrder.find({ 
+                _id: { $in: blocker.relatedWorkOrders },
+                customerId 
+            });
+            relatedWorkOrders.push(...workOrders.map(wo => ({
+                workorder: wo.workorder,
+                status: wo.status
+            })));
+        }
+
+        return {
+            ...blocker.toObject(),
+            id: blocker._id.toString(),
+            type: blocker.type === 'Issue' ? 'Issues' : blocker.type,
+            relatedParts,
+            relatedSalesOrders,
+            relatedWorkOrders
+        };
+    } catch (error) {
+        console.error("Error fetching blocker details:", error);
+        return null;
+    }
+}
+
+// Helper function to get customer details
+async function getCustomerDetails(id, customerId) {
+    try {
+        let company = await Company.findOne({ name: id });
+        
+        if (!company && /^[0-9a-fA-F]{24}$/.test(id)) {
+            company = await Company.findOne({ _id: id });
+        }
+        
+        if (!company) return null;
+
+        // Get statistics
+        const salesOrderCount = await SalesOrder.countDocuments({ customerId: company._id });
+        const partCount = await Part.countDocuments({ customerId: company._id });
+        const workOrderCount = await WorkOrder.countDocuments({ customerId: company._id });
+
+        // Get recent sales orders
+        const recentSalesOrders = await SalesOrder.find({ 
+            customerId: company._id 
+        })
+        .sort({ createdAt: -1 })
+        .limit(5);
+
+        return {
+            ...company.toObject(),
+            id: company._id.toString(),
+            type: 'Customer',
+            statistics: {
+                salesOrders: salesOrderCount,
+                parts: partCount,
+                workOrders: workOrderCount
+            },
+            recentSalesOrders: recentSalesOrders.map(so => ({
+                ordernumber: so.ordernumber,
+                program: so.program,
+                partnumber: so.partnumber,
+                createdAt: so.createdAt
+            }))
+        };
+    } catch (error) {
+        console.error("Error fetching customer details:", error);
+        return null;
+    }
+}
+
+// Helper function to get operation details
+async function getOperationDetails(id, customerId) {
+    try {
+        // Get parts that use this operation
+        const partBops = await PartBoP.find({ operation: id, customerId });
+        
+        const relatedParts = [];
+        for (const bop of partBops) {
+            const part = await Part.findOne({ partnumber: bop.partnumber, customerId });
+            if (part) {
+                relatedParts.push({
+                    partnumber: part.partnumber,
+                    description: part.description
+                });
+            }
+        }
+
+        return {
+            id: id,
+            type: 'Operation',
+            operation: id,
+            description: `Operation ${id}`,
+            relatedParts,
+            partCount: relatedParts.length
+        };
+    } catch (error) {
+        console.error("Error fetching operation details:", error);
+        return null;
     }
 }
