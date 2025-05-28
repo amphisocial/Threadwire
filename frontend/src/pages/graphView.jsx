@@ -875,13 +875,9 @@ const GraphView = () => {
         // Single click to show details
         handleNodeClick(d, event);
       })
-      .on("contextmenu", (event, d) => {
-        // Right-click to make center
-        handleNodeRightClick(d, event);
-      })
       .on("dblclick", (event, d) => {
-        // Double click to expand (existing functionality)
-        fetchGraphData(d.id, true);
+        // Double click to make center and show relationships
+        handleNodeDoubleClick(d, event);
       });
     
     // Add rounded rectangles to nodes
@@ -1065,7 +1061,7 @@ const GraphView = () => {
             {/* Instructions */}
             <div className="instructions">
               <small>
-                <strong>Instructions:</strong> Single-click for details | Right-click to center | Double-click to expand | Drag to move | Scroll to zoom
+                <strong>Instructions:</strong> Single-click for details | Double-click to center & show relationships | Drag to move | Scroll to zoom
               </small>
             </div>
             
@@ -1357,22 +1353,13 @@ const GraphView = () => {
                     <button 
                       className="action-button center-button"
                       onClick={() => {
-                        handleNodeSelect(selectedNodeDetails);
+                        handleNodeDoubleClick(selectedNodeDetails, { stopPropagation: () => {} });
                         closeDetailsPanel();
                       }}
                     >
-                      🎯 Make Center
+                      🎯 Make Center & Show Relationships
                     </button>
                   )}
-                  <button 
-                    className="action-button expand-button"
-                    onClick={() => {
-                      fetchGraphData(selectedNodeDetails.id, true);
-                      closeDetailsPanel();
-                    }}
-                  >
-                    🔍 Expand Relationships
-                  </button>
                 </div>
               </div>
 
