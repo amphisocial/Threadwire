@@ -398,26 +398,43 @@ async function fetchGraphData(id, entityType, selectedTypes, customerId) {
         // If 'All' is selected, include all entity types
         const includeAllTypes = selectedTypes.includes('All');
         
+        // Use Sets to track unique nodes and links to prevent duplicates
+        const seenNodes = new Set([id]); // Start with root node ID
+        const seenLinks = new Set();
+        
         // Fetch relationships based on entity type
         const relationships = await fetchRelationships(id, entityType, customerId);
         
-        // Filter relationships based on selected entity types
+        // Filter relationships based on selected entity types and prevent duplicates
         for (const rel of relationships) {
             if (includeAllTypes || selectedTypes.includes(rel.targetType)) {
-                // Add the relationship target node
-                const targetNode = await getEntityDetails(rel.targetId, rel.targetType, customerId);
-                if (targetNode) {
-                    nodes.push(targetNode);
-                    
+                // Check if we've already added this node
+                if (!seenNodes.has(rel.targetId)) {
+                    // Add the relationship target node
+                    const targetNode = await getEntityDetails(rel.targetId, rel.targetType, customerId);
+                    if (targetNode) {
+                        nodes.push(targetNode);
+                        seenNodes.add(rel.targetId);
+                    }
+                }
+                
+                // Create unique link key to prevent duplicate links
+                const linkKey = `${id}-${rel.targetId}-${rel.targetType}`;
+                if (!seenLinks.has(linkKey)) {
                     // Add the link
                     links.push({
                         source: id,
                         target: rel.targetId,
                         type: rel.targetType
                     });
+                    seenLinks.add(linkKey);
                 }
             }
         }
+
+        console.log(`fetchGraphData completed for ${entityType} ${id}:`);
+        console.log(`- Found ${nodes.length} unique nodes`);
+        console.log(`- Found ${links.length} unique links`);
 
         return { nodes, links };
     } catch (error) {
