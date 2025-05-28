@@ -587,9 +587,12 @@ const GraphView = () => {
   const handleNodeClick = async (node, event) => {
     event.stopPropagation();
     
+    // Don't show details if this is part of a double-click
     if (event.detail === 2) return;
     
+    // Use a longer delay to better detect double-clicks
     setTimeout(async () => {
+      // Only proceed if this was truly a single click (not followed by another click)
       if (event.detail === 1) {
         const nodeDetails = await fetchNodeDetails(node.id, node.type);
         
@@ -604,14 +607,16 @@ const GraphView = () => {
         setSelectedNodeDetails(enhancedDetails);
         setShowDetailsPanel(true);
       }
-    }, 200);
+    }, 300); // Increased delay to 300ms
   };
 
   // Handle double-click to make center and show relationships
   const handleNodeDoubleClick = async (node, event) => {
     event.stopPropagation();
     
-    closeDetailsPanel();
+    // Immediately close details panel if open
+    setShowDetailsPanel(false);
+    setSelectedNodeDetails(null);
     
     setCenterItem({
       id: node.id,
@@ -741,6 +746,18 @@ const GraphView = () => {
     const height = graphRef.current.clientHeight;
     const tooltip = d3.select(tooltipRef.current);
     
+    // Add zoom behavior
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 4])
+      .on("zoom", (event) => {
+        container.attr("transform", event.transform);
+      });
+    
+    svg.call(zoom);
+    
+    // Create container group for zoom/pan
+    const container = svg.append("g").attr("class", "zoom-container");
+    
     const simulation = d3.forceSimulation(graphData.nodes)
       .force("link", d3.forceLink(graphData.links)
         .id(d => d.id)
@@ -764,13 +781,13 @@ const GraphView = () => {
       };
     });
     
-    const link = svg.append("g")
+    const link = container.append("g")
       .selectAll("line")
       .data(linkData)
       .enter().append("line")
       .attr("class", "graph-link");
     
-    const node = svg.append("g")
+    const node = container.append("g")
       .selectAll(".node")
       .data(graphData.nodes)
       .enter().append("g")
@@ -853,18 +870,6 @@ const GraphView = () => {
         <div className="sidebar">
           <div className="sidebar-section">
             <div className="sidebar-title">Thread Level</div>
-            
-            {centerItem && (
-              <div className="center-item-display">
-                <div className="center-item-header">
-                  <span>Center Item</span>
-                </div>
-                <div className="center-item-info">
-                  <div className="center-item-id">{centerItem.id}</div>
-                  <div className="center-item-type">{centerItem.type}</div>
-                </div>
-              </div>
-            )}
             
             {entityTypes.map((type) => (
               <div key={type} className="entity-type-item">
