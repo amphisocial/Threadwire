@@ -774,23 +774,9 @@ async function fetchRelationships(id, entityType, customerId) {
                                     targetType: 'Product'
                                 });
                             });
+                       }     
                             
-                            // Find other sales orders with the same blockerTag
-                            const relatedSalesOrders = await SalesOrder.find({
-                                blockerTag: salesOrder.blockerTag,
-                                ordernumber: { $ne: salesOrder.ordernumber },
-                                customerId
-                            });
-                            
-                            relatedSalesOrders.forEach(so => {
-                                relationships.push({
-                                    targetId: so.ordernumber || so._id.toString(),
-                                    targetType: 'Sales Order'
-                                });
-                            });
-                        }
-                        
-                        // NEW: Find related work orders by salesorder field
+                    // NEW: Find related work orders by salesorder field
                         const linkedWorkOrders = await WorkOrder.find({ 
                             salesorder: id,
                             customerId 
