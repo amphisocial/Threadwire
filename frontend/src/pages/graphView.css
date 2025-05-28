@@ -103,42 +103,8 @@
   text-decoration: underline;
 }
 
-/* Center Item Display - NEW FEATURE */
-.center-item-display {
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 16px;
-}
-
-.center-item-header {
-  font-weight: 600;
-  color: #4a5568;
-  margin-bottom: 8px;
-  font-size: 14px;
-}
-
-.center-item-info {
-  border-left: 3px solid #ff6b6b;
-  padding-left: 8px;
-}
-
-.center-item-id {
-  font-weight: 600;
-  color: #2d3748;
-  font-size: 14px;
-  margin-bottom: 2px;
-}
-
-.center-item-type {
-  font-size: 12px;
-  color: #718096;
-  background: #edf2f7;
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: inline-block;
-}
+/* Center Item Display - REMOVED as requested */
+/* .center-item-display styles removed */
 
 /* Visualization Container */
 .visualization-container {
@@ -319,6 +285,15 @@
 .graph-svg {
   width: 100%;
   height: 100%;
+  cursor: grab;
+}
+
+.graph-svg:active {
+  cursor: grabbing;
+}
+
+.zoom-container {
+  /* Container for zoom/pan transformations */
 }
 
 .graph-link {
