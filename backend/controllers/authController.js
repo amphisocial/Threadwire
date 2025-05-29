@@ -140,12 +140,6 @@ const googleAuth = async (req, res) => {
                     try {
                         await require('../services/invitationService').processInvitation(invitationToken);
 
-                        // Update company user count for invited users
-                        const company = await Company.findById(customerId);
-                        if (company) {
-                            company.currentUserCount += 1;
-                            await company.save();
-                        }
                     } catch (error) {
                         console.error('Error processing invitation:', error);
                         // Continue with registration even if processing invitation fails

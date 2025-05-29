@@ -1,3 +1,5 @@
+/* GraphView.css - Complete CSS with minimal additions for new features */
+
 /* Main Layout */
 .app-container {
   display: flex;
@@ -290,10 +292,6 @@
 
 .graph-svg:active {
   cursor: grabbing;
-}
-
-.zoom-container {
-  /* Container for zoom/pan transformations */
 }
 
 .graph-link {
