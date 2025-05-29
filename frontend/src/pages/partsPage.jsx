@@ -68,7 +68,12 @@ const PartsPage = () => {
 
   useEffect(() => {
     document.title = 'Parts';
+    fetchParts();
   }, []);
+
+  const handleImportComplete = () => {
+    fetchParts(); 
+};
 
   return (
     <div className="pm-container">
@@ -100,6 +105,7 @@ const PartsPage = () => {
       {showImportPartModal && (
         <ImportPartModal
           onClose={() => setShowImportPartModal(false)}
+          onImportComplete={handleImportComplete}
         />
       )}
 

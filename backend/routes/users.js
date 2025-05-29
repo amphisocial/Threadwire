@@ -28,6 +28,8 @@ router.post('/complete-profile/:userId', authenticateToken, userController.compl
 
 router.get('/:id', userController.getUserById);
 
+router.delete('/:userId', authenticateToken, requirePowerUser, userController.deleteUser);
+
 router.post('/invitations', authenticateToken, requirePowerUser, invitationController.createInvitation);
 router.get('/invitations/validate', invitationController.validateInvitation);
 router.post('/invitations/process', invitationController.processInvitation);
