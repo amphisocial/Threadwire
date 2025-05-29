@@ -370,6 +370,58 @@ const getCompanyUsers = async (userId) => {
     }
 };
 
+const deleteUser = async (userId, requestingUserId) => {
+    try {
+        // Get the requesting user (must be power user)
+        const requestingUser = await User.findById(requestingUserId);
+        if (!requestingUser || requestingUser.role !== 'power_user') {
+            throw new Error('Access denied. Only power users can delete users.');
+        }
+
+        // Get the user to be deleted
+        const userToDelete = await User.findById(userId);
+        if (!userToDelete) {
+            throw new Error('User not found');
+        }
+
+        // Check if both users are from the same company
+        if (userToDelete.customerId.toString() !== requestingUser.customerId.toString()) {
+            throw new Error('Access denied. You can only delete users from your own company.');
+        }
+
+        // Prevent power user from deleting themselves
+        if (userId === requestingUserId) {
+            throw new Error('You cannot delete yourself');
+        }
+
+        // Prevent deleting another power user
+        if (userToDelete.role === 'power_user') {
+            throw new Error('Cannot delete another power user');
+        }
+
+        // Delete the user
+        await User.findByIdAndDelete(userId);
+
+        // Update company user count
+        const company = await Company.findById(requestingUser.customerId);
+        if (company && company.currentUserCount > 0) {
+            company.currentUserCount -= 1;
+            await company.save();
+        }
+
+        return { 
+            message: `User ${userToDelete.firstName} ${userToDelete.lastName} deleted successfully`,
+            deletedUser: {
+                id: userToDelete._id,
+                name: `${userToDelete.firstName} ${userToDelete.lastName}`,
+                email: userToDelete.email
+            }
+        };
+    } catch (error) {
+        throw new Error(error.message || 'Failed to delete user');
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
@@ -379,5 +431,6 @@ module.exports = {
     verifyMFA,
     completeProfile,
     checkCompanyStatus,
-    getCompanyUsers
+    getCompanyUsers,
+    deleteUser
 };

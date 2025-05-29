@@ -9,7 +9,7 @@ import './userManagement.css';
 
 const UserManagement = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, isPowerUser, isLoading } = useAuth();
+  const { isAuthenticated, isPowerUser, isLoading, user } = useAuth();
   const [users, setUsers] = useState([]);
   const [companyInfo, setCompanyInfo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -19,6 +19,8 @@ const UserManagement = () => {
   const [activeTab, setActiveTab] = useState('users');
   const [pendingInvitations, setPendingInvitations] = useState([]);
   const [resendingInvitation, setResendingInvitation] = useState(null);
+  const [deletingUser, setDeletingUser] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
   useEffect(() => {
     document.title = 'User Management';
@@ -163,6 +165,44 @@ const UserManagement = () => {
     }
   };
 
+  const handleDeleteUser = async (userId) => {
+    try {
+      setDeletingUser(userId);
+      const token = localStorage.getItem('authToken');
+      const isGoogleAuth = localStorage.getItem('isGoogleAuth');
+
+      const response = await fetch(`/api/user/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...(isGoogleAuth && { 'Auth-Type': 'google' }),
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete user');
+      }
+
+      showToast('success', 'User deleted successfully');
+      setShowDeleteConfirm(null);
+      fetchCompanyUsers(); // Refresh the user list
+    } catch (error) {
+      showToast('error', error.message);
+    } finally {
+      setDeletingUser(null);
+    }
+  };
+
+  const confirmDeleteUser = (userToDelete) => {
+    setShowDeleteConfirm(userToDelete);
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirm(null);
+  };
+
   const showToast = (type, message) => {
     setToast({ show: true, type, message });
     setTimeout(() => {
@@ -175,7 +215,7 @@ const UserManagement = () => {
   }
 
   const canInviteMore = companyInfo && companyInfo.currentUserCount < companyInfo.maxUsers;
-
+  const currentUserId = user?.userId || user?.id;
 
   return (
     <div className="app-container">
@@ -196,6 +236,39 @@ const UserManagement = () => {
             >
               ×
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <div className="modal-header">
+              <h3>Confirm Delete</h3>
+            </div>
+            <div className="modal-body">
+              <p>
+                Are you sure you want to delete user <strong>{showDeleteConfirm.firstName} {showDeleteConfirm.lastName}</strong>?
+              </p>
+              <p>This action cannot be undone.</p>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn btn-secondary" 
+                onClick={cancelDelete}
+                disabled={deletingUser === showDeleteConfirm._id}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-danger" 
+                onClick={() => handleDeleteUser(showDeleteConfirm._id)}
+                disabled={deletingUser === showDeleteConfirm._id}
+              >
+                {deletingUser === showDeleteConfirm._id ? 'Deleting...' : 'Delete User'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -324,20 +397,36 @@ const UserManagement = () => {
                             <th>Email</th>
                             <th>Role</th>
                             <th>Joined</th>
+                            <th>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {users.map(user => (
-                            <tr key={user._id}>
-                              <td>{user.firstName} {user.lastName}</td>
-                              <td>{user.userName}</td>
-                              <td>{user.email}</td>
+                          {users.map(userItem => (
+                            <tr key={userItem._id}>
+                              <td>{userItem.firstName} {userItem.lastName}</td>
+                              <td>{userItem.userName}</td>
+                              <td>{userItem.email}</td>
                               <td>
-                                <span className={user.role === 'power_user' ? 'badge admin' : 'badge user'}>
-                                  {user.role === 'power_user' ? 'Admin' : 'User'}
+                                <span className={userItem.role === 'power_user' ? 'badge admin' : 'badge user'}>
+                                  {userItem.role === 'power_user' ? 'Admin' : 'User'}
                                 </span>
                               </td>
-                              <td>{new Date(user.createdAt).toLocaleDateString()}</td>
+                              <td>{new Date(userItem.createdAt).toLocaleDateString()}</td>
+                              <td>
+                                {/* Only show delete button for regular users, not for the current power user */}
+                                {userItem.role === 'regular_user' && userItem._id !== currentUserId ? (
+                                  <button
+                                    className="delete-button"
+                                    onClick={() => confirmDeleteUser(userItem)}
+                                    disabled={deletingUser === userItem._id}
+                                    title="Delete User"
+                                  >
+                                    {deletingUser === userItem._id ? 'Deleting...' : '🗑️'}
+                                  </button>
+                                ) : (
+                                  <span className="no-actions">—</span>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
