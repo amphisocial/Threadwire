@@ -1,3 +1,21 @@
+/**
+ * =============================================================================
+ * Blockers Page Component
+ * =============================================================================
+ * Main page for viewing and managing Blockers (Risk/Issues).
+ * 
+ * Features:
+ * - List all blockers in a table with filters
+ * - Select a blocker to view its details and action items
+ * - Edit blockers inline
+ * - Full CRUD for action items (Create, Read, Update, Delete)
+ * - Close blocker functionality
+ * 
+ * Updated: February 2, 2026
+ * - Added onBlockerUpdate callback to BlockerDetails for refresh after close
+ * =============================================================================
+ */
+
 import React, { useState, useEffect } from 'react';
 import Navbar from '../comps/NavBar';
 import BlockersTable from '../comps/BlockersTable';
@@ -17,6 +35,9 @@ const BlockersApp = () => {
     document.title = 'Blockers';
   }, []);
 
+  /**
+   * Get authentication headers for API requests
+   */
   const getAuthHeaders = () => {
     const token = localStorage.getItem('authToken');
     const isGoogleAuth = localStorage.getItem('isGoogleAuth') === 'true';
@@ -27,6 +48,9 @@ const BlockersApp = () => {
     };
   };
 
+  /**
+   * Load all blockers from API
+   */
   const loadBlockers = async () => {
     try {
       setIsLoading(true);
@@ -47,6 +71,9 @@ const BlockersApp = () => {
     }
   };
 
+  /**
+   * Load action items for a specific blocker
+   */
   const loadActionItems = async (blockerId) => {
     if (!blockerId) {
       setActionItems([]);
@@ -68,17 +95,23 @@ const BlockersApp = () => {
     }
   };
 
+  /**
+   * Handle blocker selection - load its action items
+   */
   const handleBlockerSelect = (blocker) => {
     setSelectedBlocker(blocker);
     loadActionItems(blocker._id);
   };
 
+  /**
+   * Handle blocker update (inline editing)
+   */
   const handleBlockerUpdate = async (blockerId, updatedData) => {
     try {
       const response = await fetch(`/api/blockers/${blockerId}`, {
         method: "PUT",
         headers: getAuthHeaders(),
-        body: JSON.stringify({ _id: blockerId, ...updatedData }),
+        body: JSON.stringify(updatedData),
       });
 
       if (!response.ok) {
@@ -87,12 +120,44 @@ const BlockersApp = () => {
 
       alert("Blocker saved successfully.");
       loadBlockers();
+      
+      // Refresh selected blocker data
+      if (selectedBlocker && selectedBlocker._id === blockerId) {
+        const updatedBlocker = await response.json();
+        setSelectedBlocker(updatedBlocker);
+      }
     } catch (error) {
       console.error("Error saving blocker:", error);
       alert("Error saving blocker");
     }
   };
 
+  /**
+   * Handle blocker close or update from BlockerDetails component
+   * This refreshes the blockers list and clears selection
+   */
+  const handleBlockerRefresh = async () => {
+    await loadBlockers();
+    // Clear selection to force re-fetch of updated blocker
+    if (selectedBlocker) {
+      // Re-fetch the selected blocker to get updated data
+      try {
+        const response = await fetch(`/api/blockers/${selectedBlocker._id}`, {
+          headers: getAuthHeaders()
+        });
+        if (response.ok) {
+          const updatedBlocker = await response.json();
+          setSelectedBlocker(updatedBlocker);
+        }
+      } catch (error) {
+        console.error("Error refreshing selected blocker:", error);
+      }
+    }
+  };
+
+  /**
+   * Handle action item update
+   */
   const handleActionUpdate = async (actionId, updatedData) => {
     try {
       const response = await fetch(`/api/action-items/${actionId}`, {
@@ -109,9 +174,69 @@ const BlockersApp = () => {
       if (selectedBlocker) {
         loadActionItems(selectedBlocker._id);
       }
+      // Also refresh blockers in case action completion closed the blocker
+      loadBlockers();
     } catch (error) {
       console.error("Error saving action item:", error);
       alert("Error saving action item");
+    }
+  };
+
+  /**
+   * Handle action item delete
+   */
+  const handleActionDelete = async (actionId) => {
+    try {
+      const response = await fetch(`/api/action-items/${actionId}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete action item");
+      }
+
+      alert("Action item deleted successfully.");
+      if (selectedBlocker) {
+        loadActionItems(selectedBlocker._id);
+      }
+    } catch (error) {
+      console.error("Error deleting action item:", error);
+      alert("Error deleting action item");
+    }
+  };
+
+  /**
+   * Handle action item create
+   */
+  const handleActionCreate = async (newActionData) => {
+    if (!selectedBlocker) {
+      alert("Please select a blocker first.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/action-items`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          blockerId: selectedBlocker._id,
+          actionItem: newActionData.actionItem,
+          assignedTo: newActionData.assignedTo,
+          status: newActionData.status,
+          remark: newActionData.remark,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create action item");
+      }
+
+      alert("Action item created successfully.");
+      loadActionItems(selectedBlocker._id);
+    } catch (error) {
+      console.error("Error creating action item:", error);
+      alert("Error creating action item");
     }
   };
 
@@ -119,7 +244,8 @@ const BlockersApp = () => {
     <div className="app-container">
       <Navbar />
       <div className="blocker-container">
-        <div>
+        {/* Left Pane - Blockers Table */}
+        <div className="left-pane">
           <h2>Blockers</h2>
           {error && (
             <div className="error-message">
@@ -138,18 +264,25 @@ const BlockersApp = () => {
           )}
         </div>
         
+        {/* Right Pane - Details and Action Items */}
         <div className="right-pane">
-        {selectedBlocker && (
+          {/* Blocker Details with Close button and Go To Item */}
+          {selectedBlocker && (
             <BlockerDetails 
               selectedBlocker={selectedBlocker}
               getAuthHeaders={getAuthHeaders}
+              onBlockerUpdate={handleBlockerRefresh}
             />
           )}
           
+          {/* Action Items Table */}
           <h2>Action Items</h2>
           <ActionItemsTable 
             actionItems={actionItems}
             onActionUpdate={handleActionUpdate}
+            onActionDelete={handleActionDelete}
+            onActionCreate={handleActionCreate}
+            blockerId={selectedBlocker?._id}
           />
         </div>
       </div>

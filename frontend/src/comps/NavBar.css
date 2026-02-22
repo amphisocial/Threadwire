@@ -1,119 +1,252 @@
-.navbar {
-    background-color: #004080;
-    padding: 10px 20px;
-    display: flex;
-    gap: 15px;
-    align-items: center;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    position: sticky;
-    top: 0;
-    z-index: 100;
+/**
+ * =============================================================================
+ * NavBar.css - Tabular Navigation Styles
+ * =============================================================================
+ * STRATEGY: First, a blanket reset rule (.tw-nav button) kills every
+ * global button{} and .navbar button{} style. Then we style cleanly.
+ * 
+ * Last Updated: February 10, 2026
+ * =============================================================================
+ */
+
+/* ==========================================================
+   STEP 1: Kill ALL inherited button styles inside .tw-nav
+   This single rule neutralizes:
+     - global button{width:100%;padding:14px 24px;border-radius:8px;background:#6959ff}
+     - global button:hover{background-color:#fff}
+     - .navbar button{padding:10px 15px;border-radius:5px}
+     - .navbar button:hover{transform:translateY(-1px)}
+   ========================================================== */
+/* Reset base button styles only (not hover/active/focus) */
+.tw-nav button {
+  all: unset !important;
+  display: flex !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+}
+
+/* Explicitly kill global button:hover{background-color:#fff} */
+.tw-nav button:hover,
+.tw-nav button:active,
+.tw-nav button:focus {
+  background-color: transparent !important;
+  transform: none !important;
+  border-radius: 0 !important;
+  outline: none !important;
+}
+
+/* ==========================================================
+   STEP 2: Style the navbar container
+   ========================================================== */
+.tw-nav {
+  background-color: #004080;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: stretch;
+  height: 44px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ==========================================================
+   STEP 3: AI Chat icon
+   ========================================================== */
+.tw-nav-chat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  min-width: 48px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+  height: 44px;
+}
+
+.tw-nav-chat:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+/* Chat icon active state when on chatbot page */
+.tw-nav-chat.tw-chat-active {
+  background: linear-gradient(180deg, #e8890c 0%, #d97b06 100%);
+  color: #ffffff;
+  box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.25);
+}
+
+.tw-nav-chat.tw-chat-active:hover {
+  background: linear-gradient(180deg, #f09518 0%, #e8890c 100%);
+}
+
+/* ==========================================================
+   STEP 4: Tab buttons (built on the reset from Step 1)
+   ========================================================== */
+.tw-nav .tw-nav-tab {
+  flex: 1 1 0% !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  padding: 0 12px !important;
+  height: 44px !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+  line-height: 1 !important;
+  transition: background-color 0.2s ease !important;
+}
+
+.tw-nav .tw-nav-tab svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+/* ===== Hover ===== */
+.tw-nav .tw-nav-tab:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+.tw-nav .tw-nav-tab:hover svg {
+  opacity: 1;
+}
+
+/* ===== Active - Orange ===== */
+.tw-nav .tw-nav-tab.tw-active {
+  background: linear-gradient(180deg, #e8890c 0%, #d97b06 100%) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: inset 0 -2px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+.tw-nav .tw-nav-tab.tw-active svg {
+  opacity: 1;
+}
+
+.tw-nav .tw-nav-tab.tw-active:hover {
+  background: linear-gradient(180deg, #f09518 0%, #e8890c 100%) !important;
+}
+
+/* ===== Logout ===== */
+.tw-nav .tw-nav-tab.tw-nav-logout {
+  flex: 0 0 auto !important;
+  background: #dc3545 !important;
+  color: #ffffff !important;
+  padding: 0 20px !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.tw-nav .tw-nav-tab.tw-nav-logout:hover {
+  background: #c82333 !important;
+  color: #ffffff !important;
+}
+
+/* ==========================================================
+   Responsive: 1200px
+   ========================================================== */
+@media screen and (max-width: 1200px) {
+  .tw-nav {
+    height: 42px;
   }
 
-  .home-icon {
-    margin-right: 10px;
-    cursor: pointer;
-    color: white;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.2s ease;
+  .tw-nav-chat {
+    height: 42px;
   }
-  
-  .home-icon:hover {
-    transform: scale(1.2);
+
+  .tw-nav .tw-nav-tab {
+    font-size: 12.5px !important;
+    gap: 5px !important;
+    height: 42px !important;
+    padding: 0 8px !important;
   }
-  
-  .navbar button {
-    background-color: #0074cc;
-    border: none;
-    color: white;
-    padding: 10px 15px;
-    border-radius: 5px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-    min-width: 100px;
-    text-align: center;
+}
+
+/* ==========================================================
+   Responsive: 1024px
+   ========================================================== */
+@media screen and (max-width: 1024px) {
+  .tw-nav .tw-nav-tab {
+    font-size: 12px !important;
+    gap: 4px !important;
+    padding: 0 6px !important;
   }
-  
-  .navbar button:hover {
-    background-color: #005c99;
-    transform: translateY(-1px);
+
+  .tw-nav .tw-nav-tab svg {
+    width: 13px;
+    height: 13px;
   }
-  
-  .navbar button:active {
-    transform: translateY(0);
+
+  .tw-nav .tw-nav-tab.tw-nav-logout {
+    padding: 0 12px !important;
   }
-  
-  /* Active state for the current page */
-  .navbar button.active {
-    background-color: #003366;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* ==========================================================
+   Responsive: 900px - icons only
+   ========================================================== */
+@media screen and (max-width: 900px) {
+  .tw-nav .tw-nav-tab {
+    font-size: 0 !important;
+    gap: 0 !important;
+    padding: 0 12px !important;
   }
-  
-  /* Logout button specific styling */
-  .navbar button:last-child {
-    margin-left: auto;
-    background-color: #dc3545;
+
+  .tw-nav .tw-nav-tab svg {
+    width: 16px;
+    height: 16px;
   }
-  
-  .navbar button:last-child:hover {
-    background-color: #c82333;
+
+  .tw-nav .tw-nav-tab.tw-nav-logout {
+    font-size: 0 !important;
+    padding: 0 12px !important;
   }
-  
-  /* Responsive styles */
-  @media screen and (max-width: 1024px) {
-    .navbar {
-      padding: 8px 15px;
-      gap: 10px;
-    }
-  
-    .navbar button {
-      padding: 8px 12px;
-      font-size: 13px;
-      min-width: 90px;
-    }
+}
+
+/* ==========================================================
+   Responsive: Mobile
+   ========================================================== */
+@media screen and (max-width: 768px) {
+  .tw-nav {
+    height: auto;
+    flex-wrap: wrap;
+    padding: 4px;
+    gap: 3px;
   }
-  
-  @media screen and (max-width: 768px) {
-    .navbar {
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-      padding: 8px;
-    }
-  
-    .navbar button {
-      padding: 8px 10px;
-      font-size: 12px;
-      min-width: auto;
-      flex: 1;
-      max-width: 150px;
-    }
-  
-    /* Logout button in mobile view */
-    .navbar button:last-child {
-      margin-left: 0;
-      order: -1;
-      width: 100%;
-      max-width: 100%;
-    }
+
+  .tw-nav .tw-nav-tab {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    padding: 8px 10px !important;
+    font-size: 11px !important;
+    gap: 4px !important;
   }
-  
-  @media screen and (max-width: 480px) {
-    .navbar {
-      padding: 5px;
-    }
-  
-    .navbar button {
-      font-size: 11px;
-      padding: 6px 8px;
-      flex-basis: calc(50% - 8px);
-      max-width: none;
-    }
+
+  .tw-nav-chat {
+    width: auto;
+    min-width: auto;
+    padding: 8px 10px;
+    border-right: none;
+    height: auto;
   }
+
+  .tw-nav .tw-nav-tab.tw-nav-logout {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    justify-content: center !important;
+    order: 99 !important;
+    font-size: 11px !important;
+    padding: 8px 10px !important;
+    height: auto !important;
+  }
+}

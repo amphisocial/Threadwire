@@ -470,3 +470,775 @@ h2 {
     width: 100%;
   }
 }
+
+/* =============================================================================
+   Blocker Selection Modal Styles
+   Added: January 22, 2026
+   Purpose: Modal for selecting which blocker to edit when multiple exist
+   ============================================================================= */
+
+/* Modal Overlay - semi-transparent background */
+.blocker-select-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* Modal Container */
+.blocker-select-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Modal Header */
+.blocker-select-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f8f9fa;
+}
+
+.blocker-select-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.blocker-select-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  line-height: 1;
+}
+
+.blocker-select-close:hover {
+  color: #333;
+}
+
+/* Modal Body */
+.blocker-select-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.blocker-select-subtitle {
+  margin: 0 0 16px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Blocker List */
+.blocker-select-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.blocker-select-item {
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: #fff;
+}
+
+.blocker-select-item:hover {
+  border-color: #007bff;
+  background-color: #f0f7ff;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.15);
+}
+
+.blocker-select-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Blocker Item Header Row */
+.blocker-select-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.blocker-select-number {
+  font-weight: 600;
+  color: #666;
+  min-width: 20px;
+}
+
+.blocker-select-title {
+  font-weight: 600;
+  color: #333;
+  flex: 1;
+}
+
+/* Status Badge */
+.blocker-select-status {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.blocker-select-status.status-open {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.blocker-select-status.status-in-progress {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.blocker-select-status.status-closed {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+/* Blocker Item Details Row */
+.blocker-select-item-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 28px;
+}
+
+.blocker-select-type {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.blocker-select-desc {
+  font-size: 13px;
+  color: #888;
+  line-height: 1.4;
+}
+
+/* Modal Footer */
+.blocker-select-footer {
+  padding: 12px 20px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+  background-color: #f8f9fa;
+}
+
+.blocker-select-cancel {
+  padding: 8px 20px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #666;
+  transition: all 0.2s ease;
+}
+
+.blocker-select-cancel:hover {
+  background-color: #f0f0f0;
+  border-color: #999;
+}
+
+/* =============================================================================
+   Phase 2 CSS Additions - Add these to the END of salesOrders.css
+   Added: February 2, 2026
+   ============================================================================= */
+
+/* Blocker Details Header with Close Button */
+.blocker-details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  border-bottom: 2px solid #004080;
+  padding-bottom: 8px;
+}
+
+.blocker-details-header h2 {
+  margin: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* Close Blocker Button (D4) */
+.close-blocker-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.close-blocker-btn:hover {
+  background-color: #218838;
+}
+
+.close-blocker-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+/* Status Badge Styling */
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.status-badge.status-open {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.status-in-progress {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.status-badge.status-closed {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+/* Related Item with Go To Button */
+.related-item {
+  background-color: #f8f9fa;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.related-item-info {
+  flex: 1;
+  min-width: 200px;
+}
+
+.related-item-info div {
+  margin-bottom: 5px;
+}
+
+/* Go To Item Button (E1) */
+.go-to-item-btn {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+}
+
+.go-to-item-btn:hover {
+  background-color: #0056b3;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .blocker-details-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+  .close-blocker-btn {
+    width: 100%;
+  }
+  
+  .related-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .go-to-item-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* =============================================================================
+   Order Details Modal Styles for Sales Orders Page
+   Added: February 3, 2026
+   Purpose: Modal popup showing full order details with blockers and action items
+   Matches the calendarView.css Order Details modal styling
+   ============================================================================= */
+
+/* Modal Overlay - semi-transparent background covering entire screen */
+.so-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* Main Modal Container */
+.so-order-details-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Modal Header */
+.so-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #004080;
+  color: white;
+}
+
+.so-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.so-modal-close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.so-modal-close-btn:hover {
+  opacity: 1;
+}
+
+/* Modal Body - scrollable content area */
+.so-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Order Information Section */
+.so-order-info-section {
+  margin-bottom: 24px;
+}
+
+.so-order-info-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #004080;
+  border-bottom: 2px solid #004080;
+  padding-bottom: 6px;
+}
+
+/* Order Info Grid - 2 columns */
+.so-order-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.so-order-info-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.so-order-info-item label {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.so-order-info-item span {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+/* Blockers Section */
+.so-blockers-section {
+  margin-top: 20px;
+}
+
+.so-blockers-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #004080;
+  border-bottom: 2px solid #004080;
+  padding-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.so-blocker-count {
+  font-size: 12px;
+  background-color: #004080;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: normal;
+}
+
+/* No Blockers Message */
+.so-no-blockers {
+  text-align: center;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  color: #666;
+  font-style: italic;
+}
+
+/* Individual Blocker Card */
+.so-blocker-card {
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+  border-left: 4px solid #dc3545;
+}
+
+.so-blocker-card.status-closed {
+  border-left-color: #28a745;
+  opacity: 0.7;
+}
+
+.so-blocker-card.status-in-progress {
+  border-left-color: #007bff;
+}
+
+/* Blocker Card Header */
+.so-blocker-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.so-blocker-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: #333;
+  margin: 0;
+  flex: 1;
+}
+
+/* Blocker Edit Button */
+.so-blocker-edit-btn {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s ease;
+  margin-left: 10px;
+}
+
+.so-blocker-edit-btn:hover {
+  background-color: #0056b3;
+}
+
+/* Blocker Status Badge */
+.so-blocker-status {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  margin-left: 8px;
+}
+
+.so-blocker-status.status-open {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.so-blocker-status.status-in-progress {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.so-blocker-status.status-closed {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+/* Blocker Type Badge */
+.so-blocker-type {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-right: 8px;
+}
+
+.so-blocker-type.type-risk {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.so-blocker-type.type-issue {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+/* Blocker Description */
+.so-blocker-description {
+  font-size: 13px;
+  color: #666;
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+/* Blocker Meta Information */
+.so-blocker-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #888;
+  margin-top: 8px;
+}
+
+.so-blocker-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Action Items Section within Blocker */
+.so-action-items-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #ddd;
+}
+
+.so-action-items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.so-action-items-header h5 {
+  margin: 0;
+  font-size: 13px;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.so-action-items-toggle {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Action Items List */
+.so-action-items-list {
+  margin-top: 8px;
+}
+
+.so-action-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.so-action-item:last-child {
+  margin-bottom: 0;
+}
+
+.so-action-item-text {
+  flex: 1;
+  color: #333;
+}
+
+.so-action-item-assignee {
+  color: #666;
+  font-size: 12px;
+  margin-left: 10px;
+}
+
+.so-action-item-status {
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  margin-left: 10px;
+  text-transform: uppercase;
+}
+
+.so-action-item-status.status-open {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.so-action-item-status.status-in-progress {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.so-action-item-status.status-completed {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.so-no-action-items {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* Modal Footer - Action Buttons */
+.so-modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f8f9fa;
+}
+
+.so-modal-footer-left {
+  display: flex;
+  gap: 10px;
+}
+
+.so-add-blocker-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+.so-add-blocker-btn:hover {
+  background-color: #218838;
+}
+
+.so-close-modal-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.so-close-modal-btn:hover {
+  background-color: #5a6268;
+}
+
+/* Loading State */
+.so-loading-blockers {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .so-order-details-modal {
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .so-order-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .so-blocker-card-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .so-blocker-edit-btn {
+    align-self: flex-start;
+    margin-left: 0;
+  }
+
+  .so-modal-footer {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .so-modal-footer-left {
+    width: 100%;
+  }
+
+  .so-add-blocker-btn,
+  .so-close-modal-btn {
+    width: 100%;
+  }
+}

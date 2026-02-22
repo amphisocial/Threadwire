@@ -15,6 +15,8 @@ const WorkOrderSchema = new mongoose.Schema({
   blockerTag: { type: Number },
   quantity: { type: Number },
   salesorder: { type: String },
+  estimatedCompletionDate: { type: Date },
+  dueDate: { type: Date },
   customerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Company',

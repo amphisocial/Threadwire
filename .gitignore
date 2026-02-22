@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/build/
+
+# Cache
+.cache/
+*.cache
+
+# Backup files
+*.backup
+*.backup.*
+
+# Environment files
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
