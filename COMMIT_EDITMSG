@@ -1,0 +1,27 @@
+feat(mfg-01): work-instruction source extractor template v1.0.0
+
+Extracts manufacturing-critical facts from drawings, ECOs, planning
+sheets, and process specs so a downstream copilot can draft shop-floor
+work instructions:
+
+  - critical features (KC, KPC, CSI, FlightSafetyCritical, FractureCritical)
+  - tolerances (limit-dimensioning normalized to nominal/upper/lower)
+  - fasteners with quantity, location, reuse rules, finish/plating
+  - torque specs (value, tolerance, units, wet/dry, sequence, preload)
+  - process specs (AMS, MIL, Nadcap) with revision and process_class
+  - tooling, consumables, PPE, environmental controls
+  - inspection / buyoff points with role
+  - traceability requirements
+  - ECO from/to deltas
+
+Citation shape supports drawing zones (e.g. 'B4'), text sections, and
+note IDs (e.g. 'NOTE 7'); each citation carries a source doc_id.
+
+Runtime config:
+  - Primitive=DocumentExtract, Temperature=0.0
+  - DataSensitivityTier=ITAR
+  - MinConfidenceThreshold=0.80 (shop-floor errors are safety-of-flight)
+  - RefuseIfUngrounded enabled for torque_specs, tolerances,
+    process_specs, fasteners — model must not invent values
+
+Consumer: MFG-01 Guided Work-Instruction Author.
