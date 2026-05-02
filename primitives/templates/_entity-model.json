@@ -1,0 +1,115 @@
+{
+  "$comment": "Mendix entity model for the AI Interaction Framework's PromptTemplate library. This file describes the entities, attributes, and associations that a Mendix developer should create in the module 'AIInteractionFramework'. Template record JSON files in this library conform to this shape and can be imported via the ImportPromptTemplates microflow described in the design spec.",
+  "module": "AIInteractionFramework",
+  "version": "0.1.0",
+  "entities": [
+    {
+      "name": "PromptTemplate",
+      "description": "A versioned, governed prompt template. Immutable once Status = Published.",
+      "attributes": [
+        { "name": "Code", "type": "String(length=120)", "required": true, "unique": false, "description": "Stable human-readable code, e.g. 'SCM-02-RFQ-Extractor'. Combined with Version forms the unique key." },
+        { "name": "Version", "type": "String(length=20)", "required": true, "description": "Semantic version, e.g. '1.0.0'." },
+        { "name": "Title", "type": "String(length=200)", "required": true },
+        { "name": "Description", "type": "String(length=2000)", "required": false },
+        { "name": "Primitive", "type": "Enum[DocumentExtract, Classify, Answer, Draft, Cluster, Score, Summarize]", "required": true },
+        { "name": "Status", "type": "Enum[Draft, InReview, Published, Deprecated]", "required": true, "default": "Draft" },
+        { "name": "SystemPrompt", "type": "String(unlimited)", "required": true, "description": "Role, invariants, and output contract. XML-tagged sections recommended." },
+        { "name": "UserPromptTemplate", "type": "String(unlimited)", "required": true, "description": "User-turn template with {{variable}} placeholders. Rendered by the framework before invocation." },
+        { "name": "OutputSchemaJson", "type": "String(unlimited)", "required": true, "description": "JSON Schema (draft 2020-12) the completion must validate against." },
+        { "name": "MinConfidenceThreshold", "type": "Decimal(precision=3,scale=2)", "required": true, "default": "0.70", "description": "If overall_confidence in the completion falls below this, mark invocation LowConfidence and route to review." },
+        { "name": "MaxOutputTokens", "type": "Integer", "required": true, "default": "4000" },
+        { "name": "Temperature", "type": "Decimal(precision=3,scale=2)", "required": true, "default": "0.00", "description": "Document-Extract templates should default to deterministic (0.0)." },
+        { "name": "PreferredBackend", "type": "Enum[Any, AzureOpenAI, Bedrock_Claude, Vertex, OnPremGateway]", "required": true, "default": "Any" },
+        { "name": "RequiresCitation", "type": "Boolean", "required": true, "default": "true", "description": "Document-Extract enforces citation on every extracted fact." },
+        { "name": "DataSensitivityTier", "type": "Enum[Public, Internal, ITAR, Classified]", "required": true, "default": "Internal", "description": "Framework uses this to select a compliant backend and apply routing policy." },
+        { "name": "CreatedAt", "type": "DateTime", "required": true },
+        { "name": "CreatedBy", "type": "String", "required": true },
+        { "name": "PublishedAt", "type": "DateTime" },
+        { "name": "PublishedBy", "type": "String" },
+        { "name": "DeprecatedAt", "type": "DateTime" },
+        { "name": "SupersededByCode", "type": "String(length=120)", "description": "On deprecation, points to the replacement template Code." }
+      ],
+      "associations": [
+        { "name": "PromptTemplate_PromptVariable", "target": "PromptVariable", "type": "1..N", "ownership": "composite" },
+        { "name": "PromptTemplate_FewShotExample", "target": "FewShotExample", "type": "1..N", "ownership": "composite" },
+        { "name": "PromptTemplate_Guardrail", "target": "Guardrail", "type": "1..N", "ownership": "referential" }
+      ],
+      "uniqueConstraints": [["Code", "Version"]]
+    },
+    {
+      "name": "PromptVariable",
+      "description": "A named input slot that the UserPromptTemplate references as {{name}}. The framework validates inputs against these variables before invocation.",
+      "attributes": [
+        { "name": "Name", "type": "String(length=80)", "required": true },
+        { "name": "DataType", "type": "Enum[String, Integer, Decimal, Boolean, Json, DocumentText, CitationList]", "required": true },
+        { "name": "Required", "type": "Boolean", "required": true, "default": "true" },
+        { "name": "DefaultValue", "type": "String(unlimited)" },
+        { "name": "Description", "type": "String(length=500)" },
+        { "name": "ValidationPattern", "type": "String(length=500)", "description": "Optional regex for String-typed variables." },
+        { "name": "MaxLength", "type": "Integer", "description": "Optional cap for DocumentText to protect the context window." }
+      ]
+    },
+    {
+      "name": "FewShotExample",
+      "description": "An example (input, expected-output) pair inlined into the user prompt. Used sparingly \u2014 one or two per template.",
+      "attributes": [
+        { "name": "Label", "type": "String(length=120)", "required": true },
+        { "name": "Ordinal", "type": "Integer", "required": true, "default": "0" },
+        { "name": "InputJson", "type": "String(unlimited)", "required": true, "description": "JSON object whose keys match PromptVariable.Name." },
+        { "name": "ExpectedOutputJson", "type": "String(unlimited)", "required": true, "description": "JSON that validates against the template's OutputSchemaJson." }
+      ]
+    },
+    {
+      "name": "Guardrail",
+      "description": "A declarative policy attached to a template. The framework runtime enforces these on the invocation (input filtering, output filtering, escalation).",
+      "attributes": [
+        { "name": "Name", "type": "String", "required": true },
+        { "name": "Kind", "type": "Enum[InputRedaction, OutputRedaction, RequireCitation, SchemaValidation, ConfidenceThreshold, DataClassificationRoute, PromptInjectionDefense, RefuseIfUngrounded]", "required": true },
+        { "name": "ConfigJson", "type": "String(unlimited)", "description": "Policy-specific JSON config, e.g. regex for redaction, confidence cutoff, etc." }
+      ]
+    },
+    {
+      "name": "ExtractionInvocation",
+      "description": "One execution of a Document-Extract template. Immutable audit record.",
+      "attributes": [
+        { "name": "TemplateCode", "type": "String", "required": true, "indexed": true },
+        { "name": "TemplateVersion", "type": "String", "required": true },
+        { "name": "InputPayloadJson", "type": "String(unlimited)", "required": true, "description": "Variable values used to render the user prompt (documents may be referenced by ID instead of inlined for payload size)." },
+        { "name": "RenderedSystemPrompt", "type": "String(unlimited)", "required": true },
+        { "name": "RenderedUserPrompt", "type": "String(unlimited)", "required": true },
+        { "name": "OutputPayloadJson", "type": "String(unlimited)", "description": "Validated completion; null if SchemaInvalid." },
+        { "name": "BackendUsed", "type": "String(length=40)", "required": true },
+        { "name": "ModelId", "type": "String", "required": true },
+        { "name": "PromptTokens", "type": "Integer" },
+        { "name": "CompletionTokens", "type": "Integer" },
+        { "name": "LatencyMs", "type": "Integer" },
+        { "name": "SchemaValid", "type": "Boolean" },
+        { "name": "OverallConfidence", "type": "Decimal(precision=3,scale=2)" },
+        { "name": "Status", "type": "Enum[Success, SchemaInvalid, LowConfidence, Refused, Error]", "required": true },
+        { "name": "ErrorMessage", "type": "String(length=2000)" },
+        { "name": "InvokedBy", "type": "String", "required": true },
+        { "name": "InvokedAt", "type": "DateTime", "required": true }
+      ],
+      "associations": [
+        { "name": "Invocation_Citation", "target": "Citation", "type": "1..N", "ownership": "composite" }
+      ]
+    },
+    {
+      "name": "Citation",
+      "description": "A per-field pointer from an extracted value back to its source document location. Produced by the framework after parsing the completion.",
+      "attributes": [
+        { "name": "FieldPath", "type": "String(length=500)", "required": true, "description": "JSON Pointer to the field in OutputPayloadJson, e.g. '/clauses/0/far'." },
+        { "name": "SourceDocumentId", "type": "String", "required": true },
+        { "name": "SourcePage", "type": "Integer" },
+        { "name": "SourceParagraph", "type": "String(length=120)" },
+        { "name": "VerbatimText", "type": "String(length=2000)" },
+        { "name": "Confidence", "type": "Decimal(precision=3,scale=2)" }
+      ]
+    }
+  ],
+  "notes": [
+    "Publish is irreversible for a given (Code, Version). Corrections require a new Version.",
+    "ExtractionInvocation and Citation are append-only to protect the audit trail.",
+    "The framework exposes a microflow IF_DocumentExtract_Invoke(template_code, template_version_or_latest, input_object) -> ExtractionInvocation. See Appendix A of the design spec for the full flow."
+  ]
+}

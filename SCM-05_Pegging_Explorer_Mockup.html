@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SCM-05 Multi-Level Pegging Explorer · Mockup</title>
+<style>
+  :root {
+    --navy: #1F3A5F;
+    --navy-2: #14283F;
+    --accent: #2E75B6;
+    --ink: #0F172A;
+    --muted: #64748B;
+    --line: #E2E8F0;
+    --bg: #F8FAFC;
+    --card: #FFFFFF;
+    --hard: #10B981;
+    --hard-bg: #ECFDF5;
+    --soft: #F59E0B;
+    --soft-bg: #FFFBEB;
+    --gap: #EF4444;
+    --gap-bg: #FEF2F2;
+    --info: #3B82F6;
+    --info-bg: #EFF6FF;
+    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.08);
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+  }
+  /* ------- Layout ------- */
+  .app {
+    display: grid;
+    grid-template-rows: 56px 1fr;
+    height: 100vh;
+  }
+  .topbar {
+    background: var(--navy);
+    color: white;
+    display: flex; align-items: center; padding: 0 20px; gap: 24px;
+  }
+  .brand { font-weight: 600; letter-spacing: .2px; font-size: 14px; }
+  .brand .tag { font-weight: 400; opacity: .7; margin-left: 8px; font-size: 12px; }
+  .search {
+    flex: 1; max-width: 520px;
+    display: flex; align-items: center;
+    background: rgba(255,255,255,.12);
+    border-radius: 6px; padding: 6px 10px; gap: 8px;
+  }
+  .search input {
+    flex: 1; background: transparent; border: 0; color: white; outline: none; font-size: 13px;
+  }
+  .search input::placeholder { color: rgba(255,255,255,.6); }
+  .breadcrumb { color: rgba(255,255,255,.85); font-size: 12px; }
+  .breadcrumb b { color: white; }
+  .user { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); display: grid; place-items: center; color: white; font-weight: 600;
+  }
+
+  .body {
+    display: grid;
+    grid-template-columns: 360px 1fr 400px;
+    gap: 12px;
+    padding: 12px;
+    min-height: 0;
+  }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    display: flex; flex-direction: column; min-height: 0;
+    box-shadow: var(--shadow);
+  }
+  .panel header {
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel header h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--navy); }
+  .panel .body-scroll { overflow: auto; padding: 8px 6px; flex: 1; min-height: 0; }
+
+  /* ------- Tree (left) ------- */
+  .toggle-group { display: flex; gap: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin-left: auto; }
+  .toggle-btn {
+    background: white; border: 0; padding: 5px 9px; font-size: 11px; cursor: pointer; color: var(--muted);
+  }
+  .toggle-btn.active { background: var(--navy); color: white; }
+  .tree { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; font-size: 12px; }
+  .tnode {
+    display: flex; align-items: center; gap: 6px;
+    padding: 3px 6px; border-radius: 4px; cursor: pointer; user-select: none;
+  }
+  .tnode:hover { background: #F1F5F9; }
+  .tnode.selected { background: #DBEAFE; }
+  .tnode .caret { width: 12px; display: inline-block; color: var(--muted); }
+  .tnode .icon {
+    width: 14px; height: 14px; flex: 0 0 auto;
+    display: grid; place-items: center; font-size: 9px; border-radius: 3px;
+    background: #E2E8F0; color: var(--navy); font-weight: 700;
+  }
+  .tnode .icon.lvl0 { background: var(--navy); color: white; }
+  .tnode .icon.asm  { background: #C7D2FE; color: #1E3A8A; }
+  .tnode .icon.sub  { background: #DDD6FE; color: #5B21B6; }
+  .tnode .icon.pcb  { background: #FED7AA; color: #9A3412; }
+  .tnode .icon.cmp  { background: #BBF7D0; color: #14532D; }
+  .tnode .pn { font-weight: 600; color: var(--ink); }
+  .tnode .nom { color: var(--muted); margin-left: 4px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tnode .qty { color: var(--muted); font-size: 11px; }
+  .tnode .peg { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .peg.hard { background: var(--hard); }
+  .peg.soft { background: var(--soft); }
+  .peg.gap  { background: var(--gap); }
+  .peg.none { background: #CBD5E1; }
+  .lvl-bar {
+    position: relative; padding-left: var(--lp, 0);
+  }
+  .level-pill {
+    display: inline-block; min-width: 22px; text-align: center;
+    background: #F1F5F9; color: var(--muted); padding: 1px 4px; border-radius: 3px; font-size: 10px;
+    margin-right: 2px;
+  }
+
+  /* ------- Center detail ------- */
+  .detail-head {
+    padding: 16px 18px; border-bottom: 1px solid var(--line);
+  }
+  .detail-head .pn-row {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .detail-head h2 {
+    margin: 0; font-size: 18px; color: var(--navy); font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: -.2px;
+  }
+  .detail-head .nom { color: var(--muted); margin-top: 2px; font-size: 13px; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .b-kc { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
+  .b-itar { background: #E0E7FF; color: #3730A3; border-color: #C7D2FE; }
+  .b-eol { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+  .b-single { background: #FCE7F3; color: #9D174D; border-color: #FBCFE8; }
+  .b-lt { background: #DBEAFE; color: #1E40AF; border-color: #BFDBFE; }
+  .b-ok { background: #D1FAE5; color: #065F46; border-color: #A7F3D0; }
+
+  .meta-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 18px;
+    margin-top: 12px;
+  }
+  .meta-grid .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .meta-grid .v { font-size: 13px; color: var(--ink); margin-top: 1px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+  .tabs {
+    display: flex; gap: 0; border-bottom: 1px solid var(--line); padding: 0 14px;
+  }
+  .tab {
+    padding: 10px 12px; font-size: 12px; font-weight: 600; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .tab.active { color: var(--navy); border-color: var(--accent); }
+
+  .tab-content { padding: 14px 18px; overflow: auto; flex: 1; min-height: 0; }
+
+  /* Pegging ladder */
+  .ladder {
+    display: grid;
+    grid-template-columns: 160px repeat(12, 1fr);
+    gap: 6px; align-items: center;
+    font-size: 12px;
+  }
+  .ladder .col-h {
+    color: var(--muted); font-size: 10px; text-align: center; font-weight: 600; padding: 4px 2px;
+    border-bottom: 1px solid var(--line);
+  }
+  .ladder .row-l {
+    color: var(--ink); font-weight: 600; padding: 6px 0;
+  }
+  .ladder .row-l small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
+  .cell {
+    height: 26px; border-radius: 4px; display: grid; place-items: center;
+    font-size: 11px; font-weight: 600;
+  }
+  .cell.demand { background: #F1F5F9; color: var(--ink); }
+  .cell.supply { background: #ECFEFF; color: #155E75; }
+  .cell.hard  { background: var(--hard-bg); color: #065F46; border: 1px solid #A7F3D0; }
+  .cell.soft  { background: var(--soft-bg); color: #92400E; border: 1px solid #FDE68A; }
+  .cell.gap   { background: var(--gap-bg);  color: #991B1B; border: 1px solid #FECACA; }
+  .cell.zero  { color: #CBD5E1; }
+
+  /* Peg list */
+  .peg-list { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .peg-list h4 { margin: 0 0 8px 0; font-size: 12px; color: var(--navy); }
+  .peg-row {
+    display: grid;
+    grid-template-columns: 22px 110px 1fr 120px 90px 100px;
+    gap: 10px; align-items: center;
+    padding: 8px 4px; font-size: 12px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .peg-row:last-child { border-bottom: 0; }
+  .peg-row .src { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .peg-row .dest { color: var(--muted); }
+  .peg-row .qty { text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .peg-row .date { color: var(--muted); }
+  .peg-row .actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 6px; border-radius: 10px; font-size: 11px; font-weight: 600;
+  }
+  .chip.hard { background: var(--hard-bg); color: #065F46; }
+  .chip.soft { background: var(--soft-bg); color: #92400E; }
+  .chip.gap  { background: var(--gap-bg);  color: #991B1B; }
+  .btn {
+    background: white; border: 1px solid var(--line); color: var(--ink);
+    padding: 3px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 500;
+  }
+  .btn:hover { background: #F8FAFC; }
+  .btn.primary { background: var(--navy); color: white; border-color: var(--navy); }
+  .btn.primary:hover { background: var(--navy-2); }
+
+  /* Right rail: Copilot */
+  .copilot { display: flex; flex-direction: column; min-height: 0; }
+  .convo { padding: 12px 14px; overflow: auto; flex: 1; }
+  .msg { margin-bottom: 14px; }
+  .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+  .msg .bubble {
+    background: var(--info-bg); padding: 10px 12px; border-radius: 10px;
+    border: 1px solid #DBEAFE; line-height: 1.5;
+  }
+  .msg.ai .bubble { background: white; border: 1px solid var(--line); }
+  .citations { margin-top: 8px; font-size: 11px; }
+  .cit {
+    display: inline-block; background: #F1F5F9; color: var(--ink);
+    padding: 2px 6px; margin: 2px 4px 0 0; border-radius: 4px;
+    font-family: ui-monospace, Menlo, Consolas, monospace; cursor: pointer;
+  }
+  .cit:hover { background: #E2E8F0; }
+  .impact-table {
+    margin-top: 8px; font-size: 12px; width: 100%; border-collapse: collapse;
+  }
+  .impact-table th, .impact-table td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+  .impact-table th { color: var(--muted); font-size: 11px; font-weight: 600; }
+  .impact-table .qcol { text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+  .composer {
+    border-top: 1px solid var(--line); padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .suggest { display: flex; gap: 6px; flex-wrap: wrap; }
+  .suggest button {
+    background: white; border: 1px solid var(--line); border-radius: 14px;
+    padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--ink);
+  }
+  .suggest button:hover { background: #F8FAFC; border-color: var(--accent); color: var(--accent); }
+  .composer-input {
+    display: flex; gap: 8px; align-items: center;
+    border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px;
+  }
+  .composer-input input { flex: 1; border: 0; outline: none; font-size: 12px; }
+  .ai-tier {
+    font-size: 11px; color: var(--muted); padding: 4px 12px 0 12px;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .ai-tier .dot { width: 6px; height: 6px; background: var(--hard); border-radius: 50%; }
+
+  /* Risk panel inside copilot */
+  .risk-strip {
+    border-top: 1px solid var(--line); padding: 10px 14px; background: #FFFBEB;
+  }
+  .risk-strip h4 { margin: 0 0 6px 0; font-size: 11px; color: #92400E; text-transform: uppercase; letter-spacing: .4px; }
+  .risk-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 12px; }
+  .risk-row .pn { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+  .risk-row .score { font-weight: 700; color: #B45309; }
+
+  /* Footer */
+  .footer { padding: 8px 14px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); display: flex; justify-content: space-between; }
+
+  /* Legend */
+  .legend { display: flex; gap: 10px; font-size: 11px; color: var(--muted); margin-left: auto; }
+  .legend span { display: inline-flex; gap: 4px; align-items: center; }
+  .legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="brand">SCM-05 <span class="tag">Multi-Level Pegging Explorer</span></div>
+    <div class="search">
+      <span style="color:#94A3B8">⌕</span>
+      <input placeholder="Search part, work order, program, or program …" value="MAX14001AAP+">
+    </div>
+    <div class="breadcrumb">Program <b>P-8104 Falcon-LRU</b> · ERP <b>Oracle EBS R12</b> · Lake refresh <b>2 min ago</b></div>
+    <div class="user"><div class="avatar">M</div>Marco Leon · Materials Mgmt</div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+
+    <!-- LEFT: BOM tree -->
+    <div class="panel">
+      <header>
+        <h3>BOM tree</h3>
+        <div class="toggle-group" role="tablist" aria-label="Direction">
+          <button class="toggle-btn active" id="dir-down">Down ↓</button>
+          <button class="toggle-btn" id="dir-up">Up ↑</button>
+        </div>
+      </header>
+      <div class="body-scroll">
+        <div class="tree" id="tree"></div>
+      </div>
+      <div class="footer">
+        <span>15-level depth · 4 of 5,228 nodes shown</span>
+        <span><span class="peg hard"></span>hard&nbsp;&nbsp;<span class="peg soft"></span>soft&nbsp;&nbsp;<span class="peg gap"></span>gap</span>
+      </div>
+    </div>
+
+    <!-- CENTER: Selected part detail -->
+    <div class="panel">
+      <div class="detail-head">
+        <div class="pn-row">
+          <h2>MAX14001AAP+</h2>
+          <div class="badges">
+            <span class="badge b-kc">▲ KC-014 Functional Safety</span>
+            <span class="badge b-single">Single source</span>
+            <span class="badge b-eol">EOL · LTB by 2026-10-15</span>
+            <span class="badge b-itar">ITAR · USML XII(d)</span>
+            <span class="badge b-lt">Lead 22 wk</span>
+          </div>
+        </div>
+        <div class="nom">Functional Safety AFE, isolated 24-bit Σ-Δ ADC, Maxim/ADI · BOM Level 5–7 across 4 assemblies</div>
+        <div class="meta-grid">
+          <div><div class="k">Manufacturer P/N</div><div class="v">MAX14001AAP+</div></div>
+          <div><div class="k">Approved Mfrs (AVL)</div><div class="v">ADI · Rochester (LTB)</div></div>
+          <div><div class="k">On-hand inventory</div><div class="v">412 EA</div></div>
+          <div><div class="k">Open commitments</div><div class="v">1,170 EA</div></div>
+          <div><div class="k">Where used</div><div class="v">17 BOMs · 4 end items</div></div>
+          <div><div class="k">Next dock</div><div class="v">2026-06-04 · PO 4500219881-30 · 600 EA</div></div>
+          <div><div class="k">Last PCN</div><div class="v">2026-03-12 · ADI PDN-220314A</div></div>
+          <div><div class="k">Pegging confidence</div><div class="v">0.81 · review queue</div></div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active">Pegging</div>
+        <div class="tab">Demand &amp; Supply</div>
+        <div class="tab">Where used (up)</div>
+        <div class="tab">PCN / EOL history</div>
+        <div class="tab">Audit log</div>
+        <div class="legend"><span><i style="background:var(--hard)"></i>hard</span><span><i style="background:var(--soft)"></i>soft</span><span><i style="background:var(--gap)"></i>gap</span></div>
+      </div>
+
+      <div class="tab-content">
+        <div class="ladder" aria-label="time-phased pegging">
+          <div></div>
+          <div class="col-h">W18</div><div class="col-h">W19</div><div class="col-h">W20</div>
+          <div class="col-h">W21</div><div class="col-h">W22</div><div class="col-h">W23</div>
+          <div class="col-h">W24</div><div class="col-h">W25</div><div class="col-h">W26</div>
+          <div class="col-h">W27</div><div class="col-h">W28</div><div class="col-h">W29</div>
+
+          <div class="row-l">Demand<small>EA — across 17 BOMs</small></div>
+          <div class="cell demand">42</div><div class="cell demand">42</div><div class="cell demand">96</div>
+          <div class="cell demand">96</div><div class="cell demand">120</div><div class="cell demand">120</div>
+          <div class="cell demand">132</div><div class="cell demand">132</div><div class="cell demand">132</div>
+          <div class="cell demand">120</div><div class="cell demand">96</div><div class="cell demand">42</div>
+
+          <div class="row-l">Supply<small>POs + on-hand</small></div>
+          <div class="cell supply">412</div><div class="cell supply zero">·</div><div class="cell supply">600</div>
+          <div class="cell supply zero">·</div><div class="cell supply zero">·</div><div class="cell supply">300</div>
+          <div class="cell supply zero">·</div><div class="cell supply zero">·</div><div class="cell supply zero">·</div>
+          <div class="cell supply">200</div><div class="cell supply zero">·</div><div class="cell supply zero">·</div>
+
+          <div class="row-l">Hard pegs<small>firm-allocated</small></div>
+          <div class="cell hard">42</div><div class="cell hard">42</div><div class="cell hard">96</div>
+          <div class="cell hard">96</div><div class="cell hard">96</div><div class="cell hard">96</div>
+          <div class="cell hard">96</div><div class="cell zero">·</div><div class="cell zero">·</div>
+          <div class="cell zero">·</div><div class="cell zero">·</div><div class="cell zero">·</div>
+
+          <div class="row-l">Soft pegs<small>algorithmic</small></div>
+          <div class="cell zero">·</div><div class="cell zero">·</div><div class="cell zero">·</div>
+          <div class="cell zero">·</div><div class="cell soft">24</div><div class="cell soft">24</div>
+          <div class="cell soft">36</div><div class="cell soft">96</div><div class="cell soft">120</div>
+          <div class="cell soft">96</div><div class="cell zero">·</div><div class="cell zero">·</div>
+
+          <div class="row-l">Gap<small>uncovered</small></div>
+          <div class="cell zero">·</div><div class="cell zero">·</div><div class="cell zero">·</div>
+          <div class="cell zero">·</div><div class="cell zero">·</div><div class="cell zero">·</div>
+          <div class="cell zero">·</div><div class="cell gap">36</div><div class="cell gap">12</div>
+          <div class="cell gap">24</div><div class="cell gap">96</div><div class="cell gap">42</div>
+        </div>
+
+        <div class="peg-list">
+          <h4>Active pegs (showing 6 of 47)</h4>
+
+          <div class="peg-row">
+            <span class="peg hard" title="hard"></span>
+            <span class="src">PO 4500219881-20</span>
+            <span class="dest">→ WO 7200915-A · AVCM-7800 · Falcon-LRU S/N 0125–0140</span>
+            <span class="qty">96 EA</span>
+            <span class="date">dock W20</span>
+            <span class="actions"><button class="btn">View</button><button class="btn">Override</button></span>
+          </div>
+
+          <div class="peg-row">
+            <span class="peg hard" title="hard"></span>
+            <span class="src">On-hand · Bin C-14</span>
+            <span class="dest">→ WO 7200915-B · AVCM-7800 · Falcon-LRU S/N 0141–0152</span>
+            <span class="qty">42 EA</span>
+            <span class="date">W18</span>
+            <span class="actions"><button class="btn">View</button><button class="btn">Override</button></span>
+          </div>
+
+          <div class="peg-row">
+            <span class="peg soft" title="soft"></span>
+            <span class="src">PO 4500220115-10</span>
+            <span class="dest">→ WO 7201118 · IO-BOARD-440 · Stinger-IRU</span>
+            <span class="qty">120 EA</span>
+            <span class="date">soft · ranked 1/3</span>
+            <span class="actions"><button class="btn primary">Harden</button><button class="btn">Why?</button></span>
+          </div>
+
+          <div class="peg-row">
+            <span class="peg soft" title="soft"></span>
+            <span class="src">Planned receipt PR-44021</span>
+            <span class="dest">→ WO 7201219 · PWR-SUPPLY-2200 · Falcon-LRU</span>
+            <span class="qty">96 EA</span>
+            <span class="date">soft · ranked 1/2</span>
+            <span class="actions"><button class="btn primary">Harden</button><button class="btn">Why?</button></span>
+          </div>
+
+          <div class="peg-row">
+            <span class="peg gap" title="gap"></span>
+            <span class="src">— no supply found —</span>
+            <span class="dest">→ WO 7201501 · AVCM-7800 · Falcon-LRU S/N 0153–0164</span>
+            <span class="qty">96 EA</span>
+            <span class="date">need W28</span>
+            <span class="actions"><button class="btn primary">Expedite</button><button class="btn">Alt MPN</button></span>
+          </div>
+
+          <div class="peg-row">
+            <span class="peg gap" title="gap"></span>
+            <span class="src">— no supply found —</span>
+            <span class="dest">→ WO 7201609 · AVCM-7800 · Falcon-LRU S/N 0165–0170</span>
+            <span class="qty">42 EA</span>
+            <span class="date">need W29</span>
+            <span class="actions"><button class="btn primary">Expedite</button><button class="btn">Alt MPN</button></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: AI Copilot -->
+    <div class="panel copilot">
+      <header>
+        <h3>Pegging Copilot</h3>
+        <span class="ai-tier" style="margin-left:auto"><span class="dot"></span>ITAR · Bedrock Claude · v1.0.0-stub</span>
+      </header>
+      <div class="convo" id="convo">
+
+        <div class="msg user">
+          <div class="who">Marco · 09:41</div>
+          <div class="bubble">If MAX14001AAP+ is delayed 4 weeks (PO 4500219881-30 slips from W23 to W27), what end items slip?</div>
+        </div>
+
+        <div class="msg ai">
+          <div class="who">Pegging Copilot</div>
+          <div class="bubble">
+            Across <b>4 end items</b>, a 4-week delay on PO 4500219881-30 cascades as follows:
+            <table class="impact-table">
+              <thead><tr><th>End item</th><th>Affected WOs</th><th class="qcol">Slip</th><th>Confidence</th></tr></thead>
+              <tbody>
+                <tr><td>AVCM-7800-A · Falcon-LRU</td><td>WO 7201501, 7201609</td><td class="qcol">+3 wk</td><td>0.89</td></tr>
+                <tr><td>IO-BOARD-440 · Stinger-IRU</td><td>WO 7201118</td><td class="qcol">+2 wk</td><td>0.84</td></tr>
+                <tr><td>PWR-SUPPLY-2200 · Falcon-LRU</td><td>WO 7201219</td><td class="qcol">+1 wk</td><td>0.82</td></tr>
+                <tr><td>SBC-ARM-7800 · Stinger-IRU</td><td>WO 7201407</td><td class="qcol">+0 wk (covered)</td><td>0.95</td></tr>
+              </tbody>
+            </table>
+            Two of these (<b>WO 7201501, 7201609</b>) are already in the gap state — the delay would extend an existing gap, not create one. The PWR-SUPPLY-2200 line slips because its current peg is <i>soft</i> on planned receipt PR-44021, which will re-rank.
+            <div class="citations">
+              <span class="cit">PO 4500219881-30 · supply</span>
+              <span class="cit">WO 7201501 · demand</span>
+              <span class="cit">WO 7201609 · demand</span>
+              <span class="cit">PR-44021 · supply</span>
+              <span class="cit">BOM Lvl 5–7 · 17 nodes</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="risk-strip">
+        <h4>Risk triage · soft pegs that should be hardened</h4>
+        <div class="risk-row"><span class="pn">MAX14001AAP+ → WO 7201118</span><span class="score">87</span></div>
+        <div class="risk-row"><span class="pn">LT3045-1 → WO 7201219</span><span class="score">74</span></div>
+        <div class="risk-row"><span class="pn">RTG-XILINX-5VFX130 → WO 7201407</span><span class="score">71</span></div>
+      </div>
+
+      <div class="composer">
+        <div class="suggest">
+          <button>Show all soft pegs &gt; 60 risk</button>
+          <button>What slips if PR-44021 is canceled?</button>
+          <button>Where is Rochester LTB stock pegged?</button>
+          <button>Open PCN PDN-220314A impact</button>
+        </div>
+        <div class="composer-input">
+          <input placeholder="Ask the pegging graph …">
+          <button class="btn primary">Send</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// --- Tree data ---
+// Down direction: from end item AVCM-7800-A to MAX14001AAP+ at level 6
+// Up direction: from MAX14001AAP+ up through every parent to end items
+const downTree = [
+  { id:'l0', pn:'AVCM-7800-A', nom:'Falcon-LRU Avionics Module (end item)', icon:'lvl0', lvl:0, qty:'1 EA',
+    children:[
+      { id:'l1a', pn:'PWR-SUPPLY-2200', nom:'Power Supply Subassembly', icon:'asm', lvl:1, qty:'1 EA',
+        children:[
+          { id:'l2a', pn:'PCB-PWR-A1', nom:'Power Board Assembly', icon:'sub', lvl:2, qty:'1 EA',
+            children:[
+              { id:'l3a', pn:'PCB-PWR-A1-EMC', nom:'EMC Filter Subcircuit', icon:'pcb', lvl:3, qty:'1 EA',
+                children:[
+                  { id:'l4a', pn:'AFE-MOD-08', nom:'Analog Front-End Module', icon:'sub', lvl:4, qty:'1 EA',
+                    children:[
+                      { id:'l5a', pn:'MAX14001AAP+', nom:'Functional Safety AFE (KC)', icon:'cmp', lvl:5, qty:'2 EA', selected:true,
+                        peg:'soft' },
+                      { id:'l5b', pn:'LT3045-1', nom:'Linear Reg, 20V 0.5A', icon:'cmp', lvl:5, qty:'4 EA', peg:'hard' },
+                      { id:'l5c', pn:'ISO7741DWR', nom:'Quad Digital Isolator', icon:'cmp', lvl:5, qty:'2 EA', peg:'hard' }
+                    ]
+                  },
+                  { id:'l4b', pn:'CAP-FILM-10UF-100V', nom:'Film Cap, X7R, 10µF', icon:'cmp', lvl:4, qty:'8 EA', peg:'hard' }
+                ]
+              },
+              { id:'l3b', pn:'CONN-DSUB-37HD', nom:'D-Sub HD-37 connector', icon:'cmp', lvl:3, qty:'1 EA', peg:'soft' }
+            ]
+          }
+        ]
+      },
+      { id:'l1b', pn:'SBC-ARM-7800', nom:'Single-Board Computer', icon:'asm', lvl:1, qty:'1 EA',
+        children:[
+          { id:'l2b', pn:'PCB-CPU-R3', nom:'CPU Board, Rev 3', icon:'sub', lvl:2, qty:'1 EA',
+            children:[
+              { id:'l3c', pn:'RTG-XILINX-5VFX130', nom:'Rad-tolerant FPGA', icon:'cmp', lvl:3, qty:'1 EA', peg:'soft' },
+              { id:'l3d', pn:'DDR3L-2GB-AERO', nom:'Rad-hard DDR3L 2GB', icon:'cmp', lvl:3, qty:'4 EA', peg:'hard' }
+            ]
+          }
+        ]
+      },
+      { id:'l1c', pn:'IO-BOARD-440', nom:'I/O Board Subassembly (also uses MAX14001AAP+)', icon:'asm', lvl:1, qty:'1 EA',
+        children:[
+          { id:'l2c', pn:'PCB-IO-440', nom:'I/O PCB', icon:'sub', lvl:2, qty:'1 EA',
+            children:[
+              { id:'l3e', pn:'MAX14001AAP+', nom:'Functional Safety AFE (KC)', icon:'cmp', lvl:3, qty:'4 EA', peg:'gap' },
+              { id:'l3f', pn:'OPA188IDR', nom:'Precision OpAmp', icon:'cmp', lvl:3, qty:'2 EA', peg:'hard' }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+];
+
+const upTree = [
+  { id:'u0', pn:'MAX14001AAP+', nom:'Functional Safety AFE (this part)', icon:'cmp', lvl:0, qty:'—', selected:true,
+    children:[
+      { id:'u1a', pn:'AFE-MOD-08', nom:'Analog Front-End Module', icon:'sub', lvl:1, qty:'used 2 EA',
+        children:[
+          { id:'u2a', pn:'PCB-PWR-A1-EMC', nom:'EMC Filter Subcircuit', icon:'pcb', lvl:2, qty:'used 1 EA',
+            children:[
+              { id:'u3a', pn:'PCB-PWR-A1', nom:'Power Board Assembly', icon:'sub', lvl:3, qty:'used 1 EA',
+                children:[
+                  { id:'u4a', pn:'PWR-SUPPLY-2200', nom:'Power Supply Subassembly', icon:'asm', lvl:4, qty:'used 1 EA',
+                    children:[
+                      { id:'u5a', pn:'AVCM-7800-A', nom:'Falcon-LRU Avionics Module', icon:'lvl0', lvl:5, qty:'end item · 17 WOs', peg:'soft' },
+                      { id:'u5b', pn:'AVCM-7820-B', nom:'Stinger-IRU Avionics Module', icon:'lvl0', lvl:5, qty:'end item · 6 WOs', peg:'hard' }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      { id:'u1b', pn:'PCB-IO-440', nom:'I/O PCB (uses 4 EA)', icon:'pcb', lvl:1, qty:'used 4 EA',
+        children:[
+          { id:'u2b', pn:'IO-BOARD-440', nom:'I/O Board Subassembly', icon:'asm', lvl:2, qty:'used 1 EA',
+            children:[
+              { id:'u3b', pn:'AVCM-7800-A', nom:'Falcon-LRU Avionics Module', icon:'lvl0', lvl:3, qty:'end item · 17 WOs', peg:'gap' },
+              { id:'u3c', pn:'AVCM-7820-B', nom:'Stinger-IRU Avionics Module', icon:'lvl0', lvl:3, qty:'end item · 6 WOs', peg:'soft' }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+];
+
+// --- Render tree (recursive, expand-collapse) ---
+function renderTree(nodes, depth = 0) {
+  let html = '';
+  nodes.forEach(n => {
+    const hasKids = n.children && n.children.length;
+    const expanded = depth < 5; // expand a healthy default
+    const caret = hasKids ? (expanded ? '▾' : '▸') : '';
+    const peg = n.peg || (n.selected ? 'soft' : 'none');
+    html += `<div class="tnode ${n.selected ? 'selected' : ''}" data-id="${n.id}" data-has="${hasKids?1:0}" data-exp="${expanded?1:0}" style="padding-left:${6 + depth*16}px">
+      <span class="caret">${caret}</span>
+      <span class="level-pill">L${n.lvl}</span>
+      <span class="icon ${n.icon}">${n.icon === 'lvl0' ? '★' : n.icon[0].toUpperCase()}</span>
+      <span class="pn">${n.pn}</span>
+      <span class="nom">${n.nom}</span>
+      <span class="qty">${n.qty}</span>
+      <span class="peg ${peg}" title="${peg}"></span>
+    </div>`;
+    if (hasKids && expanded) html += `<div class="tchildren" data-parent="${n.id}">${renderTree(n.children, depth+1)}</div>`;
+  });
+  return html;
+}
+
+const tree = document.getElementById('tree');
+let direction = 'down';
+function paint() {
+  tree.innerHTML = renderTree(direction === 'down' ? downTree : upTree, 0);
+}
+paint();
+
+document.getElementById('dir-down').onclick = () => { direction='down'; document.getElementById('dir-down').classList.add('active'); document.getElementById('dir-up').classList.remove('active'); paint(); };
+document.getElementById('dir-up').onclick = () => { direction='up'; document.getElementById('dir-up').classList.add('active'); document.getElementById('dir-down').classList.remove('active'); paint(); };
+
+// Suggested questions
+document.querySelectorAll('.suggest button').forEach(b => {
+  b.onclick = () => {
+    const convo = document.getElementById('convo');
+    convo.innerHTML += `<div class="msg user"><div class="who">Marco · just now</div><div class="bubble">${b.textContent}</div></div>
+    <div class="msg ai"><div class="who">Pegging Copilot</div><div class="bubble"><i>(stub) — would invoke SCM-05-Pegging-Copilot template against the data-lake graph and return a cited answer.</i></div></div>`;
+    convo.scrollTop = convo.scrollHeight;
+  };
+});
+</script>
+</body>
+</html>

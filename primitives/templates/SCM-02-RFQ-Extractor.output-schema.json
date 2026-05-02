@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "SCM-02-RFQ-Extractor.output-schema.json",
+  "title": "RFQ / SOW Intake Record",
+  "description": "Output contract for SCM-02-RFQ-Extractor v1.0.0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_id", "schema_version", "document_id", "program", "document_metadata", "clauses", "unresolved_ambiguities", "overall_confidence"],
+  "properties": {
+    "schema_id": { "const": "SCM-02-RFQ-Extractor.output-schema.json" },
+    "schema_version": { "const": "1.0.0" },
+    "document_id": { "type": "string" },
+    "program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "customer", "program_number", "customer_poc", "citation"],
+      "properties": {
+        "name": { "type": ["string", "null"] },
+        "customer": { "type": ["string", "null"] },
+        "program_number": { "type": ["string", "null"] },
+        "customer_poc": { "type": ["string", "null"] },
+        "citation": { "$ref": "#/$defs/citationOrNull" }
+      }
+    },
+    "document_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["solicitation_number", "document_kind", "revision", "issue_date", "response_due", "citation"],
+      "properties": {
+        "solicitation_number": { "type": ["string", "null"] },
+        "document_kind": { "enum": ["RFQ", "RFP", "SOW", "ICD", "Amendment", "Other", null] },
+        "revision": { "type": ["string", "null"] },
+        "issue_date": { "type": ["string", "null"], "format": "date" },
+        "response_due": { "type": ["string", "null"], "format": "date" },
+        "citation": { "$ref": "#/$defs/citationOrNull" }
+      }
+    },
+    "scope_summary": { "type": ["string", "null"], "maxLength": 800 },
+    "deliverables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "description", "due_date", "is_relative", "citation"],
+        "properties": {
+          "kind": { "enum": ["Hardware", "CDRL", "Software", "Report", "Service", "Other"] },
+          "description": { "type": "string" },
+          "due_date": { "type": ["string", "null"], "format": "date" },
+          "relative_text": { "type": ["string", "null"] },
+          "is_relative": { "type": "boolean" },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+    "parts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["part_number", "nomenclature", "quantity", "effectivity", "citation"],
+        "properties": {
+          "part_number": { "type": "string" },
+          "nomenclature": { "type": ["string", "null"] },
+          "quantity": { "type": ["integer", "null"], "minimum": 0 },
+          "effectivity": { "type": ["string", "null"] },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+    "milestones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "date", "is_relative", "citation"],
+        "properties": {
+          "name": { "type": "string" },
+          "date": { "type": ["string", "null"], "format": "date" },
+          "relative_text": { "type": ["string", "null"] },
+          "is_relative": { "type": "boolean" },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+    "clauses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["number", "title", "verbatim", "incorporation", "risk_level", "citation"],
+        "properties": {
+          "number": { "type": "string" },
+          "title": { "type": ["string", "null"] },
+          "verbatim": { "type": "string" },
+          "incorporation": { "enum": ["ByReference", "FullText", "Unknown"] },
+          "risk_level": { "enum": ["Low", "Medium", "High", "Unknown"] },
+          "routing": { "enum": ["Legal", "Cybersecurity", "Contracts", "Program", "None", null] },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+    "data_rights": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["category", "notes", "citation"],
+      "properties": {
+        "category": { "enum": ["Unlimited", "GovernmentPurpose", "Limited", "Restricted", "SBIR", "Unknown", null] },
+        "notes": { "type": ["string", "null"] },
+        "citation": { "$ref": "#/$defs/citationOrNull" }
+      }
+    },
+    "cybersecurity_requirements": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["cmmc_level", "dfars_7012", "dfars_7019", "dfars_7020", "dfars_7021", "nist_800_171", "citation"],
+      "properties": {
+        "cmmc_level": { "type": ["integer", "null"], "minimum": 1, "maximum": 3 },
+        "dfars_7012": { "type": "boolean" },
+        "dfars_7019": { "type": "boolean" },
+        "dfars_7020": { "type": "boolean" },
+        "dfars_7021": { "type": "boolean" },
+        "nist_800_171": { "type": "boolean" },
+        "citation": { "$ref": "#/$defs/citationOrNull" }
+      }
+    },
+    "export_control_markings": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["itar", "ear", "noforn", "distribution_statements", "citation"],
+      "properties": {
+        "itar": { "type": "boolean" },
+        "ear": { "type": "boolean" },
+        "noforn": { "type": "boolean" },
+        "distribution_statements": { "type": "array", "items": { "type": "string" } },
+        "citation": { "$ref": "#/$defs/citationOrNull" }
+      }
+    },
+    "security_classification": { "enum": ["Unclassified", "CUI", "Confidential", "Secret", "TopSecret", null] },
+    "small_business_requirements": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["set_aside", "subcontracting_plan_required", "citation"],
+      "properties": {
+        "set_aside": { "type": ["string", "null"] },
+        "subcontracting_plan_required": { "type": ["boolean", "null"] },
+        "citation": { "$ref": "#/$defs/citationOrNull" }
+      }
+    },
+    "evaluation_criteria": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["verbatim", "citation"],
+      "properties": {
+        "verbatim": { "type": "string" },
+        "citation": { "$ref": "#/$defs/citation" }
+      }
+    },
+    "unresolved_ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field_hint", "text", "citation"],
+        "properties": {
+          "field_hint": { "type": ["string", "null"], "description": "Which structured field this ambiguity relates to." },
+          "text": { "type": "string" },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+    "refusal_reason": { "type": ["string", "null"] },
+    "overall_confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "section", "quote"],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "section": { "type": ["string", "null"] },
+        "quote": { "type": "string", "maxLength": 300 }
+      }
+    },
+    "citationOrNull": {
+      "oneOf": [
+        { "$ref": "#/$defs/citation" },
+        { "type": "null" }
+      ]
+    }
+  }
+}
