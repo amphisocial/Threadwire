@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "SCM-05-PCN-EOL-LTB-Extractor.output-schema.json",
+  "title": "PCN / EOL / LTB Notice Extraction Record",
+  "description": "Output contract for SCM-05-PCN-EOL-LTB-Extractor v1.0.0. Structured extraction of supplier change notices for SCM-05 Multi-Level Pegging Explorer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "document_id",
+    "notice_metadata",
+    "affected_parts",
+    "milestones",
+    "change_drivers",
+    "affected_distributors",
+    "continuing_supply_authority",
+    "unresolved_ambiguities",
+    "refusal_reason",
+    "overall_confidence"
+  ],
+  "properties": {
+    "schema_id": { "const": "SCM-05-PCN-EOL-LTB-Extractor.output-schema.json" },
+    "schema_version": { "const": "1.0.0" },
+    "document_id": { "type": "string" },
+
+    "notice_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["notice_id", "notice_type", "manufacturer", "issue_date", "is_relative", "relative_text", "verbatim_quote", "citation"],
+      "properties": {
+        "notice_id": { "type": ["string", "null"], "description": "Supplier-issued notice identifier (e.g. 'PDN-220314A', 'PCN-2025-091')." },
+        "notice_type": { "enum": ["PCN", "PDN", "EOL", "LTB", "Recall", "Bulletin", "Other"] },
+        "manufacturer": { "type": ["string", "null"] },
+        "issue_date": { "type": ["string", "null"], "format": "date" },
+        "is_relative": { "type": "boolean" },
+        "relative_text": { "type": ["string", "null"], "maxLength": 200 },
+        "verbatim_quote": { "type": "string", "maxLength": 300 },
+        "citation": { "$ref": "#/$defs/citation" }
+      }
+    },
+
+    "affected_parts": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["manufacturer_part_number", "description", "grade_marking", "qualification_impact", "verbatim_quote", "citation", "replacement", "confidence"],
+        "properties": {
+          "manufacturer_part_number": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "description": { "type": ["string", "null"], "maxLength": 500 },
+          "grade_marking": { "type": ["string", "null"], "maxLength": 200, "description": "Grade or qualification marking as printed (e.g. 'AEC-Q100 Grade 1', 'QML-V', 'rad-tolerant')." },
+          "qualification_impact": {
+            "enum": ["NoneStated", "FormFitFunctionPreserved", "RequiresRequalification", "RequiresFlightQualification", "NotApplicable", "Unknown"]
+          },
+          "verbatim_quote": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "replacement": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["manufacturer_part_number", "equivalence", "notes", "verbatim_quote", "citation"],
+            "properties": {
+              "manufacturer_part_number": { "type": "string", "maxLength": 200 },
+              "equivalence": {
+                "enum": ["FormFitFunction", "Functional", "RequiresQual", "NoEquivalent", "Unknown"]
+              },
+              "notes": { "type": ["string", "null"], "maxLength": 500 },
+              "verbatim_quote": { "type": "string", "maxLength": 300 },
+              "citation": { "$ref": "#/$defs/citation" }
+            }
+          },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "milestones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "date", "is_relative", "relative_text", "verbatim_quote", "citation"],
+        "properties": {
+          "kind": {
+            "enum": ["NoticeIssue", "LastOrderDate", "LastShipDate", "ChangeEffectiveDate", "FinalProductionDate", "SampleAvailable", "DataSheetUpdate", "Other"]
+          },
+          "date": { "type": ["string", "null"], "format": "date" },
+          "is_relative": { "type": "boolean" },
+          "relative_text": { "type": ["string", "null"], "maxLength": 200 },
+          "verbatim_quote": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "change_drivers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "verbatim_quote", "citation", "confidence"],
+        "properties": {
+          "category": {
+            "enum": [
+              "WaferFabRelocation", "FabClosure", "AssemblySiteChange",
+              "MaterialSetChange", "RoHSCompliance", "RevisionChange",
+              "ProcessShrink", "QualificationUpdate", "MarketWithdrawal",
+              "SupplyChainConsolidation", "Obsolescence", "Other"
+            ]
+          },
+          "verbatim_quote": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "affected_distributors": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "maxLength": 200 }
+    },
+
+    "continuing_supply_authority": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["distributor", "authority_type", "verbatim_quote", "citation"],
+      "properties": {
+        "distributor": { "type": "string", "maxLength": 200 },
+        "authority_type": { "enum": ["LastTimeBuy", "AuthorizedAftermarket", "DieBank", "Other"] },
+        "verbatim_quote": { "type": "string", "maxLength": 300 },
+        "citation": { "$ref": "#/$defs/citation" }
+      }
+    },
+
+    "unresolved_ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field_hint", "text", "citation"],
+        "properties": {
+          "field_hint": { "type": ["string", "null"] },
+          "text": { "type": "string", "maxLength": 1000 },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "refusal_reason": { "type": ["string", "null"] },
+    "overall_confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "section_or_anchor"],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "section_or_anchor": { "type": ["string", "null"], "maxLength": 200, "description": "Section number, table reference, or heading text used as an anchor (e.g. 'Section 3', 'Table 1', 'Header')." }
+      }
+    }
+  }
+}

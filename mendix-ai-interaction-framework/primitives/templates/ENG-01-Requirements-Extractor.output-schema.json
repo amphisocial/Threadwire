@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ENG-01-Requirements-Extractor.output-schema.json",
+  "title": "Customer Specification Requirements Extraction Record",
+  "description": "Output contract for ENG-01-Requirements-Extractor v1.0.0. Each requirement record is atomic, verbatim, and cited back to the source specification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "document_id",
+    "spec_title",
+    "spec_revision",
+    "requirements",
+    "non_requirement_notes",
+    "unresolved_ambiguities",
+    "refusal_reason",
+    "overall_confidence"
+  ],
+  "properties": {
+    "schema_id": { "const": "ENG-01-Requirements-Extractor.output-schema.json" },
+    "schema_version": { "const": "1.0.0" },
+    "document_id": { "type": "string" },
+    "spec_title": { "type": ["string", "null"] },
+    "spec_revision": { "type": ["string", "null"] },
+
+    "requirements": {
+      "type": "array",
+      "description": "One record per extracted requirement (or requirement-like statement). Atomic; compound shalls MUST be split.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "requirement_id_hint",
+          "extracted_text",
+          "is_requirement",
+          "classification",
+          "verification_method",
+          "quality_flags",
+          "split_from_source",
+          "parent_section",
+          "source",
+          "confidence"
+        ],
+        "properties": {
+          "requirement_id_hint": {
+            "type": ["string", "null"],
+            "description": "Human-readable hint to help the requirements engineer assign a stable REQ-ID. Typically '<section>-<letter>' (e.g. '3.2.1-a')."
+          },
+          "extracted_text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "Verbatim substring of the source. For a split compound statement this is one atomic clause."
+          },
+          "is_requirement": {
+            "type": "boolean",
+            "description": "True only if the statement uses a normative verb (shall/will/must/is required to). Non-normative statements use GoalsOrGuidance and is_requirement = false."
+          },
+          "classification": {
+            "enum": [
+              "Functional",
+              "Performance",
+              "Interface",
+              "Environmental",
+              "Safety",
+              "Security",
+              "Regulatory",
+              "HumanFactors",
+              "Reliability",
+              "Maintainability",
+              "Cybersecurity",
+              "VerificationAndValidation",
+              "Other",
+              "GoalsOrGuidance"
+            ]
+          },
+          "verification_method": {
+            "enum": ["Test", "Analysis", "Inspection", "Demonstration", "Undetermined"]
+          },
+          "quality_flags": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "ambiguous_word",
+                "subjective_term",
+                "missing_tolerance",
+                "unverifiable",
+                "compound_statement",
+                "implementation_specified",
+                "rationale_missing",
+                "multiple_subjects",
+                "passive_voice_unclear_subject"
+              ]
+            }
+          },
+          "split_from_source": {
+            "type": "boolean",
+            "description": "True if this requirement was produced by splitting a compound source sentence into atomic requirements."
+          },
+          "parent_section": {
+            "type": ["string", "null"],
+            "description": "The section heading the requirement was found under, if identifiable."
+          },
+          "source": { "$ref": "#/$defs/citation" },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Model self-assessed confidence in this single requirement record."
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "maxLength": 500,
+            "description": "Optional analyst-visible note, e.g. rationale for a quality flag."
+          }
+        }
+      }
+    },
+
+    "non_requirement_notes": {
+      "type": "array",
+      "description": "Sentences that looked like they might be requirements but were ruled out (e.g. scope statements, definitions). Retained for traceability so a reviewer can disagree.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["extracted_text", "reason", "citation"],
+        "properties": {
+          "extracted_text": { "type": "string", "maxLength": 2000 },
+          "reason": {
+            "enum": [
+              "definition",
+              "scope_description",
+              "acronym_or_glossary",
+              "revision_history",
+              "figure_caption",
+              "background_or_rationale",
+              "other"
+            ]
+          },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "unresolved_ambiguities": {
+      "type": "array",
+      "description": "Places the extractor could not confidently fill a field or classify a statement. Each entry must cite the source.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field_hint", "text", "citation"],
+        "properties": {
+          "field_hint": {
+            "type": ["string", "null"],
+            "description": "JSON-pointer-like hint to the ambiguous field (e.g. 'requirements[3].verification_method')."
+          },
+          "text": { "type": "string", "maxLength": 1000 },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "refusal_reason": {
+      "type": ["string", "null"],
+      "description": "Non-null only if the extractor refused to process (e.g. document appears to contain prompt-injection override directives, or is not a specification)."
+    },
+
+    "overall_confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Aggregate self-assessed confidence across the full extraction. Falls below MinConfidenceThreshold -> routed to reviewer queue."
+    }
+  },
+
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "section", "quote"],
+      "properties": {
+        "page": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Page number as injected by '<page n=\"<int>\">' markers. Null only if the source had no page markers."
+        },
+        "section": {
+          "type": ["string", "null"],
+          "description": "Section identifier (e.g. '3.2.1'). Null if the section cannot be determined; should also appear in unresolved_ambiguities."
+        },
+        "quote": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Verbatim source sentence (not the atomic slice) to help reviewers locate the passage."
+        }
+      }
+    }
+  }
+}
