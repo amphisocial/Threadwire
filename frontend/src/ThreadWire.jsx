@@ -2502,20 +2502,47 @@ function DeliveryPage() {
     );
   };
 
+  /* committed vs blocked split for any subset */
+  const splitFor = (pred) => {
+    const ms = filtered.filter(pred);
+    const blocked = ms.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
+    const committed = ms.reduce((a, s) => a + s.value, 0) - blocked;
+    return { committed, blocked, total: committed + blocked, count: ms.length };
+  };
+  const splitBar = (g, b, h = 9) => (
+    <div style={{ display: "flex", height: h, borderRadius: 99, overflow: "hidden", background: "var(--bg2)" }}>
+      <div style={{ width: (g + b ? (g / (g + b)) * 100 : 0) + "%", background: "var(--green)" }} />
+      <div style={{ width: (g + b ? (b / (g + b)) * 100 : 0) + "%", background: "var(--red)" }} />
+    </div>
+  );
+  const sameMonth = (s, ref) => { const d = D(s.promise); return d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear(); };
+  const SummaryBar = ({ title, sp }) => (
+    <div className="tf-panel" style={{ padding: "14px 16px", marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginBottom: 10 }}>
+        {title && <div style={{ fontWeight: 700, fontSize: 15, marginRight: "auto" }}>{title}</div>}
+        <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>committed</div><div className="tf-disp" style={{ fontSize: 20, fontWeight: 800, color: "var(--green)" }}>{fmtMoney(sp.committed)}</div></div>
+        <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>blocked</div><div className="tf-disp" style={{ fontSize: 20, fontWeight: 800, color: "var(--red)" }}>{fmtMoney(sp.blocked)}</div></div>
+        <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>total</div><div className="tf-disp" style={{ fontSize: 20, fontWeight: 800 }}>{fmtMoney(sp.total)}</div></div>
+        <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>orders</div><div className="tf-disp" style={{ fontSize: 20, fontWeight: 800 }}>{sp.count}</div></div>
+      </div>
+      {splitBar(sp.committed, sp.blocked, 10)}
+    </div>
+  );
+
   /* monthly grid */
   const monthGrid = () => {
     const first = new Date(monthRef.getFullYear(), monthRef.getMonth(), 1);
     const start = mondayOf(first);
     const cells = Array.from({ length: 42 }, (_, i) => addDays(start, i));
-    const monthVal = filtered.filter((s) => { const d = D(s.promise); return d.getMonth() === monthRef.getMonth() && d.getFullYear() === monthRef.getFullYear(); }).reduce((a, s) => a + s.value, 0);
+    const sp = splitFor((s) => sameMonth(s, monthRef));
     return (
       <>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
           <button className="tf-btn tf-btn-ghost" onClick={() => setMonthRef(new Date(monthRef.getFullYear(), monthRef.getMonth() - 1, 1))}><ChevronLeft size={15} /></button>
           <span style={{ fontWeight: 700, fontSize: 16 }}>{monthRef.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
           <button className="tf-btn tf-btn-ghost" onClick={() => setMonthRef(new Date(monthRef.getFullYear(), monthRef.getMonth() + 1, 1))}><ChevronRight size={15} /></button>
-          <span className="tf-chip" style={{ marginLeft: "auto" }}>month revenue {fmtMoney(monthVal)}</span>
         </div>
+        <SummaryBar sp={sp} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
           {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d} className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", textAlign: "center", paddingBottom: 4 }}>{d}</div>)}
           {cells.map((dt, i) => {
@@ -2542,6 +2569,44 @@ function DeliveryPage() {
     );
   };
 
+  /* quarterly view */
+  const quarterGrid = () => {
+    const y = monthRef.getFullYear();
+    const qIdx = Math.floor(monthRef.getMonth() / 3);
+    const qMonths = [0, 1, 2].map((k) => new Date(y, qIdx * 3 + k, 1));
+    const sp = splitFor((s) => { const d = D(s.promise); return d.getFullYear() === y && Math.floor(d.getMonth() / 3) === qIdx; });
+    const goQ = (delta) => setMonthRef(new Date(y, qIdx * 3 + delta * 3, 1));
+    return (
+      <>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+          <button className="tf-btn tf-btn-ghost" onClick={() => goQ(-1)}><ChevronLeft size={15} /></button>
+          <span style={{ fontWeight: 700, fontSize: 16 }}>Q{qIdx + 1} {y}</span>
+          <button className="tf-btn tf-btn-ghost" onClick={() => goQ(1)}><ChevronRight size={15} /></button>
+        </div>
+        <SummaryBar sp={sp} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }} className="tf-cols">
+          {qMonths.map((mref) => {
+            const ms = splitFor((s) => sameMonth(s, mref));
+            return (
+              <div key={mref.getMonth()} className="tf-panel" onClick={() => { setMonthRef(mref); setView("month"); }} style={{ padding: 16, cursor: "pointer" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{mref.toLocaleDateString(undefined, { month: "long" })}</span>
+                  <span className="tf-disp" style={{ marginLeft: "auto", fontSize: 19, fontWeight: 800 }}>{fmtMoney(ms.total)}</span>
+                </div>
+                <div style={{ margin: "11px 0 9px" }}>{splitBar(ms.committed, ms.blocked)}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                  <span style={{ color: "var(--green)" }}>{fmtMoney(ms.committed)} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)" }}>clear</span></span>
+                  <span style={{ color: "var(--red)" }}>{fmtMoney(ms.blocked)} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)" }}>blocked</span></span>
+                </div>
+                <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginTop: 8 }}>{ms.count} order{ms.count === 1 ? "" : "s"} · tap to open month</div>
+              </div>
+            );
+          })}
+        </div>
+      </>
+    );
+  };
+
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
       <PageHead icon={CalendarDays} eyebrow="Module · Point-in-time delivery" title="Delivery calendar"
@@ -2550,8 +2615,9 @@ function DeliveryPage() {
       {/* controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 4 }}>
-          <button onClick={() => setView("week")} className="tf-mono" style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${view === "week" ? "var(--amber)" : "var(--line)"}`, background: view === "week" ? "var(--panel2)" : "transparent", color: view === "week" ? "var(--ink)" : "var(--muted)" }}>Weekly</button>
-          <button onClick={() => setView("month")} className="tf-mono" style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${view === "month" ? "var(--amber)" : "var(--line)"}`, background: view === "month" ? "var(--panel2)" : "transparent", color: view === "month" ? "var(--ink)" : "var(--muted)" }}>Monthly summary</button>
+          {[["week", "Weekly"], ["month", "Monthly"], ["quarter", "Quarterly"]].map(([k, label]) => (
+            <button key={k} onClick={() => setView(k)} className="tf-mono" style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${view === k ? "var(--amber)" : "var(--line)"}`, background: view === k ? "var(--panel2)" : "transparent", color: view === k ? "var(--ink)" : "var(--muted)" }}>{label}</button>
+          ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginLeft: "auto" }}>
           <Building2 size={15} color="var(--faint)" />
@@ -2595,7 +2661,7 @@ function DeliveryPage() {
             })}
           </div>
         </>
-      ) : monthGrid()}
+      ) : view === "month" ? monthGrid() : quarterGrid()}
     </div>
   );
 }
