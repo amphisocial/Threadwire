@@ -1,0 +1,19 @@
+# /etc/systemd/system/threadwire-api.service
+[Unit]
+Description=ThreadWire API (FastAPI/uvicorn)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/threadwire/backend
+EnvironmentFile=/opt/threadwire/backend/.env
+ExecStart=/opt/threadwire/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=always
+RestartSec=3
+# t2.small is memory-constrained; cap the service
+MemoryMax=700M
+
+[Install]
+WantedBy=multi-user.target

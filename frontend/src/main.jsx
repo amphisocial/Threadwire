@@ -1,0 +1,57 @@
+import React, { useEffect, useState } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./ThreadWire.jsx";
+import Login from "./auth/Login.jsx";
+import Admin from "./auth/Admin.jsx";
+import InviteAccept from "./auth/InviteAccept.jsx";
+import { getMe, logout } from "./lib/api.js";
+
+const center = { minHeight: "100vh", display: "grid", placeItems: "center", background: "#0a0e15", color: "#8d9fb5", fontFamily: "'IBM Plex Mono',monospace" };
+
+function Root() {
+  const params = new URLSearchParams(window.location.search);
+  const inviteToken = (window.location.pathname === "/invite" && params.get("token")) || params.get("invite");
+
+  const [state, setState] = useState({ loading: true, user: null });
+  const [showAuth, setShowAuth] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+
+  const refresh = () =>
+    getMe().then((u) => setState({ loading: false, user: u })).catch(() => setState({ loading: false, user: null }));
+
+  useEffect(() => { if (!inviteToken) refresh(); }, []);
+
+  // Invite link always wins — public accept flow.
+  if (inviteToken) return <InviteAccept token={inviteToken} />;
+
+  if (state.loading) return <div style={center}>Loading…</div>;
+  if (showAuth && !state.user) return <Login onAuthed={() => { setShowAuth(false); refresh(); }} onCancel={() => setShowAuth(false)} />;
+  if (adminOpen && state.user) return <Admin user={state.user} onClose={() => setAdminOpen(false)} />;
+
+  const pill = { position: "fixed", bottom: 16, zIndex: 70, fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, borderRadius: 999, padding: "8px 14px", cursor: "pointer", backdropFilter: "blur(8px)" };
+
+  return (
+    <>
+      <App />
+      {state.user ? (
+        <>
+          <button onClick={() => setAdminOpen(true)}
+            style={{ ...pill, left: 16, color: "#1a0f06", background: "linear-gradient(180deg,#48d6c8,#2a8f86)", border: "none", fontWeight: 600 }}>
+            {state.user.role === "org_admin" || state.user.role === "superadmin" ? "⚙ Admin" : "⚙ Connections"}
+          </button>
+          <button onClick={() => logout().then(refresh)} title={`Signed in as ${state.user.email}`}
+            style={{ ...pill, left: 132, color: "#8d9fb5", background: "rgba(13,18,28,.85)", border: "1px solid #243245" }}>
+            Sign out · {state.user.full_name || state.user.email}
+          </button>
+        </>
+      ) : (
+        <button onClick={() => setShowAuth(true)}
+          style={{ ...pill, left: 16, color: "#1a0f06", background: "linear-gradient(180deg,#ff8a3d,#cc6a26)", border: "none", fontWeight: 600 }}>
+          Sign up / Log in
+        </button>
+      )}
+    </>
+  );
+}
+
+createRoot(document.getElementById("root")).render(<Root />);
