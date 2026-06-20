@@ -200,7 +200,7 @@ function genSPC(n = 28, target = 50, sigma = 1.1, seed = 7) {
 /* ----------------------------- shared UI -------------------------------- */
 function TopNav({ route, go, tier }) {
   const links = [
-    ["home", "Home"], ["thread", "Digital Thread"], ["visibility", "Delivery"], ["blockers", "Blockers"], ["directspend", "Direct Spend"], ["roi", "ROI Calculator"],
+    ["home", "Home"], ["thread", "Digital Thread"], ["visibility", "Delivery"], ["finance", "Forecast"], ["blockers", "Blockers"], ["directspend", "Direct Spend"], ["roi", "ROI Calculator"],
   ];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(10,14,21,.72)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
@@ -409,6 +409,13 @@ const ASSISTANT = {
     suggestions: ["What's this week's revenue forecast?", "Which orders are at risk?", "Show next week"],
     system: "You help a manufacturing team read a point-in-time delivery calendar: sales orders by promise date, revenue forecast, and which orders carry open blockers. Be concise.\n\n" + CTX.thread,
     fallback: () => "Each day shows the orders due by promise date; a red band means an open blocker. The week summary totals revenue forecast and flags at-risk orders. Filter by site to see one location's exposure, and create a blocker straight from any order card.",
+  },
+  finance: {
+    subject: "Revenue Forecast", accent: "var(--green)",
+    intro: "Ask about committed vs at-risk revenue, a quarter, or what's dragging the forecast.",
+    suggestions: ["What's committed this quarter?", "How much revenue is at risk?", "Which quarter looks weakest?"],
+    system: "You help a GM read a point-in-time, blocker-aware revenue forecast: committed (clear) vs at-risk (blocked) by quarter and month. Be concise and decision-oriented.\n\n" + CTX.thread,
+    fallback: () => "The forecast splits pipeline into committed (no open blocker) and at-risk (an open blocker on the order). Clearing the highest-value blockers converts at-risk revenue to committed — that's the lever on the quarter. Filter by site to see each location's exposure.",
   },
 };
 
@@ -2045,7 +2052,7 @@ function DirectSpendPage({ tier, setTier }) {
 }
 
 /* ----------------------------- ROOT ------------------------------------- */
-const EMPTY_CHATS = { home: { msgs: [], hist: [] }, assets: { msgs: [], hist: [] }, contracts: { msgs: [], hist: [] }, requirements: { msgs: [], hist: [] }, thread: { msgs: [], hist: [] }, roi: { msgs: [], hist: [] }, directspend: { msgs: [], hist: [] }, blockers: { msgs: [], hist: [] }, visibility: { msgs: [], hist: [] } };
+const EMPTY_CHATS = { home: { msgs: [], hist: [] }, assets: { msgs: [], hist: [] }, contracts: { msgs: [], hist: [] }, requirements: { msgs: [], hist: [] }, thread: { msgs: [], hist: [] }, roi: { msgs: [], hist: [] }, directspend: { msgs: [], hist: [] }, blockers: { msgs: [], hist: [] }, visibility: { msgs: [], hist: [] }, finance: { msgs: [], hist: [] } };
 
 /* ===================== DIGITAL THREAD — object explorer =================
    Click any part / BOM / work order / ECO / PO / supplier anywhere in the app
@@ -2224,10 +2231,24 @@ const SALES_ORDERS = [
   { id: "SO-5010", customer: "Cascade Pumps", site: "Monterrey, MX", promise: "2026-07-01", parts: ["PN-3323"], qty: 65, value: 28000 },
   { id: "SO-5011", customer: "Northwind Motors", site: "Greenville, SC", promise: "2026-07-02", parts: ["PN-3320"], qty: 30, value: 99000 },
   { id: "SO-5012", customer: "Orion Systems", site: "Lawrence, MA", promise: "2026-06-29", parts: ["PN-3321", "PN-3322"], qty: 90, value: 47000 },
+  { id: "SO-5013", customer: "Vertex Aerospace", site: "Lawrence, MA", promise: "2026-07-10", parts: ["PN-3320"], qty: 35, value: 112000 },
+  { id: "SO-5014", customer: "Apex Defense", site: "Greenville, SC", promise: "2026-07-18", parts: ["PN-4501"], qty: 180, value: 88000 },
+  { id: "SO-5015", customer: "Cascade Pumps", site: "Monterrey, MX", promise: "2026-08-05", parts: ["PN-3320"], qty: 28, value: 90000 },
+  { id: "SO-5016", customer: "Helios Robotics", site: "Lawrence, MA", promise: "2026-08-21", parts: ["PN-3322", "PN-3323"], qty: 140, value: 63000 },
+  { id: "SO-5017", customer: "Northwind Motors", site: "Greenville, SC", promise: "2026-09-09", parts: ["PN-1188"], qty: 16, value: 51000 },
+  { id: "SO-5018", customer: "Orion Systems", site: "Lawrence, MA", promise: "2026-09-24", parts: ["PN-3321"], qty: 260, value: 39000 },
+  { id: "SO-5019", customer: "Vertex Aerospace", site: "Lawrence, MA", promise: "2026-10-08", parts: ["PN-3320"], qty: 50, value: 158000 },
+  { id: "SO-5020", customer: "Apex Defense", site: "Greenville, SC", promise: "2026-10-22", parts: ["PN-4501", "PN-1188"], qty: 160, value: 131000 },
+  { id: "SO-5021", customer: "Cascade Pumps", site: "Monterrey, MX", promise: "2026-11-12", parts: ["PN-3323"], qty: 70, value: 30000 },
+  { id: "SO-5022", customer: "Northwind Motors", site: "Greenville, SC", promise: "2026-11-26", parts: ["PN-3320"], qty: 33, value: 104000 },
+  { id: "SO-5023", customer: "Helios Robotics", site: "Lawrence, MA", promise: "2026-12-10", parts: ["PN-3322"], qty: 80, value: 44000 },
+  { id: "SO-5024", customer: "Orion Systems", site: "Greenville, SC", promise: "2026-12-18", parts: ["PN-4501"], qty: 120, value: 97000 },
 ];
 const SEED_BLOCKERS = [
   { id: "BLK-2001", title: "CNC-07 fixture failure halting servo bracket", status: "assigned", assignee: "Floor Lead", action: "Replace fixture and re-qualify first article before resuming WO-7790.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5004", "SO-5009"], created: "2026-06-18" },
   { id: "BLK-2002", title: "PN-3323 collet-nut shortage — PO-9920 delayed", status: "open", assignee: null, action: "Expedite PO-9920 or re-source PN-3323 to an alternate supplier.", wo: "WO-7781", parts: ["PN-3323"], sos: ["SO-5002"], created: "2026-06-19" },
+  { id: "BLK-2003", title: "Anodize capacity risk on Q3 servo brackets", status: "open", assignee: null, action: "Qualify a second anodize vendor before the July build.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5014"], created: "2026-06-20" },
+  { id: "BLK-2004", title: "Long-lead casting risk on Q4 spindle housings", status: "assigned", assignee: "Procurement Desk", action: "Place long-lead PO for PN-3320 castings now to protect Q4.", wo: null, parts: ["PN-3320"], sos: ["SO-5019", "SO-5022"], created: "2026-06-20" },
 ];
 
 const soById = (id) => SALES_ORDERS.find((s) => s.id === id);
@@ -2387,9 +2408,12 @@ function BlockerModal({ id }) {
 function BlockersPage() {
   const { blockers, openBlocker, openForm } = useData();
   const [filter, setFilter] = useState("all");
-  const list = blockers.filter((b) => filter === "all" || b.status === filter);
-  const openCount = blockers.filter((b) => b.status !== "closed").length;
-  const atRisk = blockers.filter((b) => b.status !== "closed").reduce((a, b) => a + blockerValue(b), 0);
+  const [site, setSite] = useState("All");
+  const atSite = (b) => site === "All" || b.sos.some((id) => soById(id)?.site === site);
+  const scoped = blockers.filter(atSite);
+  const list = scoped.filter((b) => filter === "all" || b.status === filter);
+  const openCount = scoped.filter((b) => b.status !== "closed").length;
+  const atRisk = scoped.filter((b) => b.status !== "closed").reduce((a, b) => a + blockerValue(b), 0);
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "34px 22px 70px" }}>
@@ -2397,7 +2421,7 @@ function BlockersPage() {
         sub="Shop-floor issues tied to the sales orders they put at risk. Each blocker links parts, a work order and an owner — and carries the $ revenue exposed across its orders." />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
-        {[["Open / assigned", openCount, "var(--red)"], ["$ revenue at risk", fmtMoney(atRisk), "var(--amber)"], ["Total blockers", blockers.length, "var(--ink)"]].map(([l, v, c]) => (
+        {[["Open / assigned", openCount, "var(--red)"], ["$ revenue at risk", fmtMoney(atRisk), "var(--amber)"], ["Total blockers", scoped.length, "var(--ink)"]].map(([l, v, c]) => (
           <div key={l} className="tf-panel" style={{ padding: 16 }}>
             <div className="tf-disp" style={{ fontSize: 24, fontWeight: 800, color: c }}>{v}</div>
             <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 3 }}>{l}</div>
@@ -2412,6 +2436,13 @@ function BlockersPage() {
           ))}
         </div>
         <button className="tf-btn tf-btn-primary" style={{ marginLeft: "auto" }} onClick={() => openForm([])}><Plus size={15} /> New blocker</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <Building2 size={15} color="var(--faint)" />
+          <select value={site} onChange={(e) => setSite(e.target.value)} style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
+            <option value="All">All sites</option>
+            {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="tf-panel" style={{ overflow: "hidden" }}>
@@ -2569,6 +2600,107 @@ function DeliveryPage() {
   );
 }
 
+/* ---------- point-in-time revenue forecast (finance / GM view) ---------- */
+function FinancePage() {
+  const { sos, blockers } = useData();
+  const [site, setSite] = useState("All");
+  const filtered = site === "All" ? sos : sos.filter((s) => s.site === site);
+  const rows = filtered.map((o) => ({ ...o, blk: !!openBlockerForSO(blockers, o.id), ym: o.promise.slice(0, 7) }));
+
+  const mLabel = (ym) => { const [y, m] = ym.split("-"); return new Date(+y, +m - 1, 1).toLocaleDateString(undefined, { month: "short" }) + " '" + y.slice(2); };
+  const months = [...new Set(rows.map((r) => r.ym))].sort();
+  const monthData = months.map((ym) => {
+    const ms = rows.filter((r) => r.ym === ym);
+    return { label: mLabel(ym), committed: ms.filter((r) => !r.blk).reduce((a, r) => a + r.value, 0), atrisk: ms.filter((r) => r.blk).reduce((a, r) => a + r.value, 0) };
+  });
+
+  const qmap = {};
+  rows.forEach((r) => { const d = D(r.promise); const q = Math.floor(d.getMonth() / 3) + 1; const k = d.getFullYear() + "-Q" + q; (qmap[k] = qmap[k] || { green: 0, blocked: 0 })[r.blk ? "blocked" : "green"] += r.value; });
+  const quarters = Object.keys(qmap).sort().map((k) => ({ label: "Q" + k.slice(-1) + " " + k.slice(0, 4), green: qmap[k].green, blocked: qmap[k].blocked, total: qmap[k].green + qmap[k].blocked }));
+
+  const totGreen = rows.filter((r) => !r.blk).reduce((a, r) => a + r.value, 0);
+  const totBlocked = rows.filter((r) => r.blk).reduce((a, r) => a + r.value, 0);
+  const tot = totGreen + totBlocked;
+  const pct = (n) => (tot ? Math.round((n / tot) * 100) : 0);
+
+  const splitBar = (g, b, h = 8) => (
+    <div style={{ display: "flex", height: h, borderRadius: 99, overflow: "hidden", background: "var(--bg2)" }}>
+      <div style={{ width: (g + b ? (g / (g + b)) * 100 : 0) + "%", background: "var(--green)" }} />
+      <div style={{ width: (g + b ? (b / (g + b)) * 100 : 0) + "%", background: "var(--red)" }} />
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={TrendingUp} eyebrow="Module · Point-in-time finance" title="Revenue forecast"
+        sub="A blocker-aware forecast a GM can trust: committed (clear) revenue versus at-risk (blocked) revenue, by quarter and month — recomputed live as blockers open and close." />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16 }}>
+        <Building2 size={15} color="var(--faint)" />
+        <select value={site} onChange={(e) => setSite(e.target.value)} style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
+          <option value="All">All sites</option>
+          {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginLeft: "auto" }}>horizon: {months.length} months · {quarters.length} quarters</span>
+      </div>
+
+      {/* top summary */}
+      <div className="tf-panel tf-fade" style={{ padding: 20, marginBottom: 22 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 18, marginBottom: 16 }}>
+          {[["Total pipeline", fmtMoney(tot), "var(--ink)"], ["Committed (clear)", fmtMoney(totGreen), "var(--green)"], ["At risk (blocked)", fmtMoney(totBlocked), "var(--red)"], ["At-risk share", pct(totBlocked) + "%", "var(--amber)"]].map(([l, v, c]) => (
+            <div key={l}>
+              <div className="tf-disp" style={{ fontSize: 26, fontWeight: 800, color: c }}>{v}</div>
+              <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 3 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+        {splitBar(totGreen, totBlocked, 10)}
+        <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 7 }}>
+          <span style={{ color: "var(--green)" }}>■</span> committed (no open blocker) &nbsp; <span style={{ color: "var(--red)" }}>■</span> at risk (open blocker on the order)
+        </div>
+      </div>
+
+      {/* quarter cards */}
+      <div className="tf-eyebrow" style={{ marginBottom: 14 }}>By quarter — blocked vs clear</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 26 }}>
+        {quarters.map((q) => (
+          <div key={q.label} className="tf-panel" style={{ padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>{q.label}</span>
+              <span className="tf-disp" style={{ marginLeft: "auto", fontSize: 20, fontWeight: 800 }}>{fmtMoney(q.total)}</span>
+            </div>
+            <div style={{ margin: "12px 0 10px" }}>{splitBar(q.green, q.blocked)}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+              <span style={{ color: "var(--green)" }}>{fmtMoney(q.green)} <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>clear</span></span>
+              <span style={{ color: "var(--red)" }}>{fmtMoney(q.blocked)} <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>at risk</span></span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* monthly chart */}
+      <div className="tf-panel tf-fade" style={{ padding: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <CalendarDays size={16} color="var(--amber)" /><span style={{ fontWeight: 600, fontSize: 14 }}>Monthly forecast</span>
+          <span style={{ marginLeft: "auto" }} className="tf-mono">
+            <span style={{ color: "var(--green)", fontSize: 11 }}>■ committed</span> &nbsp; <span style={{ color: "var(--red)", fontSize: 11 }}>■ at risk</span>
+          </span>
+        </div>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={monthData} margin={{ top: 6, right: 8, left: 4, bottom: 0 }}>
+            <CartesianGrid stroke="var(--line)" strokeDasharray="2 4" vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: "var(--faint)", fontSize: 10.5, fontFamily: "var(--mono)" }} />
+            <YAxis tickFormatter={(v) => fmtMoney(v)} tick={{ fill: "var(--faint)", fontSize: 10, fontFamily: "var(--mono)" }} width={52} />
+            <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line2)", borderRadius: 8, fontSize: 12 }} formatter={(v, n) => [fmtMoney(v), n === "committed" ? "Committed" : "At risk"]} cursor={{ fill: "rgba(255,255,255,.03)" }} />
+            <Bar dataKey="committed" stackId="a" fill="var(--green)" />
+            <Bar dataKey="atrisk" stackId="a" fill="var(--red)" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [route, setRoute] = useState("home");
   const [assetStage, setAssetStage] = useState("all");
@@ -2609,6 +2741,7 @@ export default function App() {
       {route === "directspend" && <DirectSpendPage tier={tier.directspend} setTier={setT("directspend")} />}
       {route === "blockers" && <BlockersPage />}
       {route === "visibility" && <DeliveryPage />}
+      {route === "finance" && <FinancePage />}
 
       <div style={{ borderTop: "1px solid var(--line)", marginTop: 30, paddingBottom: 70 }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "22px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
