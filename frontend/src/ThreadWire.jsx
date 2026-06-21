@@ -401,26 +401,39 @@ const ASSISTANT = {
     intro: "Ask which orders are at risk, who owns a blocker, or what to prioritize.",
     suggestions: ["Which blocker risks the most revenue?", "What's open and unassigned?", "Summarize today's blockers"],
     system: "You help a manufacturing ops team triage shop-floor blockers tied to sales orders — by revenue at risk, owner and status. Be concise and action-oriented.\n\n" + CTX.thread,
-    fallback: () => "Blockers are ranked by revenue at risk. Open one to see its impacted orders, parts and work order, assign an owner, and close it when cleared. The highest-exposure open blocker is the one to push first.",
+    fallback: (q, c) => {
+      if (!c) return "Blockers are ranked by revenue at risk. Open one to see its impacted orders, parts and work order, assign an owner, and close it when cleared.";
+      const lead = c.top ? `Highest-exposure open blocker: \u201c${c.top.title}\u201d at ${fmtMoney(c.top.val)}. ` : "";
+      return `${lead}${c.open} blocker${c.open === 1 ? "" : "s"} open or assigned, ${fmtMoney(c.atRisk)} revenue at risk in total. Open one to assign an owner and close it — the delivery calendar and forecast update as you do.`;
+    },
   },
   visibility: {
     subject: "Delivery & Order Risk", accent: "var(--amber)",
     intro: "Ask about this week's revenue, at-risk orders, or a customer's delivery.",
     suggestions: ["What's this week's revenue forecast?", "Which orders are at risk?", "Show next week"],
     system: "You help a manufacturing team read a point-in-time delivery calendar: sales orders by promise date, revenue forecast, and which orders carry open blockers. Be concise.\n\n" + CTX.thread,
-    fallback: () => "Each day shows the orders due by promise date; a red band means an open blocker. The week summary totals revenue forecast and flags at-risk orders. Filter by site to see one location's exposure, and create a blocker straight from any order card.",
+    fallback: (q, c) => {
+      if (!c) return "Open the Delivery calendar to see orders by promise date; each carries committed vs blocked revenue.";
+      const site = c.site === "All" ? "all sites" : c.site;
+      if (/risk|blocker|blocked/i.test(q) && !/revenue|forecast|committed|expected/i.test(q))
+        return `${c.atRisk} order${c.atRisk === 1 ? "" : "s"} this week (${c.weekLabel}, ${site}) carry an open blocker — ${fmtMoney(c.blocked)} at risk. Open a red-banded card to view and close the blocker.`;
+      return `This week (${c.weekLabel}, ${site}): expected revenue ${fmtMoney(c.expected)} across ${c.orders} order${c.orders === 1 ? "" : "s"} — ${fmtMoney(c.committed)} committed (clear) and ${fmtMoney(c.blocked)} blocked by open issues (at risk). Clear the blockers and the full ${fmtMoney(c.expected)} ships. Use the site filter or prev/next week to change scope.`;
+    },
   },
   finance: {
     subject: "Revenue Forecast", accent: "var(--green)",
     intro: "Ask about committed vs at-risk revenue, a quarter, or what's dragging the forecast.",
     suggestions: ["What's committed this quarter?", "How much revenue is at risk?", "Which quarter looks weakest?"],
     system: "You help a GM read a point-in-time, blocker-aware revenue forecast: committed (clear) vs at-risk (blocked) by quarter and month. Be concise and decision-oriented.\n\n" + CTX.thread,
-    fallback: () => "The forecast splits pipeline into committed (no open blocker) and at-risk (an open blocker on the order). Clearing the highest-value blockers converts at-risk revenue to committed — that's the lever on the quarter. Filter by site to see each location's exposure.",
+    fallback: (q, c) => {
+      if (!c) return "The forecast splits pipeline into committed (no open blocker) and at-risk (an open blocker on the order). Clearing blockers converts at-risk revenue to committed.";
+      return `Across the forecast horizon: ${fmtMoney(c.expected)} total pipeline — ${fmtMoney(c.committed)} committed (clear) and ${fmtMoney(c.blocked)} at risk from open blockers. Clearing the highest-value blockers moves at-risk into committed. Filter by site on the Forecast page for per-location numbers and the per-quarter split.`;
+    },
   },
 };
 
 /* ---- Docked, minimizable, subject-aware assistant (on every page) ---- */
-function DockedAssistant({ route, chat, update, open, setOpen }) {
+function DockedAssistant({ route, chat, update, open, setOpen, botCtx }) {
   const cfg = ASSISTANT[route] || ASSISTANT.home;
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -436,7 +449,7 @@ function DockedAssistant({ route, chat, update, open, setOpen }) {
     update(route, (c) => ({ ...c, msgs: [...c.msgs, { role: "user", text: q }] }));
     setBusy(true);
     const reply = await askClaude(cfg.system, q, hist);
-    const out = reply || cfg.fallback(q);
+    const out = reply || cfg.fallback(q, botCtx);
     update(route, (c) => ({
       msgs: [...c.msgs, { role: "bot", text: out, offline: !reply }],
       hist: [...c.hist, { role: "user", content: q }, { role: "assistant", content: out }].slice(-8),
@@ -2404,6 +2417,61 @@ function BlockerModal({ id }) {
   );
 }
 
+/* ---------- sales order detail ---------- */
+function SalesOrderModal({ id }) {
+  const { blockers, openBlocker, openForm, closeSO } = useData();
+  const o = soById(id);
+  if (!o) return null;
+  const blk = openBlockerForSO(blockers, id);
+  const wos = WORKORDERS.filter((w) => o.parts.includes(w.part));
+
+  return (
+    <div onClick={closeSO} style={{ position: "fixed", inset: 0, zIndex: 206, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 540, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <Tag tone={blk ? "red" : "green"}>{blk ? "at risk" : "on track"}</Tag>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--amber)" }}>{o.id}</span>
+          <span onClick={closeSO} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
+        </div>
+        <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{o.customer}</h3>
+
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", marginBottom: 16 }}>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Site</span><span style={{ fontSize: 13 }}>{o.site}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Promise date</span><span style={{ fontSize: 13 }}>{o.promise}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Quantity</span><span style={{ fontSize: 13 }}>{o.qty}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Total value</span><span className="tf-disp" style={{ fontSize: 16, fontWeight: 800 }}>{fmtMoney(o.value)}</span>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Parts</div>
+          {o.parts.map((pn) => (
+            <div key={pn} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
+              <ThreadLink id={pn} style={{ color: "var(--green)", fontFamily: "var(--mono)", fontSize: 12 }}>{pn}</ThreadLink>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{PART_META[pn]?.desc || ""}</span>
+            </div>
+          ))}
+        </div>
+
+        {wos.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Related work orders</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {wos.map((w) => <ThreadLink key={w.id} id={w.id} style={{ color: "var(--amber)", fontFamily: "var(--mono)", fontSize: 12, padding: "4px 9px", border: "1px solid var(--line2)", borderRadius: 8, borderBottom: "1px solid var(--line2)" }}>{w.id}</ThreadLink>)}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+          {blk
+            ? <button className="tf-btn" onClick={() => openBlocker(blk.id)} style={{ borderColor: "var(--red)", color: "var(--red)" }}><AlertTriangle size={14} /> Open blocker</button>
+            : <span style={{ fontSize: 12.5, color: "var(--green)" }}>No open blocker on this order.</span>}
+          <button className="tf-btn tf-btn-primary" onClick={() => openForm([o.id])} style={{ marginLeft: "auto" }}><Plus size={14} /> New blocker</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- blockers list page ---------- */
 function BlockersPage() {
   const { blockers, openBlocker, openForm } = useData();
@@ -2464,11 +2532,9 @@ function BlockersPage() {
 
 /* ---------- point-in-time delivery calendar ---------- */
 function DeliveryPage() {
-  const { sos, blockers, openBlocker, openForm } = useData();
-  const [site, setSite] = useState("All");
+  const { sos, blockers, openBlocker, openForm, openSO, delivSite: site, setDelivSite: setSite, delivWeek: weekStart, setDelivWeek: setWeekStart } = useData();
   const [view, setView] = useState("week");
   const earliest = useMemo(() => sos.map((s) => s.promise).sort()[0], [sos]);
-  const [weekStart, setWeekStart] = useState(() => mondayOf(D(earliest)));
   const [monthRef, setMonthRef] = useState(() => D(earliest));
 
   const filtered = site === "All" ? sos : sos.filter((s) => s.site === site);
@@ -2482,7 +2548,7 @@ function DeliveryPage() {
   const Card = ({ o }) => {
     const blk = openBlockerForSO(blockers, o.id);
     return (
-      <div className="tf-panel" style={{ padding: 0, marginBottom: 8, overflow: "hidden", border: blk ? "1px solid var(--red)" : "1px solid var(--line)" }}>
+      <div className="tf-panel" onClick={() => openSO(o.id)} style={{ padding: 0, marginBottom: 8, overflow: "hidden", cursor: "pointer", border: blk ? "1px solid var(--red)" : "1px solid var(--line)" }}>
         {blk && <div style={{ height: 4, background: "var(--red)" }} />}
         <div style={{ padding: "10px 11px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -2551,7 +2617,7 @@ function DeliveryPage() {
             const v = list.reduce((a, s) => a + s.value, 0);
             const risk = list.some((s) => openBlockerForSO(blockers, s.id));
             return (
-              <div key={i} onClick={() => { if (list.length) { setWeekStart(mondayOf(dt)); setView("week"); } }}
+              <div key={i} onClick={() => { if (list.length === 1) { openSO(list[0].id); } else if (list.length) { setWeekStart(mondayOf(dt)); setView("week"); } }}
                 style={{ minHeight: 64, borderRadius: 9, border: "1px solid var(--line)", background: inMonth ? "var(--panel)" : "transparent", opacity: inMonth ? 1 : 0.4, padding: 7, cursor: list.length ? "pointer" : "default" }}>
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <span className="tf-mono" style={{ fontSize: 11, color: "var(--muted)" }}>{dt.getDate()}</span>
@@ -2777,14 +2843,43 @@ export default function App() {
   const [blockers, setBlockers] = useState(SEED_BLOCKERS);
   const [bView, setBView] = useState(null);
   const [bForm, setBForm] = useState(null);
+  const [soView, setSoView] = useState(null);
+  const [delivSite, setDelivSite] = useState("All");
+  const [delivWeek, setDelivWeek] = useState(() => mondayOf(D(SALES_ORDERS.map((s) => s.promise).sort()[0])));
   const dataVal = {
     sos: SALES_ORDERS, blockers, people: PEOPLE, sites: SITES,
+    delivSite, setDelivSite, delivWeek, setDelivWeek,
     addBlocker: (p) => { const id = "BLK-" + (2001 + blockers.length); setBlockers((b) => [...b, { id, created: isoOf(new Date()), ...p }]); setBForm(null); setBView(id); },
     closeBlocker: (id) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed" } : x))),
     assignBlocker: (id, who) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, assignee: who, status: x.status === "closed" ? "closed" : who ? "assigned" : "open" } : x))),
     openBlocker: (id) => setBView(id), closeView: () => setBView(null),
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
+    openSO: (id) => setSoView(id), closeSO: () => setSoView(null),
   };
+
+  // live context so the offline assistant can give real numbers
+  const botCtx = (() => {
+    const blkVal = (b) => b.sos.reduce((a, id) => a + (SALES_ORDERS.find((s) => s.id === id)?.value || 0), 0);
+    if (route === "visibility") {
+      const f = delivSite === "All" ? SALES_ORDERS : SALES_ORDERS.filter((s) => s.site === delivSite);
+      const isos = Array.from({ length: 7 }, (_, i) => isoOf(addDays(delivWeek, i)));
+      const wk = f.filter((s) => isos.includes(s.promise));
+      const blocked = wk.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
+      const total = wk.reduce((a, s) => a + s.value, 0);
+      return { site: delivSite, weekLabel: fmtMD(delivWeek) + "–" + fmtMD(addDays(delivWeek, 6)), committed: total - blocked, blocked, expected: total, orders: wk.length, atRisk: wk.filter((s) => openBlockerForSO(blockers, s.id)).length };
+    }
+    if (route === "finance") {
+      const blocked = SALES_ORDERS.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
+      const total = SALES_ORDERS.reduce((a, s) => a + s.value, 0);
+      return { committed: total - blocked, blocked, expected: total };
+    }
+    if (route === "blockers") {
+      const openB = blockers.filter((b) => b.status !== "closed");
+      const top = [...openB].sort((a, b) => blkVal(b) - blkVal(a))[0];
+      return { open: openB.length, atRisk: openB.reduce((a, b) => a + blkVal(b), 0), top: top ? { title: top.title, val: blkVal(top) } : null };
+    }
+    return null;
+  })();
   const go = (r) => { setRoute(r); window.scrollTo?.({ top: 0, behavior: "instant" }); };
   const setT = (page) => (v) => setTier((t) => ({ ...t, [page]: v }));
   const updateChat = (r, fn) => setChats((c) => ({ ...c, [r]: fn(c[r]) }));
@@ -2818,10 +2913,11 @@ export default function App() {
       </div>
 
       {/* subject-aware assistant, docked on every page */}
-      <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} />
+      <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} />
       <ThreadModal stack={tStack} setStack={setTStack} />
       {bView && <BlockerModal id={bView} />}
       {bForm && <BlockerForm pre={bForm} />}
+      {soView && <SalesOrderModal id={soView} />}
     </div>
     </DataCtx.Provider>
     </ThreadCtx.Provider>
