@@ -11,6 +11,13 @@ class Settings:
     anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     anthropic_model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
     anthropic_max_tokens = int(os.environ.get("ANTHROPIC_MAX_TOKENS", "1024"))
+
+    # AI provider selection: "openai" | "gemini" | "anthropic" (default).
+    ai_provider = os.environ.get("AI_MODEL", "anthropic").strip().lower()
+    openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+    openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
     cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
     session_days = int(os.environ.get("SESSION_DAYS", "14"))
 

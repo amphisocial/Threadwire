@@ -10,7 +10,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 from . import connectors_rest, db, emailer, mfa
-from .ai import anthropic_chat
+from .ai import ai_complete
 from .config import settings
 from .crypto import decrypt_bytes, encrypt_str
 from .security import hash_password, verify_password
@@ -124,7 +124,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatIn(BaseModel):
-    system: Optional[str] = Field(default=None, max_length=20000)
+    system: Optional[str] = Field(default=None, max_length=120000)
     messages: list[ChatMessage] = Field(min_length=1, max_length=16)
 
 
@@ -308,7 +308,7 @@ async def delete_connector(ctype: str, user: dict = Depends(current_user)):
 async def ai_chat(body: ChatIn, user: dict = Depends(current_user)):
     messages = [{"role": ("assistant" if m.role == "assistant" else "user"), "content": m.content}
                 for m in body.messages]
-    text = await anthropic_chat(body.system, messages)
+    text = await ai_complete(body.system, messages)
     return {"text": text}
 
 

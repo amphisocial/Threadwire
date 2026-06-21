@@ -434,7 +434,7 @@ const ASSISTANT = {
 };
 
 /* ---- Docked, minimizable, subject-aware assistant (on every page) ---- */
-function DockedAssistant({ route, chat, update, open, setOpen, botCtx }) {
+function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot }) {
   const cfg = ASSISTANT[route] || ASSISTANT.home;
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -511,7 +511,8 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx }) {
     setInput("");
     update(route, (c) => ({ ...c, msgs: [...c.msgs, { role: "user", text: q }] }));
     setBusy(true);
-    const reply = await askClaude(cfg.system, q, hist);
+    const sys = cfg.system + (snapshot ? "\n\n" + snapshot : "");
+    const reply = await askClaude(sys, q, hist);
     const out = reply || cfg.fallback(q, botCtx);
     update(route, (c) => ({
       msgs: [...c.msgs, { role: "bot", text: out, offline: !reply }],
@@ -2988,15 +2989,17 @@ export default function App() {
   const [soView, setSoView] = useState(null);
   const [delivSite, setDelivSite] = useState("All");
   const [delivWeek, setDelivWeek] = useState(() => mondayOf(D(SALES_ORDERS.map((s) => s.promise).sort()[0])));
+  const [events, setEvents] = useState([]);
+  const logEvent = (type, detail) => setEvents((e) => [...e, { ts: new Date().toISOString(), who: CURRENT_USER, type, detail }].slice(-60));
   const dataVal = {
-    sos: SALES_ORDERS, blockers, people: PEOPLE, sites: SITES,
+    sos: SALES_ORDERS, blockers, people: PEOPLE, sites: SITES, events, logEvent,
     delivSite, setDelivSite, delivWeek, setDelivWeek,
-    addBlocker: (p) => { const id = "BLK-" + (2001 + blockers.length); setBlockers((b) => [...b, { id, created: new Date().toISOString(), openedBy: CURRENT_USER, closedAt: null, closedBy: null, newPromise: null, comments: [], ...p }]); setBForm(null); setBView(id); },
-    closeBlocker: (id) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed", closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || CURRENT_USER } : x))),
-    assignBlocker: (id, who) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, assignee: who, status: x.status === "closed" ? "closed" : who ? "assigned" : "open" } : x))),
-    setBlockerStatus: (id, status) => setBlockers((b) => b.map((x) => { if (x.id !== id) return x; if (status === "closed") return { ...x, status, closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || CURRENT_USER }; return { ...x, status, closedAt: null, closedBy: null }; })),
-    setNewPromise: (id, date) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, newPromise: date || null } : x))),
-    addComment: (id, text) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, comments: [...(x.comments || []), { ts: new Date().toISOString(), who: CURRENT_USER, text }] } : x))),
+    addBlocker: (p) => { const id = "BLK-" + (2001 + blockers.length); setBlockers((b) => [...b, { id, created: new Date().toISOString(), openedBy: CURRENT_USER, closedAt: null, closedBy: null, newPromise: null, comments: [], ...p }]); setBForm(null); setBView(id); logEvent("blocker.created", id + " · " + (p.title || "")); },
+    closeBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed", closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || CURRENT_USER } : x))); logEvent("blocker.closed", id); },
+    assignBlocker: (id, who) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, assignee: who, status: x.status === "closed" ? "closed" : who ? "assigned" : "open" } : x))); logEvent("blocker.assigned", id + " → " + (who || "unassigned")); },
+    setBlockerStatus: (id, status) => { setBlockers((b) => b.map((x) => { if (x.id !== id) return x; if (status === "closed") return { ...x, status, closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || CURRENT_USER }; return { ...x, status, closedAt: null, closedBy: null }; })); logEvent("blocker.status", id + " → " + status); },
+    setNewPromise: (id, date) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, newPromise: date || null } : x))); logEvent("blocker.revisedPromise", id + " → " + (date || "cleared")); },
+    addComment: (id, text) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, comments: [...(x.comments || []), { ts: new Date().toISOString(), who: CURRENT_USER, text }] } : x))); logEvent("blocker.update", id + ": " + text.slice(0, 70)); },
     openBlocker: (id) => setBView(id), closeView: () => setBView(null),
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
     openSO: (id) => setSoView(id), closeSO: () => setSoView(null),
@@ -3024,6 +3027,20 @@ export default function App() {
       return { open: openB.length, atRisk: openB.reduce((a, b) => a + blkVal(b), 0), top: top ? { title: top.title, val: blkVal(top) } : null };
     }
     return null;
+  })();
+
+  // full live snapshot appended to the system prompt so the model always sees
+  // the current orders, blockers (with audit + revised dates) and recent changes
+  const aiContext = (() => {
+    const orders = SALES_ORDERS.map((o) => ({ id: o.id, customer: o.customer, site: o.site, promise: o.promise, effective: effPromise(blockers, o), qty: o.qty, value: o.value, blocked: !!openBlockerForSO(blockers, o.id) }));
+    const blks = blockers.map((b) => ({ id: b.id, title: b.title, status: b.status, assignee: b.assignee || null, openedBy: b.openedBy || null, opened: b.created, closedAt: b.closedAt || null, closedBy: b.closedBy || null, revisedPromise: b.newPromise || null, action: b.action, orders: b.sos, parts: b.parts, workOrder: b.wo || null, dollarsAtRisk: blockerValue(b), updates: (b.comments || []).map((c) => ({ who: c.who, ts: c.ts, text: c.text })) }));
+    return [
+      "LIVE THREADWIRE DATA — authoritative current state. Answer using these exact values (dollar amounts, dates, owners, statuses here override any assumption). Money is in USD.",
+      "Definitions: effective promise = a blocker's revised date when set, else the original promise; revenue is recognized on the effective date. Committed = orders with no open blocker; blocked = orders with an open blocker (counted at the effective date).",
+      "SALES_ORDERS = " + JSON.stringify(orders),
+      "BLOCKERS = " + JSON.stringify(blks),
+      "RECENT_CHANGES = " + JSON.stringify(events.slice(-25)),
+    ].join("\n");
   })();
   const go = (r) => { setRoute(r); window.scrollTo?.({ top: 0, behavior: "instant" }); };
   const setT = (page) => (v) => setTier((t) => ({ ...t, [page]: v }));
@@ -3058,7 +3075,7 @@ export default function App() {
       </div>
 
       {/* subject-aware assistant, docked on every page */}
-      <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} />
+      <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} snapshot={aiContext} />
       <ThreadModal stack={tStack} setStack={setTStack} />
       {bView && <BlockerModal id={bView} />}
       {bForm && <BlockerForm pre={bForm} />}
