@@ -2340,16 +2340,21 @@ const SALES_ORDERS = [
   { id: "SO-5024", customer: "Orion Systems", site: "Greenville, SC", promise: "2026-12-18", parts: ["PN-4501"], qty: 120, value: 97000 },
 ];
 const SEED_BLOCKERS = [
-  { id: "BLK-2001", title: "CNC-07 fixture failure halting servo bracket", status: "assigned", assignee: "Floor Lead", action: "Replace fixture and re-qualify first article before resuming WO-7790.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5004", "SO-5009"], created: "2026-06-18", newPromise: "2026-07-01", comments: [{ ts: "2026-06-18T14:20:00Z", text: "Replacement fixture ordered, ETA Jun 26. Re-qual ~2 days after." }, { ts: "2026-06-19T09:05:00Z", text: "Maintenance confirmed spindle is fine; isolated to fixture." }] },
-  { id: "BLK-2002", title: "PN-3323 collet-nut shortage — PO-9920 delayed", status: "open", assignee: null, action: "Expedite PO-9920 or re-source PN-3323 to an alternate supplier.", wo: "WO-7781", parts: ["PN-3323"], sos: ["SO-5002"], created: "2026-06-19", newPromise: null, comments: [] },
-  { id: "BLK-2003", title: "Anodize capacity risk on Q3 servo brackets", status: "open", assignee: null, action: "Qualify a second anodize vendor before the July build.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5014"], created: "2026-06-20", newPromise: null, comments: [] },
-  { id: "BLK-2004", title: "Long-lead casting risk on Q4 spindle housings", status: "assigned", assignee: "Procurement Desk", action: "Place long-lead PO for PN-3320 castings now to protect Q4.", wo: null, parts: ["PN-3320"], sos: ["SO-5019", "SO-5022"], created: "2026-06-20", newPromise: null, comments: [] },
+  { id: "BLK-2001", title: "CNC-07 fixture failure halting servo bracket", status: "assigned", assignee: "Floor Lead", openedBy: "Floor Lead", action: "Replace fixture and re-qualify first article before resuming WO-7790.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5004", "SO-5009"], created: "2026-06-18T13:10:00Z", closedAt: null, closedBy: null, newPromise: "2026-07-01", comments: [{ ts: "2026-06-18T14:20:00Z", who: "Floor Lead", text: "Replacement fixture ordered, ETA Jun 26. Re-qual ~2 days after." }, { ts: "2026-06-19T09:05:00Z", who: "A. Kidd", text: "Maintenance confirmed spindle is fine; isolated to fixture." }] },
+  { id: "BLK-2002", title: "PN-3323 collet-nut shortage — PO-9920 delayed", status: "open", assignee: null, openedBy: "Procurement Desk", action: "Expedite PO-9920 or re-source PN-3323 to an alternate supplier.", wo: "WO-7781", parts: ["PN-3323"], sos: ["SO-5002"], created: "2026-06-19T08:40:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
+  { id: "BLK-2003", title: "Anodize capacity risk on Q3 servo brackets", status: "open", assignee: null, openedBy: "Anu Mishra", action: "Qualify a second anodize vendor before the July build.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5014"], created: "2026-06-20T11:15:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
+  { id: "BLK-2004", title: "Long-lead casting risk on Q4 spindle housings", status: "assigned", assignee: "Procurement Desk", openedBy: "Anu Mishra", action: "Place long-lead PO for PN-3320 castings now to protect Q4.", wo: null, parts: ["PN-3320"], sos: ["SO-5019", "SO-5022"], created: "2026-06-20T15:30:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
 ];
 
 const soById = (id) => SALES_ORDERS.find((s) => s.id === id);
 const blockerValue = (b) => b.sos.reduce((a, id) => a + (soById(id)?.value || 0), 0);
 const openBlockerForSO = (blockers, soId) => blockers.find((b) => b.status !== "closed" && b.sos.includes(soId));
 const BLK_TONE = { open: "red", assigned: "yellow", closed: "green" };
+const CURRENT_USER = "Anu Mishra";
+// effective promise = revised date from an open blocker (if any), else the original committed date
+const revisedForSO = (blockers, soId) => { const b = blockers.find((x) => x.status !== "closed" && x.newPromise && x.sos.includes(soId)); return b ? b.newPromise : null; };
+const effPromise = (blockers, o) => revisedForSO(blockers, o.id) || o.promise;
+const fmtDateTime = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }); } catch (_) { return String(iso); } };
 
 /* date helpers (local, no TZ surprises) */
 const D = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); };
@@ -2455,8 +2460,12 @@ function BlockerModal({ id }) {
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", marginBottom: 16 }}>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>$ at risk</span>
           <span className="tf-disp" style={{ fontSize: 16, fontWeight: 800, color: "var(--red)" }}>{fmtMoney(val)}</span>
-          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Created</span>
-          <span style={{ fontSize: 13 }}>{b.created}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Opened</span>
+          <span style={{ fontSize: 13 }}>{fmtDateTime(b.created)}{b.openedBy ? <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}> · by {b.openedBy}</span> : null}</span>
+          {b.status === "closed" && b.closedAt && <>
+            <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Closed</span>
+            <span style={{ fontSize: 13, color: "var(--green)" }}>{fmtDateTime(b.closedAt)}{b.closedBy ? <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}> · by {b.closedBy}</span> : null}</span>
+          </>}
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Work order</span>
           <span style={{ fontSize: 13 }}>{b.wo ? <ThreadLink id={b.wo} style={{ color: "var(--amber)" }}>{b.wo}</ThreadLink> : "—"}</span>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Action item</span>
@@ -2501,7 +2510,7 @@ function BlockerModal({ id }) {
           <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Updates ({(b.comments || []).length})</div>
           {(b.comments || []).map((c, i) => (
             <div key={i} style={{ padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
-              <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginBottom: 3 }}>{new Date(c.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+              <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginBottom: 3 }}>{c.who ? c.who + " · " : ""}{new Date(c.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
               <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>{c.text}</div>
             </div>
           ))}
@@ -2670,11 +2679,11 @@ function DeliveryPage() {
   const [monthRef, setMonthRef] = useState(() => D(earliest));
 
   const filtered = site === "All" ? sos : sos.filter((s) => s.site === site);
-  const daySOs = (iso) => filtered.filter((s) => s.promise === iso);
+  const daySOs = (iso) => filtered.filter((s) => effPromise(blockers, s) === iso);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const weekIsos = weekDays.map(isoOf);
-  const weekVal = filtered.filter((s) => weekIsos.includes(s.promise)).reduce((a, s) => a + s.value, 0);
-  const weekOrders = filtered.filter((s) => weekIsos.includes(s.promise));
+  const weekVal = filtered.filter((s) => weekIsos.includes(effPromise(blockers, s))).reduce((a, s) => a + s.value, 0);
+  const weekOrders = filtered.filter((s) => weekIsos.includes(effPromise(blockers, s)));
   const weekAtRisk = weekOrders.filter((s) => openBlockerForSO(blockers, s.id)).length;
 
   const Card = ({ o }) => {
@@ -2692,6 +2701,7 @@ function DeliveryPage() {
           </div>
           <div className="tf-disp" style={{ fontSize: 16, fontWeight: 800, margin: "3px 0 1px" }}>{fmtMoney(o.value)}</div>
           <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{o.id} · qty {o.qty}</div>
+          {revisedForSO(blockers, o.id) && <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--amber)", marginTop: 2 }}>↪ revised from {o.promise}</div>}
           <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 4 }}>
             {o.parts.map((pn) => <ThreadLink key={pn} id={pn} style={{ color: "var(--green)", fontFamily: "var(--mono)", fontSize: 10, padding: "1px 6px", border: "1px solid var(--line2)", borderRadius: 6, borderBottom: "1px solid var(--line2)" }}>{pn}</ThreadLink>)}
           </div>
@@ -2713,7 +2723,7 @@ function DeliveryPage() {
       <div style={{ width: (g + b ? (b / (g + b)) * 100 : 0) + "%", background: "var(--red)" }} />
     </div>
   );
-  const sameMonth = (s, ref) => { const d = D(s.promise); return d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear(); };
+  const sameMonth = (s, ref) => { const d = D(effPromise(blockers, s)); return d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear(); };
   const SummaryBar = ({ title, sp }) => (
     <div className="tf-panel" style={{ padding: "14px 16px", marginBottom: 14 }}>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginBottom: 10 }}>
@@ -2869,7 +2879,7 @@ function FinancePage() {
   const { sos, blockers } = useData();
   const [site, setSite] = useState("All");
   const filtered = site === "All" ? sos : sos.filter((s) => s.site === site);
-  const rows = filtered.map((o) => ({ ...o, blk: !!openBlockerForSO(blockers, o.id), ym: o.promise.slice(0, 7) }));
+  const rows = filtered.map((o) => { const eff = effPromise(blockers, o); return { ...o, blk: !!openBlockerForSO(blockers, o.id), eff, ym: eff.slice(0, 7) }; });
 
   const mLabel = (ym) => { const [y, m] = ym.split("-"); return new Date(+y, +m - 1, 1).toLocaleDateString(undefined, { month: "short" }) + " '" + y.slice(2); };
   const months = [...new Set(rows.map((r) => r.ym))].sort();
@@ -2879,7 +2889,7 @@ function FinancePage() {
   });
 
   const qmap = {};
-  rows.forEach((r) => { const d = D(r.promise); const q = Math.floor(d.getMonth() / 3) + 1; const k = d.getFullYear() + "-Q" + q; (qmap[k] = qmap[k] || { green: 0, blocked: 0 })[r.blk ? "blocked" : "green"] += r.value; });
+  rows.forEach((r) => { const d = D(r.eff); const q = Math.floor(d.getMonth() / 3) + 1; const k = d.getFullYear() + "-Q" + q; (qmap[k] = qmap[k] || { green: 0, blocked: 0 })[r.blk ? "blocked" : "green"] += r.value; });
   const quarters = Object.keys(qmap).sort().map((k) => ({ label: "Q" + k.slice(-1) + " " + k.slice(0, 4), green: qmap[k].green, blocked: qmap[k].blocked, total: qmap[k].green + qmap[k].blocked }));
 
   const totGreen = rows.filter((r) => !r.blk).reduce((a, r) => a + r.value, 0);
@@ -2981,12 +2991,12 @@ export default function App() {
   const dataVal = {
     sos: SALES_ORDERS, blockers, people: PEOPLE, sites: SITES,
     delivSite, setDelivSite, delivWeek, setDelivWeek,
-    addBlocker: (p) => { const id = "BLK-" + (2001 + blockers.length); setBlockers((b) => [...b, { id, created: isoOf(new Date()), newPromise: null, comments: [], ...p }]); setBForm(null); setBView(id); },
-    closeBlocker: (id) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed" } : x))),
+    addBlocker: (p) => { const id = "BLK-" + (2001 + blockers.length); setBlockers((b) => [...b, { id, created: new Date().toISOString(), openedBy: CURRENT_USER, closedAt: null, closedBy: null, newPromise: null, comments: [], ...p }]); setBForm(null); setBView(id); },
+    closeBlocker: (id) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed", closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || CURRENT_USER } : x))),
     assignBlocker: (id, who) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, assignee: who, status: x.status === "closed" ? "closed" : who ? "assigned" : "open" } : x))),
-    setBlockerStatus: (id, status) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status } : x))),
+    setBlockerStatus: (id, status) => setBlockers((b) => b.map((x) => { if (x.id !== id) return x; if (status === "closed") return { ...x, status, closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || CURRENT_USER }; return { ...x, status, closedAt: null, closedBy: null }; })),
     setNewPromise: (id, date) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, newPromise: date || null } : x))),
-    addComment: (id, text) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, comments: [...(x.comments || []), { ts: new Date().toISOString(), text }] } : x))),
+    addComment: (id, text) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, comments: [...(x.comments || []), { ts: new Date().toISOString(), who: CURRENT_USER, text }] } : x))),
     openBlocker: (id) => setBView(id), closeView: () => setBView(null),
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
     openSO: (id) => setSoView(id), closeSO: () => setSoView(null),
@@ -2998,7 +3008,7 @@ export default function App() {
     if (route === "visibility") {
       const f = delivSite === "All" ? SALES_ORDERS : SALES_ORDERS.filter((s) => s.site === delivSite);
       const isos = Array.from({ length: 7 }, (_, i) => isoOf(addDays(delivWeek, i)));
-      const wk = f.filter((s) => isos.includes(s.promise));
+      const wk = f.filter((s) => isos.includes(effPromise(blockers, s)));
       const blocked = wk.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
       const total = wk.reduce((a, s) => a + s.value, 0);
       return { site: delivSite, weekLabel: fmtMD(delivWeek) + "–" + fmtMD(addDays(delivWeek, 6)), committed: total - blocked, blocked, expected: total, orders: wk.length, atRisk: wk.filter((s) => openBlockerForSO(blockers, s.id)).length };
