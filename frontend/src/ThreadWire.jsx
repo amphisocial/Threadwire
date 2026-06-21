@@ -2505,6 +2505,7 @@ function SalesOrderModal({ id }) {
   const o = soById(id);
   if (!o) return null;
   const blk = openBlockerForSO(blockers, id);
+  const related = blockers.filter((b) => b.sos.includes(id)).sort((a, b) => (a.status === "closed") - (b.status === "closed") || blockerValue(b) - blockerValue(a));
   const wos = WORKORDERS.filter((w) => o.parts.includes(w.part));
 
   return (
@@ -2543,10 +2544,21 @@ function SalesOrderModal({ id }) {
           </div>
         )}
 
+        {related.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Blockers on this order ({related.length})</div>
+            {related.map((b) => (
+              <div key={b.id} onClick={() => openBlocker(b.id)} className="tf-row" style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6, cursor: "pointer" }}>
+                <Tag tone={BLK_TONE[b.status]}>{b.status}</Tag>
+                <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.title}</span>
+                <span className="tf-mono" style={{ fontSize: 11, color: "var(--red)" }}>{fmtMoney(blockerValue(b))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", paddingTop: 14, borderTop: "1px solid var(--line)" }}>
-          {blk
-            ? <button className="tf-btn" onClick={() => openBlocker(blk.id)} style={{ borderColor: "var(--red)", color: "var(--red)" }}><AlertTriangle size={14} /> Open blocker</button>
-            : <span style={{ fontSize: 12.5, color: "var(--green)" }}>No open blocker on this order.</span>}
+          {related.length === 0 && <span style={{ fontSize: 12.5, color: "var(--green)" }}>No blocker on this order yet.</span>}
           <button className="tf-btn tf-btn-primary" onClick={() => openForm([o.id])} style={{ marginLeft: "auto" }}><Plus size={14} /> New blocker</button>
         </div>
       </div>
