@@ -461,6 +461,53 @@ async def admin_usage(user: dict = Depends(current_user)):
     return {"enterprise": ent, "free_limit": settings.free_daily_tokens, "members": members}
 
 
+async def _downgrade_subscription(con, sub_id):
+    """Revoke access tied to a Stripe subscription (Pro user or Enterprise org)."""
+    if not sub_id:
+        return
+    await con.execute(
+        "UPDATE users SET plan='free', plan_status='canceled' WHERE stripe_subscription_id = $1", sub_id)
+    await con.execute(
+        "UPDATE organizations SET enterprise=false, enterprise_status='canceled' WHERE stripe_subscription_id = $1", sub_id)
+
+
+@app.post("/api/billing/webhook")
+async def billing_webhook(request: Request):
+    """Stripe → us. Verifies signature, then keeps plans in sync on cancel/lapse.
+    Not authenticated (called by Stripe), so signature verification is the gate."""
+    secret = settings.stripe_webhook_secret
+    raw = await request.body()
+    if not secret:
+        raise HTTPException(400, "Webhook signing secret not configured")
+    sig = request.headers.get("stripe-signature", "")
+    if not billing.verify_signature(raw, sig, secret):
+        raise HTTPException(400, "Invalid signature")
+    try:
+        event = json.loads(raw.decode("utf-8"))
+    except Exception:
+        raise HTTPException(400, "Bad payload")
+
+    etype = event.get("type", "")
+    obj = (event.get("data") or {}).get("object") or {}
+    async with db.pool().acquire() as con:
+        if etype == "customer.subscription.deleted":
+            await _downgrade_subscription(con, obj.get("id"))
+        elif etype == "customer.subscription.updated":
+            if obj.get("status") in ("canceled", "unpaid", "incomplete_expired"):
+                await _downgrade_subscription(con, obj.get("id"))
+            elif obj.get("cancel_at_period_end"):
+                # scheduled to cancel — keep access until period end, just note status
+                sid = obj.get("id")
+                await con.execute("UPDATE users SET plan_status='canceling' WHERE stripe_subscription_id=$1", sid)
+                await con.execute("UPDATE organizations SET enterprise_status='canceling' WHERE stripe_subscription_id=$1", sid)
+        elif etype == "invoice.payment_failed":
+            sid = obj.get("subscription")
+            if sid:
+                await con.execute("UPDATE users SET plan_status='past_due' WHERE stripe_subscription_id=$1", sid)
+                await con.execute("UPDATE organizations SET enterprise_status='past_due' WHERE stripe_subscription_id=$1", sid)
+    return {"received": True}
+
+
 # --------------------------------------------------------------------------- #
 # CSV data import (org admin only)
 # --------------------------------------------------------------------------- #

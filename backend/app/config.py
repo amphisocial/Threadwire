@@ -32,6 +32,9 @@ class Settings:
     stripe_price_enterprise = (
         (os.environ.get("STRIPE_PRICE_ENTERPRISE_LIVE") if _payment_live else os.environ.get("STRIPE_PRICE_ENTERPRISE_TEST"))
         or os.environ.get("STRIPE_PRICE_ENTERPRISE", ""))
+    stripe_webhook_secret = (
+        (os.environ.get("STRIPE_WEBHOOK_SECRET_LIVE") if _payment_live else os.environ.get("STRIPE_WEBHOOK_SECRET_TEST"))
+        or os.environ.get("STRIPE_WEBHOOK_SECRET", ""))
     free_daily_tokens = int(os.environ.get("FREE_DAILY_TOKENS", "5"))
     cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
     session_days = int(os.environ.get("SESSION_DAYS", "14"))

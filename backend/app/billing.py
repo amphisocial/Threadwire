@@ -3,11 +3,34 @@ Stripe's hosted Checkout — we only create sessions and read their status.
 The secret key stays server-side and never reaches the browser.
 """
 from typing import Optional
+import hashlib
+import hmac
+import time
+
 import httpx
 
 from .config import settings
 
 BASE = "https://api.stripe.com/v1"
+
+
+def verify_signature(payload: bytes, sig_header: str, secret: str, tolerance: int = 300) -> bool:
+    """Verify Stripe's Stripe-Signature header (scheme: t=...,v1=...)."""
+    try:
+        parts = dict(p.split("=", 1) for p in sig_header.split(",") if "=" in p)
+        t = parts.get("t")
+        v1 = parts.get("v1")
+        if not t or not v1:
+            return False
+        signed = ("%s." % t).encode("utf-8") + payload
+        expected = hmac.new(secret.encode("utf-8"), signed, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, v1):
+            return False
+        if tolerance and abs(time.time() - int(t)) > tolerance:
+            return False
+        return True
+    except Exception:
+        return False
 
 
 def _auth():
