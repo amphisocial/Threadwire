@@ -4,7 +4,8 @@ import App from "./ThreadWire.jsx";
 import Login from "./auth/Login.jsx";
 import Admin from "./auth/Admin.jsx";
 import InviteAccept from "./auth/InviteAccept.jsx";
-import { getMe, logout } from "./lib/api.js";
+import Profile, { PlanBadge } from "./auth/Profile.jsx";
+import { getMe, logout, billingConfirm } from "./lib/api.js";
 
 const center = { minHeight: "100vh", display: "grid", placeItems: "center", background: "#0a0e15", color: "#8d9fb5", fontFamily: "'IBM Plex Mono',monospace" };
 
@@ -15,11 +16,24 @@ function Root() {
   const [state, setState] = useState({ loading: true, user: null });
   const [showAuth, setShowAuth] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const refresh = () =>
     getMe().then((u) => setState({ loading: false, user: u })).catch(() => setState({ loading: false, user: null }));
 
   useEffect(() => { if (!inviteToken) refresh(); }, []);
+
+  // Stripe Checkout return: confirm the session, then clean the URL and refresh.
+  useEffect(() => {
+    if (params.get("billing") === "success" && params.get("session_id")) {
+      billingConfirm(params.get("session_id")).catch(() => {}).finally(() => {
+        window.history.replaceState({}, "", "/");
+        refresh();
+      });
+    } else if (params.get("billing")) {
+      window.history.replaceState({}, "", "/");
+    }
+  }, []);
 
   // Invite link always wins — public accept flow.
   if (inviteToken) return <InviteAccept token={inviteToken} />;
@@ -41,8 +55,13 @@ function Root() {
           </button>
           <button onClick={() => logout().then(refresh)} title={`Signed in as ${state.user.email}`}
             style={{ ...pill, left: 132, color: "#8d9fb5", background: "rgba(13,18,28,.85)", border: "1px solid #243245" }}>
-            Sign out · {state.user.full_name || state.user.email}
+            Sign out
           </button>
+          <button onClick={() => setProfileOpen(true)} title="Profile & subscription"
+            style={{ ...pill, left: 214, color: "#e7eef6", background: "rgba(13,18,28,.85)", border: "1px solid #243245", display: "flex", alignItems: "center", gap: 7 }}>
+            {state.user.full_name || state.user.email} <PlanBadge plan={state.user.plan} />
+          </button>
+          {profileOpen && <Profile user={state.user} onClose={() => setProfileOpen(false)} />}
         </>
       ) : (
         <button onClick={() => setShowAuth(true)}

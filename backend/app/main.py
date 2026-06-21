@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
-from . import connectors_rest, db, emailer, importer, mfa
+from . import billing, connectors_rest, db, emailer, importer, mfa
 from .ai import ai_complete
 from .config import settings
 from .crypto import decrypt_bytes, encrypt_str
@@ -70,7 +70,9 @@ async def load_session(request: Request):
             """
             SELECT s.id AS session_id, s.mfa_passed,
                    u.id AS user_id, u.email, u.full_name, u.role, u.mfa_enabled, u.mfa_secret,
-                   o.id AS org_id, o.legal_name
+                   u.plan, u.stripe_customer_id,
+                   o.id AS org_id, o.legal_name,
+                   o.enterprise, o.stripe_customer_id AS org_stripe_customer_id
             FROM sessions s
             JOIN users u ON u.id = s.user_id
             JOIN organizations o ON o.id = u.org_id
@@ -90,6 +92,29 @@ async def current_user(request: Request) -> dict:
 def user_public(row) -> dict:
     return {"email": row["email"], "full_name": row["full_name"],
             "role": row["role"], "org": {"legal_name": row["legal_name"]}}
+
+
+def is_unlimited(user) -> bool:
+    return bool(user.get("enterprise")) or (user.get("plan") == "pro")
+
+
+def plan_label(user) -> str:
+    if user.get("enterprise"):
+        return "enterprise"
+    return user.get("plan") or "free"
+
+
+async def usage_today(con, user_id) -> int:
+    row = await con.fetchrow(
+        "SELECT tokens FROM usage_daily WHERE user_id = $1 AND usage_date = CURRENT_DATE", user_id)
+    return row["tokens"] if row else 0
+
+
+async def bump_usage(con, user_id, org_id) -> None:
+    await con.execute(
+        "INSERT INTO usage_daily (user_id, org_id, usage_date, tokens) VALUES ($1,$2,CURRENT_DATE,1) "
+        "ON CONFLICT (user_id, usage_date) DO UPDATE SET tokens = usage_daily.tokens + 1",
+        user_id, org_id)
 
 
 # --------------------------------------------------------------------------- #
@@ -248,7 +273,17 @@ async def logout(request: Request, resp: Response):
 
 @app.get("/api/me")
 async def me(user: dict = Depends(current_user)):
-    return user_public(user)
+    async with db.pool().acquire() as con:
+        used = await usage_today(con, user["user_id"])
+    pub = user_public(user)
+    unlimited = is_unlimited(user)
+    pub["plan"] = plan_label(user)
+    pub["unlimited"] = unlimited
+    pub["tokens_used_today"] = used
+    pub["daily_limit"] = None if unlimited else settings.free_daily_tokens
+    pub["billing_configured"] = bool(settings.stripe_secret_key)
+    pub["billing_mode"] = "live" if settings._payment_live else "test"
+    return pub
 
 
 # --------------------------------------------------------------------------- #
@@ -309,15 +344,121 @@ async def ai_chat(body: ChatIn, user: dict = Depends(current_user)):
     messages = [{"role": ("assistant" if m.role == "assistant" else "user"), "content": m.content}
                 for m in body.messages]
     system = body.system or ""
-    try:
-        async with db.pool().acquire() as con:
+    unlimited = is_unlimited(user)
+    async with db.pool().acquire() as con:
+        if not unlimited:
+            used = await usage_today(con, user["user_id"])
+            if used >= settings.free_daily_tokens:
+                return {"text": ("You've used all %d free assistant messages for today. "
+                                 "Upgrade to ThreadWire Pro for unlimited access from your profile "
+                                 "(your name, bottom-left), or check back tomorrow when your free "
+                                 "messages reset." % settings.free_daily_tokens),
+                        "limit": True, "tokens_used_today": used, "daily_limit": settings.free_daily_tokens}
+        try:
             summary = await importer.org_data_summary(con, user["org_id"])
-        if summary:
-            system = (system + "\n\n" + summary) if system else summary
-    except Exception:
-        pass
+            if summary:
+                system = (system + "\n\n" + summary) if system else summary
+        except Exception:
+            pass
+        await bump_usage(con, user["user_id"], user["org_id"])
     text = await ai_complete(system, messages)
     return {"text": text}
+
+
+# --------------------------------------------------------------------------- #
+# billing (Stripe) + usage
+# --------------------------------------------------------------------------- #
+class CheckoutIn(BaseModel):
+    plan: str  # "pro" | "enterprise"
+
+
+@app.post("/api/billing/checkout")
+async def billing_checkout(body: CheckoutIn, user: dict = Depends(current_user)):
+    base = settings.app_base_url.rstrip("/")
+    success = base + "/?billing=success&session_id={CHECKOUT_SESSION_ID}"
+    cancel = base + "/?billing=cancel"
+    if body.plan == "pro":
+        price = settings.stripe_price_pro
+    elif body.plan == "enterprise":
+        if user["role"] not in ("org_admin", "superadmin"):
+            raise HTTPException(403, "Only an org admin can purchase Enterprise")
+        price = settings.stripe_price_enterprise
+    else:
+        raise HTTPException(400, "Unknown plan")
+    if not settings.stripe_secret_key or not price:
+        raise HTTPException(400, "Billing is not configured on the server")
+    meta = {"plan": body.plan, "user_id": str(user["user_id"]), "org_id": str(user["org_id"])}
+    sess = await billing.create_checkout(price, success, cancel,
+                                         customer_email=user["email"],
+                                         client_ref=str(user["user_id"]), metadata=meta)
+    if not sess or not sess.get("url"):
+        raise HTTPException(502, "Could not start checkout")
+    return {"url": sess["url"]}
+
+
+@app.get("/api/billing/confirm")
+async def billing_confirm(session_id: str, user: dict = Depends(current_user)):
+    sess = await billing.retrieve_session(session_id)
+    if not sess:
+        raise HTTPException(400, "Could not verify the checkout session")
+    paid = sess.get("payment_status") == "paid" or sess.get("status") == "complete"
+    if not paid:
+        return {"ok": False, "status": sess.get("status")}
+    meta = sess.get("metadata") or {}
+    plan = meta.get("plan")
+    customer = sess.get("customer")
+    sub = sess.get("subscription")
+    async with db.pool().acquire() as con:
+        if plan == "pro" and meta.get("user_id") == str(user["user_id"]):
+            await con.execute(
+                "UPDATE users SET plan='pro', plan_status='active', stripe_customer_id=$2, "
+                "stripe_subscription_id=$3 WHERE id=$1", user["user_id"], customer, sub)
+        elif plan == "enterprise" and user["role"] in ("org_admin", "superadmin") \
+                and meta.get("org_id") == str(user["org_id"]):
+            await con.execute(
+                "UPDATE organizations SET enterprise=true, enterprise_status='active', "
+                "stripe_customer_id=$2, stripe_subscription_id=$3 WHERE id=$1",
+                user["org_id"], customer, sub)
+        else:
+            raise HTTPException(403, "This checkout session does not belong to your account")
+    return {"ok": True, "plan": plan}
+
+
+@app.post("/api/billing/portal")
+async def billing_portal(user: dict = Depends(current_user)):
+    base = settings.app_base_url.rstrip("/")
+    cust = None
+    if user["role"] in ("org_admin", "superadmin") and user.get("enterprise"):
+        cust = user.get("org_stripe_customer_id")
+    if not cust:
+        cust = user.get("stripe_customer_id")
+    if not cust:
+        raise HTTPException(400, "No active subscription to manage")
+    url = await billing.create_portal(cust, base + "/")
+    if not url:
+        raise HTTPException(502, "Could not open the billing portal")
+    return {"url": url}
+
+
+@app.get("/api/admin/usage")
+async def admin_usage(user: dict = Depends(current_user)):
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT u.email, u.full_name, u.role, u.plan, COALESCE(d.tokens,0) AS tokens_today "
+            "FROM users u LEFT JOIN usage_daily d ON d.user_id = u.id AND d.usage_date = CURRENT_DATE "
+            "WHERE u.org_id = $1 ORDER BY u.full_name NULLS LAST, u.email", user["org_id"])
+    ent = bool(user.get("enterprise"))
+    members = []
+    for r in rows:
+        members.append({
+            "email": r["email"], "full_name": r["full_name"], "role": r["role"],
+            "plan": "enterprise" if ent else (r["plan"] or "free"),
+            "tokens_today": r["tokens_today"],
+            "unlimited": ent or r["plan"] == "pro",
+        })
+    return {"enterprise": ent, "free_limit": settings.free_daily_tokens, "members": members}
 
 
 # --------------------------------------------------------------------------- #

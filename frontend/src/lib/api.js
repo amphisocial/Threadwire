@@ -42,3 +42,7 @@ export const importEntities = () => fetch("/api/import/entities", { credentials:
 export const importData = (entity, csv) => fetch("/api/import/" + entity, opts("POST", { csv })).then(jsonOrThrow);
 export const listEvents = (limit = 20) => fetch("/api/events?limit=" + limit, { credentials: "include" }).then(jsonOrThrow);
 export const sampleUrl = (entity) => "/api/import/sample/" + entity;
+export const billingCheckout = (plan) => fetch("/api/billing/checkout", opts("POST", { plan })).then(jsonOrThrow);
+export const billingConfirm = (sid) => fetch("/api/billing/confirm?session_id=" + encodeURIComponent(sid), { credentials: "include" }).then(jsonOrThrow);
+export const billingPortal = () => fetch("/api/billing/portal", opts("POST")).then(jsonOrThrow);
+export const adminUsage = () => fetch("/api/admin/usage", { credentials: "include" }).then(jsonOrThrow);

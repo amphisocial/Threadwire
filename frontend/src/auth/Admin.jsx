@@ -3,6 +3,7 @@ import {
   getCatalog, getConnectors, saveConnector, deleteConnector, testConnector,
   listInvites, createInvite, revokeInvite,
   importEntities, importData, listEvents, sampleUrl,
+  adminUsage, billingCheckout,
 } from "../lib/api.js";
 
 const C = {
@@ -244,6 +245,57 @@ function DataImport({ isAdmin }) {
   );
 }
 
+function MembershipUsage({ isAdmin }) {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (isAdmin) adminUsage().then(setData).catch(() => {}); }, []);
+  if (!isAdmin || !data) return null;
+  const planTone = (p) => (p === "enterprise" ? "blue" : p === "pro" ? "amber" : "muted");
+  const upgrade = async () => {
+    setBusy(true);
+    try { const r = await billingCheckout("enterprise"); if (r?.url) window.location.href = r.url; else setBusy(false); }
+    catch { setBusy(false); }
+  };
+  return (
+    <>
+      <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: ".22em", textTransform: "uppercase", color: C.amber, marginBottom: 14 }}>Membership &amp; usage</div>
+      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 700, fontSize: 15 }}>{data.enterprise ? "Enterprise" : "Free / per-user Pro"}</span>
+          <Tag tone={data.enterprise ? "blue" : "muted"}>{data.enterprise ? "unlimited for everyone" : "free tier " + data.free_limit + " / day"}</Tag>
+          {!data.enterprise && (
+            <button style={{ ...btnP, marginLeft: "auto" }} disabled={busy} onClick={upgrade}>
+              {busy ? "Opening…" : "Upgrade company to Enterprise · $29.99/mo"}
+            </button>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
+          {data.enterprise
+            ? "Everyone in your company has unlimited assistant access."
+            : "Each member gets " + data.free_limit + " assistant messages/day on Free. Members can upgrade themselves to Pro ($4.99/mo) from their profile, or buy Enterprise here to cover the whole company."}
+        </div>
+      </div>
+      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden", marginBottom: 36 }}>
+        <div style={{ display: "flex", padding: "10px 16px", borderBottom: `1px solid ${C.line}`, fontFamily: mono, fontSize: 10.5, color: C.faint }}>
+          <span style={{ flex: 1 }}>MEMBER</span><span style={{ width: 110 }}>PLAN</span><span style={{ width: 120, textAlign: "right" }}>TOKENS TODAY</span>
+        </div>
+        {data.members.map((u, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", padding: "11px 16px", borderBottom: i < data.members.length - 1 ? `1px solid ${C.line}` : "none" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5 }}>{u.full_name || u.email}{u.role === "org_admin" && <span style={{ fontFamily: mono, fontSize: 10, color: C.amber }}> · admin</span>}</div>
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{u.email}</div>
+            </div>
+            <span style={{ width: 110 }}><Tag tone={planTone(u.plan)}>{u.plan}</Tag></span>
+            <span style={{ width: 120, textAlign: "right", fontFamily: mono, fontSize: 13, color: u.unlimited ? C.green : (u.tokens_today >= data.free_limit ? C.red : C.ink) }}>
+              {u.unlimited ? "∞" : u.tokens_today + " / " + data.free_limit}
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 export default function Admin({ user, onClose }) {
   const isAdmin = user.role === "org_admin" || user.role === "superadmin";
   const [catalog, setCatalog] = useState([]);
@@ -284,6 +336,9 @@ export default function Admin({ user, onClose }) {
         <div style={{ color: C.muted, fontSize: 13.5, marginBottom: 26 }}>
           {user.org?.legal_name} · signed in as {user.full_name || user.email}
         </div>
+
+        {/* membership & usage (admin only) */}
+        <MembershipUsage isAdmin={isAdmin} />
 
         {/* connectors */}
         <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: ".22em", textTransform: "uppercase", color: C.amber, marginBottom: 14 }}>Connectors</div>
