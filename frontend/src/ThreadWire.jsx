@@ -2340,10 +2340,10 @@ const SALES_ORDERS = [
   { id: "SO-5024", customer: "Orion Systems", site: "Greenville, SC", promise: "2026-12-18", parts: ["PN-4501"], qty: 120, value: 97000 },
 ];
 const SEED_BLOCKERS = [
-  { id: "BLK-2001", title: "CNC-07 fixture failure halting servo bracket", status: "assigned", assignee: "Floor Lead", action: "Replace fixture and re-qualify first article before resuming WO-7790.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5004", "SO-5009"], created: "2026-06-18" },
-  { id: "BLK-2002", title: "PN-3323 collet-nut shortage — PO-9920 delayed", status: "open", assignee: null, action: "Expedite PO-9920 or re-source PN-3323 to an alternate supplier.", wo: "WO-7781", parts: ["PN-3323"], sos: ["SO-5002"], created: "2026-06-19" },
-  { id: "BLK-2003", title: "Anodize capacity risk on Q3 servo brackets", status: "open", assignee: null, action: "Qualify a second anodize vendor before the July build.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5014"], created: "2026-06-20" },
-  { id: "BLK-2004", title: "Long-lead casting risk on Q4 spindle housings", status: "assigned", assignee: "Procurement Desk", action: "Place long-lead PO for PN-3320 castings now to protect Q4.", wo: null, parts: ["PN-3320"], sos: ["SO-5019", "SO-5022"], created: "2026-06-20" },
+  { id: "BLK-2001", title: "CNC-07 fixture failure halting servo bracket", status: "assigned", assignee: "Floor Lead", action: "Replace fixture and re-qualify first article before resuming WO-7790.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5004", "SO-5009"], created: "2026-06-18", newPromise: "2026-07-01", comments: [{ ts: "2026-06-18T14:20:00Z", text: "Replacement fixture ordered, ETA Jun 26. Re-qual ~2 days after." }, { ts: "2026-06-19T09:05:00Z", text: "Maintenance confirmed spindle is fine; isolated to fixture." }] },
+  { id: "BLK-2002", title: "PN-3323 collet-nut shortage — PO-9920 delayed", status: "open", assignee: null, action: "Expedite PO-9920 or re-source PN-3323 to an alternate supplier.", wo: "WO-7781", parts: ["PN-3323"], sos: ["SO-5002"], created: "2026-06-19", newPromise: null, comments: [] },
+  { id: "BLK-2003", title: "Anodize capacity risk on Q3 servo brackets", status: "open", assignee: null, action: "Qualify a second anodize vendor before the July build.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5014"], created: "2026-06-20", newPromise: null, comments: [] },
+  { id: "BLK-2004", title: "Long-lead casting risk on Q4 spindle housings", status: "assigned", assignee: "Procurement Desk", action: "Place long-lead PO for PN-3320 castings now to protect Q4.", wo: null, parts: ["PN-3320"], sos: ["SO-5019", "SO-5022"], created: "2026-06-20", newPromise: null, comments: [] },
 ];
 
 const soById = (id) => SALES_ORDERS.find((s) => s.id === id);
@@ -2436,7 +2436,8 @@ function BlockerForm({ pre }) {
 
 /* ---------- blocker detail / close ---------- */
 function BlockerModal({ id }) {
-  const { blockers, closeBlocker, assignBlocker, setBlockerStatus, closeView, people } = useData();
+  const { blockers, closeBlocker, assignBlocker, setBlockerStatus, setNewPromise, addComment, closeView, people } = useData();
+  const [draft, setDraft] = useState("");
   const b = blockers.find((x) => x.id === id);
   if (!b) return null;
   const val = blockerValue(b);
@@ -2484,6 +2485,34 @@ function BlockerModal({ id }) {
           ); })}
         </div>
 
+        <div style={{ marginBottom: 16 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Revised promise date</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <input type="date" value={b.newPromise || ""} onChange={(e) => setNewPromise(b.id, e.target.value)}
+              style={{ fontFamily: "var(--mono)", fontSize: 12.5, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)", colorScheme: "dark" }} />
+            {b.newPromise
+              ? <span className="tf-mono" style={{ fontSize: 11, color: "var(--amber)" }}>most-probable ship date for impacted orders</span>
+              : <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>set a most-probable date based on this blocker</span>}
+            {b.newPromise && <button className="tf-btn tf-btn-ghost" disabled title="ERP integration — coming soon" style={{ marginLeft: "auto", fontSize: 11, opacity: 0.55, cursor: "not-allowed" }}>Push to ERP ↗</button>}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Updates ({(b.comments || []).length})</div>
+          {(b.comments || []).map((c, i) => (
+            <div key={i} style={{ padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
+              <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginBottom: 3 }}>{new Date(c.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>{c.text}</div>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 7, marginTop: 4 }}>
+            <input className="tf-input" value={draft} placeholder="Add an update…" style={{ flex: 1 }}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) { addComment(b.id, draft.trim()); setDraft(""); } }} />
+            <button className="tf-btn tf-btn-primary" disabled={!draft.trim()} onClick={() => { if (draft.trim()) { addComment(b.id, draft.trim()); setDraft(""); } }} style={{ padding: "9px 12px", opacity: draft.trim() ? 1 : 0.5 }}>Post</button>
+          </div>
+        </div>
+
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", paddingTop: 14, borderTop: "1px solid var(--line)" }}>
           <label className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>status</label>
           <select value={b.status} onChange={(e) => setBlockerStatus(b.id, e.target.value)}
@@ -2513,6 +2542,7 @@ function SalesOrderModal({ id }) {
   if (!o) return null;
   const blk = openBlockerForSO(blockers, id);
   const related = blockers.filter((b) => b.sos.includes(id)).sort((a, b) => (a.status === "closed") - (b.status === "closed") || blockerValue(b) - blockerValue(a));
+  const revised = related.find((x) => x.status !== "closed" && x.newPromise)?.newPromise;
   const wos = WORKORDERS.filter((w) => o.parts.includes(w.part));
 
   return (
@@ -2527,7 +2557,8 @@ function SalesOrderModal({ id }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", marginBottom: 16 }}>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Site</span><span style={{ fontSize: 13 }}>{o.site}</span>
-          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Promise date</span><span style={{ fontSize: 13 }}>{o.promise}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Promise date</span><span style={{ fontSize: 13, textDecoration: revised ? "line-through" : "none", opacity: revised ? 0.6 : 1 }}>{o.promise}</span>
+          {revised && <><span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Revised promise</span><span style={{ fontSize: 13, fontWeight: 700, color: "var(--amber)" }}>{revised} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", fontWeight: 400 }}>· most probable</span></span></>}
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Quantity</span><span style={{ fontSize: 13 }}>{o.qty}</span>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Total value</span><span className="tf-disp" style={{ fontSize: 16, fontWeight: 800 }}>{fmtMoney(o.value)}</span>
         </div>
@@ -2950,10 +2981,12 @@ export default function App() {
   const dataVal = {
     sos: SALES_ORDERS, blockers, people: PEOPLE, sites: SITES,
     delivSite, setDelivSite, delivWeek, setDelivWeek,
-    addBlocker: (p) => { const id = "BLK-" + (2001 + blockers.length); setBlockers((b) => [...b, { id, created: isoOf(new Date()), ...p }]); setBForm(null); setBView(id); },
+    addBlocker: (p) => { const id = "BLK-" + (2001 + blockers.length); setBlockers((b) => [...b, { id, created: isoOf(new Date()), newPromise: null, comments: [], ...p }]); setBForm(null); setBView(id); },
     closeBlocker: (id) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed" } : x))),
     assignBlocker: (id, who) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, assignee: who, status: x.status === "closed" ? "closed" : who ? "assigned" : "open" } : x))),
     setBlockerStatus: (id, status) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status } : x))),
+    setNewPromise: (id, date) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, newPromise: date || null } : x))),
+    addComment: (id, text) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, comments: [...(x.comments || []), { ts: new Date().toISOString(), text }] } : x))),
     openBlocker: (id) => setBView(id), closeView: () => setBView(null),
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
     openSO: (id) => setSoView(id), closeSO: () => setSoView(null),
