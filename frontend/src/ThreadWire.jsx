@@ -2368,7 +2368,7 @@ const effPromise = (blockers, o) => revisedForSO(blockers, o.id) || o.promise;
 const fmtDateTime = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }); } catch (_) { return String(iso); } };
 
 /* date helpers (local, no TZ surprises) */
-const D = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d); };
+const D = (iso) => { if (!iso) return new Date(); const [y, m, d] = iso.split("-").map(Number); return new Date(y, (m || 1) - 1, d || 1); };
 const isoOf = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 const addDays = (dt, n) => { const x = new Date(dt); x.setDate(x.getDate() + n); return x; };
 const mondayOf = (dt) => addDays(dt, -((dt.getDay() + 6) % 7));
@@ -2686,7 +2686,7 @@ function BlockersPage() {
 function DeliveryPage() {
   const { sos, blockers, openBlocker, openForm, openSO, delivSite: site, setDelivSite: setSite, delivWeek: weekStart, setDelivWeek: setWeekStart } = useData();
   const [view, setView] = useState("week");
-  const earliest = useMemo(() => sos.map((s) => s.promise).sort()[0], [sos]);
+  const earliest = useMemo(() => sos.map((s) => s.promise).filter(Boolean).sort()[0], [sos]);
   const [monthRef, setMonthRef] = useState(() => D(earliest));
 
   const filtered = site === "All" ? sos : sos.filter((s) => s.site === site);
@@ -2890,7 +2890,7 @@ function FinancePage() {
   const { sos, blockers } = useData();
   const [site, setSite] = useState("All");
   const filtered = site === "All" ? sos : sos.filter((s) => s.site === site);
-  const rows = filtered.map((o) => { const eff = effPromise(blockers, o); return { ...o, blk: !!openBlockerForSO(blockers, o.id), eff, ym: eff.slice(0, 7) }; });
+  const rows = filtered.filter((o) => effPromise(blockers, o)).map((o) => { const eff = effPromise(blockers, o); return { ...o, blk: !!openBlockerForSO(blockers, o.id), eff, ym: eff.slice(0, 7) }; });
 
   const mLabel = (ym) => { const [y, m] = ym.split("-"); return new Date(+y, +m - 1, 1).toLocaleDateString(undefined, { month: "short" }) + " '" + y.slice(2); };
   const months = [...new Set(rows.map((r) => r.ym))].sort();
