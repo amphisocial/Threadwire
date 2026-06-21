@@ -11,6 +11,7 @@ import {
   Minus, Trash2, Calculator, SlidersHorizontal, DollarSign, Factory, ChevronDown,
   Coins, Scale, Truck,
   Plus, CalendarDays, ChevronLeft, ChevronRight, User, X, ClipboardList, Building2, Filter,
+  Mic, MicOff, Volume2, VolumeX,
 } from "lucide-react";
 
 /* =========================================================================
@@ -442,6 +443,68 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx }) {
   const hist = chat?.hist || [];
   useEffect(() => { if (open) endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy, open, route]);
 
+  const [listening, setListening] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [convo, setConvo] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const recogRef = useRef(null);
+  const convoRef = useRef(false);
+  const voiceRef = useRef(false);
+  useEffect(() => { convoRef.current = convo; }, [convo]);
+  useEffect(() => { voiceRef.current = voiceOn; }, [voiceOn]);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const ttsOk = typeof window !== "undefined" && window.speechSynthesis;
+
+  function startListen() {
+    if (!sttOk) return;
+    window.speechSynthesis && window.speechSynthesis.cancel();
+    let r = recogRef.current;
+    if (!r) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      r = new SR();
+      r.lang = "en-US"; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+      r.onresult = (e) => {
+        let interim = "", final = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) final += t; else interim += t;
+        }
+        if (final) { setInput(""); setListening(false); send(final); }
+        else setInput(interim);
+      };
+      r.onend = () => setListening(false);
+      r.onerror = (ev) => { setListening(false); if (ev.error === "not-allowed" || ev.error === "service-not-allowed") setConvo(false); };
+      recogRef.current = r;
+    }
+    try { r.start(); setListening(true); } catch (_) {}
+  }
+  const stopListen = () => { try { recogRef.current && recogRef.current.stop(); } catch (_) {} setListening(false); };
+
+  const speak = (text) => {
+    if (!ttsOk) { if (convoRef.current) startListen(); return; }
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(String(text).replace(/[*_#`>]/g, ""));
+    u.rate = 1.03; u.pitch = 1;
+    const vs = synth.getVoices();
+    const v = vs.find((x) => /Samantha|Google US English|Microsoft (Aria|Jenny|Zira)/i.test(x.name)) || vs.find((x) => /^en/i.test(x.lang));
+    if (v) u.voice = v;
+    u.onend = () => { setSpeaking(false); if (convoRef.current) startListen(); };
+    u.onerror = () => { setSpeaking(false); };
+    setSpeaking(true);
+    synth.speak(u);
+  };
+
+  const toggleMic = () => {
+    if (convo || listening) { setConvo(false); stopListen(); window.speechSynthesis && window.speechSynthesis.cancel(); setSpeaking(false); }
+    else { setConvo(true); setVoiceOn(true); startListen(); }
+  };
+  const toggleVoice = () => { setVoiceOn((v) => { const nv = !v; if (!nv) { window.speechSynthesis && window.speechSynthesis.cancel(); setSpeaking(false); } return nv; }); };
+
+  useEffect(() => () => { try { recogRef.current && recogRef.current.abort(); } catch (_) {} window.speechSynthesis && window.speechSynthesis.cancel(); }, []);
+  useEffect(() => { if (!open) { setConvo(false); stopListen(); window.speechSynthesis && window.speechSynthesis.cancel(); setSpeaking(false); } }, [open]);
+  useEffect(() => { setConvo(false); stopListen(); window.speechSynthesis && window.speechSynthesis.cancel(); setSpeaking(false); }, [route]);
+
   const send = async (text) => {
     const q = (text ?? input).trim();
     if (!q || busy) return;
@@ -455,6 +518,8 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx }) {
       hist: [...c.hist, { role: "user", content: q }, { role: "assistant", content: out }].slice(-8),
     }));
     setBusy(false);
+    if (voiceRef.current) speak(out);
+    else if (convoRef.current) startListen();
   };
 
   /* minimized pill */
@@ -502,6 +567,12 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx }) {
           </div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+          {ttsOk && (
+            <button title={voiceOn ? "Mute spoken replies" : "Speak replies aloud"} onClick={toggleVoice}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: voiceOn ? cfg.accent : "var(--faint)", padding: 6, borderRadius: 8 }}>
+              {voiceOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+          )}
           {msgs.length > 0 && (
             <button title="Clear" onClick={() => update(route, () => ({ msgs: [], hist: [] }))}
               style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--faint)", padding: 6, borderRadius: 8 }}>
@@ -543,8 +614,19 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx }) {
       </div>
 
       {/* input */}
-      <div style={{ padding: 11, borderTop: "1px solid var(--line)", display: "flex", gap: 7 }}>
-        <input className="tf-input" value={input} placeholder={`Ask about ${cfg.subject.toLowerCase()}…`}
+      <div style={{ padding: 11, borderTop: "1px solid var(--line)", display: "flex", gap: 7, alignItems: "center" }}>
+        {sttOk && (
+          <button onClick={toggleMic} title={convo || listening ? "Stop voice conversation" : "Talk to the assistant"}
+            style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", cursor: "pointer",
+              border: "1px solid " + (listening || convo ? "var(--red)" : "var(--line2)"),
+              background: listening || convo ? "rgba(240,86,58,.16)" : "var(--bg2)",
+              color: listening || convo ? "var(--red)" : "var(--muted)",
+              animation: listening ? "tfPulse 1.1s infinite" : "none" }}>
+            {convo || listening ? <Mic size={16} /> : <MicOff size={16} />}
+          </button>
+        )}
+        <input className="tf-input" value={input}
+          placeholder={listening ? "Listening…" : speaking ? "Speaking…" : `Ask about ${cfg.subject.toLowerCase()}…`}
           onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
         <button className="tf-btn tf-btn-primary" onClick={() => send()} disabled={busy} style={{ padding: "10px 13px" }}>
           <Send size={15} />
