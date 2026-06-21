@@ -2242,7 +2242,7 @@ function ThreadModal({ stack, setStack }) {
   const val = (v) => (THREAD[v] ? <ThreadLink id={v} style={{ color: "var(--thread)" }}>{v}</ThreadLink> : v);
 
   return (
-    <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 220, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 540, maxHeight: "82vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           {stack.length > 1 && <span onClick={back} style={{ cursor: "pointer", color: "var(--faint)", fontSize: 13 }}>←</span>}
@@ -2375,7 +2375,7 @@ function BlockerForm({ pre }) {
   const chk = (on) => ({ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${on ? "var(--amber)" : "var(--line)"}`, background: on ? "var(--panel2)" : "var(--bg2)", color: on ? "var(--ink)" : "var(--muted)" });
 
   return (
-    <div onClick={closeForm} style={{ position: "fixed", inset: 0, zIndex: 210, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={closeForm} style={{ position: "fixed", inset: 0, zIndex: 230, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 560, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
           <ClipboardList size={18} color="var(--amber)" />
@@ -2436,13 +2436,13 @@ function BlockerForm({ pre }) {
 
 /* ---------- blocker detail / close ---------- */
 function BlockerModal({ id }) {
-  const { blockers, closeBlocker, assignBlocker, closeView, people } = useData();
+  const { blockers, closeBlocker, assignBlocker, setBlockerStatus, closeView, people } = useData();
   const b = blockers.find((x) => x.id === id);
   if (!b) return null;
   const val = blockerValue(b);
 
   return (
-    <div onClick={closeView} style={{ position: "fixed", inset: 0, zIndex: 205, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={closeView} style={{ position: "fixed", inset: 0, zIndex: 215, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 560, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <Tag tone={BLK_TONE[b.status]}>{b.status}</Tag>
@@ -2485,6 +2485,13 @@ function BlockerModal({ id }) {
         </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+          <label className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>status</label>
+          <select value={b.status} onChange={(e) => setBlockerStatus(b.id, e.target.value)}
+            style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
+            <option value="open">open</option>
+            <option value="assigned">assigned</option>
+            <option value="closed">closed</option>
+          </select>
           <select value={b.assignee || ""} onChange={(e) => assignBlocker(b.id, e.target.value || null)} disabled={b.status === "closed"}
             style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
             <option value="">Unassigned</option>
@@ -2946,6 +2953,7 @@ export default function App() {
     addBlocker: (p) => { const id = "BLK-" + (2001 + blockers.length); setBlockers((b) => [...b, { id, created: isoOf(new Date()), ...p }]); setBForm(null); setBView(id); },
     closeBlocker: (id) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed" } : x))),
     assignBlocker: (id, who) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, assignee: who, status: x.status === "closed" ? "closed" : who ? "assigned" : "open" } : x))),
+    setBlockerStatus: (id, status) => setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status } : x))),
     openBlocker: (id) => setBView(id), closeView: () => setBView(null),
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
     openSO: (id) => setSoView(id), closeSO: () => setSoView(null),
