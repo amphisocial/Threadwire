@@ -263,6 +263,9 @@ async def org_data_summary(con, org_id) -> str:
         evts = await con.fetch(
             "SELECT entity, inserted, updated, errors, created_at FROM import_events "
             "WHERE org_id=$1 ORDER BY created_at DESC LIMIT 10", org_id)
+        acts = await con.fetch(
+            "SELECT type, detail, by_user, created_at FROM activity_events "
+            "WHERE org_id=$1 ORDER BY created_at DESC LIMIT 12", org_id)
     except Exception:
         return ""
     if not counts:
@@ -275,4 +278,9 @@ async def org_data_summary(con, org_id) -> str:
             lines.append("- %s: +%d new, %d updated, %d errors (%s)" % (
                 e["entity"], e["inserted"], e["updated"], e["errors"],
                 e["created_at"].strftime("%Y-%m-%d %H:%M")))
+    if acts:
+        lines.append("Recent changes (newest first):")
+        for a in acts:
+            lines.append("- %s: %s — %s (%s)" % (
+                a["type"], a["detail"], a["by_user"], a["created_at"].strftime("%Y-%m-%d %H:%M")))
     return "\n".join(lines)

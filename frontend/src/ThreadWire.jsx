@@ -2347,11 +2347,21 @@ const SEED_BLOCKERS = [
   { id: "BLK-2004", title: "Long-lead casting risk on Q4 spindle housings", status: "assigned", assignee: "Procurement Desk", openedBy: "Anu Mishra", action: "Place long-lead PO for PN-3320 castings now to protect Q4.", wo: null, parts: ["PN-3320"], sos: ["SO-5019", "SO-5022"], created: "2026-06-20T15:30:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
 ];
 
-const soById = (id) => SALES_ORDERS.find((s) => s.id === id);
+// Active datasets: sample by default (demo / signed-out), swapped to backend rows for signed-in members.
+let ACTIVE_ORDERS = SALES_ORDERS;
+let ACTIVE_WOS = WORKORDERS;
+let ACTIVE_PART_NUMBERS = Object.keys(PART_META);
+let ACTIVE_PART_DESC = Object.fromEntries(Object.entries(PART_META).map(([k, v]) => [k, v.desc || ""]));
+const soById = (id) => ACTIVE_ORDERS.find((s) => s.id === id);
 const blockerValue = (b) => b.sos.reduce((a, id) => a + (soById(id)?.value || 0), 0);
 const openBlockerForSO = (blockers, soId) => blockers.find((b) => b.status !== "closed" && b.sos.includes(soId));
 const BLK_TONE = { open: "red", assigned: "yellow", closed: "green" };
 const CURRENT_USER = "Anu Mishra";
+let ACTIVE_USER = CURRENT_USER;
+// backend → app shape mappers (members)
+const mapSO = (r) => ({ id: r.so_number, customer: r.customer, site: r.site || "", promise: r.promise_date, parts: r.part_number ? [r.part_number] : [], qty: Number(r.quantity) || 0, value: Number(r.value) || 0 });
+const mapWO = (r) => ({ id: r.wo_number, part: r.part_number || "", desc: r.description || "" });
+const mapBlk = (r) => ({ id: r.id, title: r.title, status: r.status, assignee: r.assignee || null, openedBy: r.opened_by || null, created: r.created_at, closedAt: r.closed_at || null, closedBy: r.closed_by || null, newPromise: r.new_promise || null, action: r.action || "", wo: r.wo || null, sos: r.sos || [], parts: r.parts || [], comments: r.comments || [] });
 // effective promise = revised date from an open blocker (if any), else the original committed date
 const revisedForSO = (blockers, soId) => { const b = blockers.find((x) => x.status !== "closed" && x.newPromise && x.sos.includes(soId)); return b ? b.newPromise : null; };
 const effPromise = (blockers, o) => revisedForSO(blockers, o.id) || o.promise;
@@ -2401,7 +2411,7 @@ function BlockerForm({ pre }) {
 
         <label style={{ fontSize: 12, color: "var(--muted)" }}>Part number(s)</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0 14px" }}>
-          {Object.keys(PART_META).map((pn) => (
+          {ACTIVE_PART_NUMBERS.map((pn) => (
             <span key={pn} onClick={() => tog("parts", pn)} style={chk(f.parts.includes(pn))}>{pn}</span>
           ))}
         </div>
@@ -2411,7 +2421,7 @@ function BlockerForm({ pre }) {
             <label style={{ fontSize: 12, color: "var(--muted)" }}>Work order</label>
             <select style={{ ...box, marginTop: 5 }} value={f.wo} onChange={(e) => setF((s) => ({ ...s, wo: e.target.value }))}>
               <option value="">— none —</option>
-              {WORKORDERS.map((w) => <option key={w.id} value={w.id}>{w.id} · {w.desc}</option>)}
+              {ACTIVE_WOS.map((w) => <option key={w.id} value={w.id}>{w.id} · {w.desc}</option>)}
             </select>
           </div>
           <div style={{ flex: "1 1 200px" }}>
@@ -2553,7 +2563,7 @@ function SalesOrderModal({ id }) {
   const blk = openBlockerForSO(blockers, id);
   const related = blockers.filter((b) => b.sos.includes(id)).sort((a, b) => (a.status === "closed") - (b.status === "closed") || blockerValue(b) - blockerValue(a));
   const revised = related.find((x) => x.status !== "closed" && x.newPromise)?.newPromise;
-  const wos = WORKORDERS.filter((w) => o.parts.includes(w.part));
+  const wos = ACTIVE_WOS.filter((w) => o.parts.includes(w.part));
 
   return (
     <div onClick={closeSO} style={{ position: "fixed", inset: 0, zIndex: 206, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
@@ -2578,7 +2588,7 @@ function SalesOrderModal({ id }) {
           {o.parts.map((pn) => (
             <div key={pn} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
               <ThreadLink id={pn} style={{ color: "var(--green)", fontFamily: "var(--mono)", fontSize: 12 }}>{pn}</ThreadLink>
-              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{PART_META[pn]?.desc || ""}</span>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{PART_META[pn]?.desc || ACTIVE_PART_DESC[pn] || ""}</span>
             </div>
           ))}
         </div>
@@ -2976,13 +2986,15 @@ function FinancePage() {
   );
 }
 
-export default function App() {
+export default function App({ user }) {
+  const backend = !!user;
   const [route, setRoute] = useState("home");
   const [assetStage, setAssetStage] = useState("all");
   const [tier, setTier] = useState({ assets: "free", contracts: "free", requirements: "free", thread: "free", directspend: "free" });
   const [chats, setChats] = useState(EMPTY_CHATS);
   const [dockOpen, setDockOpen] = useState(false);
   const [tStack, setTStack] = useState([]);
+  const [sos, setSos] = useState(SALES_ORDERS);
   const [blockers, setBlockers] = useState(SEED_BLOCKERS);
   const [bView, setBView] = useState(null);
   const [bForm, setBForm] = useState(null);
@@ -2990,16 +3002,54 @@ export default function App() {
   const [delivSite, setDelivSite] = useState("All");
   const [delivWeek, setDelivWeek] = useState(() => mondayOf(D(SALES_ORDERS.map((s) => s.promise).sort()[0])));
   const [events, setEvents] = useState([]);
-  const logEvent = (type, detail) => setEvents((e) => [...e, { ts: new Date().toISOString(), who: CURRENT_USER, type, detail }].slice(-60));
+  const logEvent = (type, detail) => setEvents((e) => [...e, { ts: new Date().toISOString(), who: ACTIVE_USER, type, detail }].slice(-60));
+
+  const apiGet = (u) => fetch(u, { credentials: "include" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const apiSend = (u, method, body) => fetch(u, { method, credentials: "include", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+
+  // Members: load digital-thread data from the backend tables (else keep sample data).
+  useEffect(() => {
+    if (!backend) return;
+    ACTIVE_USER = user.full_name || user.email || CURRENT_USER;
+    let alive = true;
+    (async () => {
+      const [so, wo, parts, blk] = await Promise.all([
+        apiGet("/api/sales_orders"), apiGet("/api/work_orders"), apiGet("/api/parts"), apiGet("/api/blockers"),
+      ]);
+      if (!alive) return;
+      if (Array.isArray(wo)) ACTIVE_WOS = wo.map(mapWO);
+      if (Array.isArray(parts) && parts.length) {
+        ACTIVE_PART_NUMBERS = parts.map((p) => p.part_number);
+        ACTIVE_PART_DESC = Object.fromEntries(parts.map((p) => [p.part_number, p.description || ""]));
+      }
+      if (Array.isArray(so)) {
+        const m = so.map(mapSO);
+        ACTIVE_ORDERS = m; setSos(m);
+        const ds = m.map((s) => s.promise).filter(Boolean).sort()[0];
+        if (ds) setDelivWeek(mondayOf(D(ds)));
+      }
+      if (Array.isArray(blk)) setBlockers(blk.map(mapBlk));
+    })();
+    return () => { alive = false; };
+  }, [backend]);
+
   const dataVal = {
-    sos: SALES_ORDERS, blockers, people: PEOPLE, sites: SITES, events, logEvent,
+    sos, blockers, people: PEOPLE, sites: SITES, events, logEvent,
     delivSite, setDelivSite, delivWeek, setDelivWeek,
-    addBlocker: (p) => { const id = "BLK-" + (2001 + blockers.length); setBlockers((b) => [...b, { id, created: new Date().toISOString(), openedBy: CURRENT_USER, closedAt: null, closedBy: null, newPromise: null, comments: [], ...p }]); setBForm(null); setBView(id); logEvent("blocker.created", id + " · " + (p.title || "")); },
-    closeBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed", closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || CURRENT_USER } : x))); logEvent("blocker.closed", id); },
-    assignBlocker: (id, who) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, assignee: who, status: x.status === "closed" ? "closed" : who ? "assigned" : "open" } : x))); logEvent("blocker.assigned", id + " → " + (who || "unassigned")); },
-    setBlockerStatus: (id, status) => { setBlockers((b) => b.map((x) => { if (x.id !== id) return x; if (status === "closed") return { ...x, status, closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || CURRENT_USER }; return { ...x, status, closedAt: null, closedBy: null }; })); logEvent("blocker.status", id + " → " + status); },
-    setNewPromise: (id, date) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, newPromise: date || null } : x))); logEvent("blocker.revisedPromise", id + " → " + (date || "cleared")); },
-    addComment: (id, text) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, comments: [...(x.comments || []), { ts: new Date().toISOString(), who: CURRENT_USER, text }] } : x))); logEvent("blocker.update", id + ": " + text.slice(0, 70)); },
+    addBlocker: async (p) => {
+      if (backend) {
+        const r = await apiSend("/api/blockers", "POST", { title: p.title, sos: p.sos, parts: p.parts, wo: p.wo || null, assignee: p.assignee || null, action: p.action || "", status: p.status });
+        if (r && r.id) { const b = mapBlk(r); setBlockers((bs) => [...bs, b]); setBForm(null); setBView(b.id); logEvent("blocker.created", b.id + " · " + b.title); return; }
+      }
+      const id = "BLK-" + (2001 + blockers.length);
+      setBlockers((b) => [...b, { id, created: new Date().toISOString(), openedBy: ACTIVE_USER, closedAt: null, closedBy: null, newPromise: null, comments: [], ...p }]);
+      setBForm(null); setBView(id); logEvent("blocker.created", id + " · " + (p.title || ""));
+    },
+    closeBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed", closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || ACTIVE_USER } : x))); logEvent("blocker.closed", id); if (backend) apiSend("/api/blockers/" + id, "PATCH", { status: "closed" }); },
+    assignBlocker: (id, who) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, assignee: who, status: x.status === "closed" ? "closed" : who ? "assigned" : "open" } : x))); logEvent("blocker.assigned", id + " → " + (who || "unassigned")); if (backend) apiSend("/api/blockers/" + id, "PATCH", { assignee: who || "" }); },
+    setBlockerStatus: (id, status) => { setBlockers((b) => b.map((x) => { if (x.id !== id) return x; if (status === "closed") return { ...x, status, closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || ACTIVE_USER }; return { ...x, status, closedAt: null, closedBy: null }; })); logEvent("blocker.status", id + " → " + status); if (backend) apiSend("/api/blockers/" + id, "PATCH", { status }); },
+    setNewPromise: (id, date) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, newPromise: date || null } : x))); logEvent("blocker.revisedPromise", id + " → " + (date || "cleared")); if (backend) apiSend("/api/blockers/" + id, "PATCH", { new_promise: date || "" }); },
+    addComment: (id, text) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, comments: [...(x.comments || []), { ts: new Date().toISOString(), who: ACTIVE_USER, text }] } : x))); logEvent("blocker.update", id + ": " + text.slice(0, 70)); if (backend) apiSend("/api/blockers/" + id + "/comments", "POST", { text }); },
     openBlocker: (id) => setBView(id), closeView: () => setBView(null),
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
     openSO: (id) => setSoView(id), closeSO: () => setSoView(null),
@@ -3007,9 +3057,9 @@ export default function App() {
 
   // live context so the offline assistant can give real numbers
   const botCtx = (() => {
-    const blkVal = (b) => b.sos.reduce((a, id) => a + (SALES_ORDERS.find((s) => s.id === id)?.value || 0), 0);
+    const blkVal = (b) => b.sos.reduce((a, id) => a + (soById(id)?.value || 0), 0);
     if (route === "visibility") {
-      const f = delivSite === "All" ? SALES_ORDERS : SALES_ORDERS.filter((s) => s.site === delivSite);
+      const f = delivSite === "All" ? sos : sos.filter((s) => s.site === delivSite);
       const isos = Array.from({ length: 7 }, (_, i) => isoOf(addDays(delivWeek, i)));
       const wk = f.filter((s) => isos.includes(effPromise(blockers, s)));
       const blocked = wk.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
@@ -3017,8 +3067,8 @@ export default function App() {
       return { site: delivSite, weekLabel: fmtMD(delivWeek) + "–" + fmtMD(addDays(delivWeek, 6)), committed: total - blocked, blocked, expected: total, orders: wk.length, atRisk: wk.filter((s) => openBlockerForSO(blockers, s.id)).length };
     }
     if (route === "finance") {
-      const blocked = SALES_ORDERS.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
-      const total = SALES_ORDERS.reduce((a, s) => a + s.value, 0);
+      const blocked = sos.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
+      const total = sos.reduce((a, s) => a + s.value, 0);
       return { committed: total - blocked, blocked, expected: total };
     }
     if (route === "blockers") {
@@ -3032,7 +3082,7 @@ export default function App() {
   // full live snapshot appended to the system prompt so the model always sees
   // the current orders, blockers (with audit + revised dates) and recent changes
   const aiContext = (() => {
-    const orders = SALES_ORDERS.map((o) => ({ id: o.id, customer: o.customer, site: o.site, promise: o.promise, effective: effPromise(blockers, o), qty: o.qty, value: o.value, blocked: !!openBlockerForSO(blockers, o.id) }));
+    const orders = sos.map((o) => ({ id: o.id, customer: o.customer, site: o.site, promise: o.promise, effective: effPromise(blockers, o), qty: o.qty, value: o.value, blocked: !!openBlockerForSO(blockers, o.id) }));
     const blks = blockers.map((b) => ({ id: b.id, title: b.title, status: b.status, assignee: b.assignee || null, openedBy: b.openedBy || null, opened: b.created, closedAt: b.closedAt || null, closedBy: b.closedBy || null, revisedPromise: b.newPromise || null, action: b.action, orders: b.sos, parts: b.parts, workOrder: b.wo || null, dollarsAtRisk: blockerValue(b), updates: (b.comments || []).map((c) => ({ who: c.who, ts: c.ts, text: c.text })) }));
     return [
       "LIVE THREADWIRE DATA — authoritative current state. Answer using these exact values (dollar amounts, dates, owners, statuses here override any assumption). Money is in USD.",

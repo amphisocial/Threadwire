@@ -371,6 +371,171 @@ async def list_events(limit: int = 20, user: dict = Depends(current_user)):
 
 
 # --------------------------------------------------------------------------- #
+# digital-thread reads (members drive the UI from these tables)
+# --------------------------------------------------------------------------- #
+@app.get("/api/sales_orders")
+async def get_sales_orders(user: dict = Depends(current_user)):
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT so_number, customer, site, promise_date, part_number, quantity, value, status "
+            "FROM sales_orders WHERE org_id = $1 ORDER BY promise_date NULLS LAST, so_number", user["org_id"])
+    out = []
+    for r in rows:
+        out.append({
+            "so_number": r["so_number"], "customer": r["customer"], "site": r["site"] or "",
+            "promise_date": r["promise_date"].isoformat() if r["promise_date"] else None,
+            "part_number": r["part_number"] or "",
+            "quantity": float(r["quantity"]) if r["quantity"] is not None else 0,
+            "value": float(r["value"]) if r["value"] is not None else 0,
+            "status": r["status"] or "",
+        })
+    return out
+
+
+@app.get("/api/work_orders")
+async def get_work_orders(user: dict = Depends(current_user)):
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT wo_number, part_number, description, site, status FROM work_orders "
+            "WHERE org_id = $1 ORDER BY wo_number", user["org_id"])
+    return [{"wo_number": r["wo_number"], "part_number": r["part_number"] or "",
+             "description": r["description"] or "", "site": r["site"] or "", "status": r["status"] or ""}
+            for r in rows]
+
+
+@app.get("/api/parts")
+async def get_parts(user: dict = Depends(current_user)):
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT part_number, description, unit_cost, commodity, revision, lifecycle FROM parts "
+            "WHERE org_id = $1 ORDER BY part_number", user["org_id"])
+    return [dict(r) | {"unit_cost": float(r["unit_cost"]) if r["unit_cost"] is not None else None} for r in rows]
+
+
+# --------------------------------------------------------------------------- #
+# persistent blockers
+# --------------------------------------------------------------------------- #
+class BlockerIn(BaseModel):
+    title: str = Field(min_length=1, max_length=400)
+    sos: list = Field(default_factory=list)
+    parts: list = Field(default_factory=list)
+    wo: Optional[str] = None
+    assignee: Optional[str] = None
+    action: str = Field(default="", max_length=2000)
+    status: Optional[str] = None
+
+
+class BlockerPatch(BaseModel):
+    status: Optional[str] = None
+    assignee: Optional[str] = None
+    new_promise: Optional[str] = None  # YYYY-MM-DD or "" to clear
+
+
+class CommentIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+def _blocker_out(r) -> dict:
+    return {
+        "id": r["id"], "title": r["title"], "status": r["status"], "assignee": r["assignee"],
+        "opened_by": r["opened_by"], "action": r["action"] or "", "wo": r["wo"],
+        "sos": r["sos"] or [], "parts": r["parts"] or [], "comments": r["comments"] or [],
+        "new_promise": r["new_promise"].isoformat() if r["new_promise"] else None,
+        "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        "closed_at": r["closed_at"].isoformat() if r["closed_at"] else None,
+        "closed_by": r["closed_by"],
+    }
+
+
+async def _log_activity(con, org_id, who, atype, detail):
+    await con.execute(
+        "INSERT INTO activity_events (org_id, type, detail, by_user) VALUES ($1,$2,$3,$4)",
+        org_id, atype, detail[:300], who)
+
+
+@app.get("/api/blockers")
+async def list_blockers(user: dict = Depends(current_user)):
+    async with db.pool().acquire() as con:
+        rows = await con.fetch("SELECT * FROM blockers WHERE org_id = $1 ORDER BY created_at", user["org_id"])
+    return [_blocker_out(r) for r in rows]
+
+
+@app.post("/api/blockers")
+async def create_blocker(body: BlockerIn, user: dict = Depends(current_user)):
+    who = user.get("full_name") or user["email"]
+    status = "assigned" if body.assignee else (body.status or "open")
+    if status not in ("open", "assigned", "closed"):
+        status = "open"
+    async with db.pool().acquire() as con:
+        n = await con.fetchval("SELECT count(*) FROM blockers WHERE org_id = $1", user["org_id"])
+        bid = "BLK-" + str(2001 + int(n))
+        row = await con.fetchrow(
+            "INSERT INTO blockers (id, org_id, title, status, assignee, opened_by, action, wo, sos, parts, comments) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'[]'::jsonb) RETURNING *",
+            bid, user["org_id"], body.title, status, body.assignee, who, body.action, body.wo,
+            body.sos, body.parts)
+        await _log_activity(con, user["org_id"], who, "blocker.created", bid + " · " + body.title)
+    return _blocker_out(row)
+
+
+@app.patch("/api/blockers/{bid}")
+async def patch_blocker(bid: str, body: BlockerPatch, user: dict = Depends(current_user)):
+    who = user.get("full_name") or user["email"]
+    async with db.pool().acquire() as con:
+        cur = await con.fetchrow("SELECT * FROM blockers WHERE org_id = $1 AND id = $2", user["org_id"], bid)
+        if not cur:
+            raise HTTPException(404, "Blocker not found")
+        status = cur["status"]
+        assignee = cur["assignee"]
+        closed_at = cur["closed_at"]
+        closed_by = cur["closed_by"]
+        new_promise = cur["new_promise"]
+        detail_bits = []
+        if body.assignee is not None:
+            assignee = body.assignee or None
+            if status != "closed":
+                status = "assigned" if assignee else "open"
+            detail_bits.append("assignee=" + (assignee or "unassigned"))
+        if body.status is not None and body.status in ("open", "assigned", "closed"):
+            status = body.status
+            detail_bits.append("status=" + status)
+        if status == "closed":
+            if closed_at is None:
+                closed_at = datetime.now(timezone.utc)
+                closed_by = who
+        else:
+            closed_at = None
+            closed_by = None
+        if body.new_promise is not None:
+            if body.new_promise == "":
+                new_promise = None
+            else:
+                from datetime import date as _date
+                new_promise = _date.fromisoformat(body.new_promise)
+            detail_bits.append("revisedPromise=" + (body.new_promise or "cleared"))
+        row = await con.fetchrow(
+            "UPDATE blockers SET status=$3, assignee=$4, closed_at=$5, closed_by=$6, new_promise=$7 "
+            "WHERE org_id=$1 AND id=$2 RETURNING *",
+            user["org_id"], bid, status, assignee, closed_at, closed_by, new_promise)
+        await _log_activity(con, user["org_id"], who, "blocker.update", bid + " · " + ", ".join(detail_bits))
+    return _blocker_out(row)
+
+
+@app.post("/api/blockers/{bid}/comments")
+async def add_blocker_comment(bid: str, body: CommentIn, user: dict = Depends(current_user)):
+    who = user.get("full_name") or user["email"]
+    entry = {"ts": datetime.now(timezone.utc).isoformat(), "who": who, "text": body.text}
+    async with db.pool().acquire() as con:
+        row = await con.fetchrow(
+            "UPDATE blockers SET comments = comments || $3::jsonb WHERE org_id=$1 AND id=$2 RETURNING *",
+            user["org_id"], bid, [entry])
+        if not row:
+            raise HTTPException(404, "Blocker not found")
+        await _log_activity(con, user["org_id"], who, "blocker.comment", bid + ": " + body.text[:70])
+    return _blocker_out(row)
+
+
+# --------------------------------------------------------------------------- #
 # connector catalog + test
 # --------------------------------------------------------------------------- #
 @app.get("/api/connectors/catalog")

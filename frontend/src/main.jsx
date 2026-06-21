@@ -32,7 +32,7 @@ function Root() {
 
   return (
     <>
-      <App />
+      <App user={state.user} />
       {state.user ? (
         <>
           <button onClick={() => setAdminOpen(true)}
