@@ -38,3 +38,7 @@ export const createInvite = (email) => fetch("/api/invites", opts("POST", { emai
 export const revokeInvite = (id) => fetch("/api/invites/" + id, opts("DELETE")).then(jsonOrThrow);
 export const lookupInvite = (token) => fetch("/api/invites/lookup?token=" + encodeURIComponent(token), { credentials: "include" }).then(jsonOrThrow);
 export const acceptInvite = (payload) => fetch("/api/invites/accept", opts("POST", payload)).then(jsonOrThrow);
+export const importEntities = () => fetch("/api/import/entities", { credentials: "include" }).then(jsonOrThrow);
+export const importData = (entity, csv) => fetch("/api/import/" + entity, opts("POST", { csv })).then(jsonOrThrow);
+export const listEvents = (limit = 20) => fetch("/api/events?limit=" + limit, { credentials: "include" }).then(jsonOrThrow);
+export const sampleUrl = (entity) => "/api/import/sample/" + entity;

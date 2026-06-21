@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
-from . import connectors_rest, db, emailer, mfa
+from . import connectors_rest, db, emailer, importer, mfa
 from .ai import ai_complete
 from .config import settings
 from .crypto import decrypt_bytes, encrypt_str
@@ -308,8 +308,66 @@ async def delete_connector(ctype: str, user: dict = Depends(current_user)):
 async def ai_chat(body: ChatIn, user: dict = Depends(current_user)):
     messages = [{"role": ("assistant" if m.role == "assistant" else "user"), "content": m.content}
                 for m in body.messages]
-    text = await ai_complete(body.system, messages)
+    system = body.system or ""
+    try:
+        async with db.pool().acquire() as con:
+            summary = await importer.org_data_summary(con, user["org_id"])
+        if summary:
+            system = (system + "\n\n" + summary) if system else summary
+    except Exception:
+        pass
+    text = await ai_complete(system, messages)
     return {"text": text}
+
+
+# --------------------------------------------------------------------------- #
+# CSV data import (org admin only)
+# --------------------------------------------------------------------------- #
+class ImportIn(BaseModel):
+    csv: str = Field(min_length=1, max_length=4_000_000)
+
+
+@app.get("/api/import/entities")
+async def import_entities(user: dict = Depends(current_user)):
+    return importer.entities_meta()
+
+
+@app.get("/api/import/sample/{entity}")
+async def import_sample(entity: str, user: dict = Depends(current_user)):
+    if entity not in importer.SPEC:
+        raise HTTPException(404, "Unknown entity")
+    text = importer.sample_csv(entity)
+    return Response(content=text, media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="%s_sample.csv"' % entity})
+
+
+@app.post("/api/import/{entity}")
+async def import_csv(entity: str, body: ImportIn, user: dict = Depends(current_user)):
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Only an org admin can import data")
+    if entity not in importer.SPEC:
+        raise HTTPException(404, "Unknown entity")
+    rows, headers = importer.parse_csv(body.csv)
+    if not rows:
+        raise HTTPException(400, "No data rows found (need a header row plus at least one record)")
+    async with db.pool().acquire() as con:
+        result = await importer.do_import(con, user["org_id"], entity, rows)
+        await con.execute(
+            "INSERT INTO import_events (org_id, entity, inserted, updated, errors, by_user) "
+            "VALUES ($1,$2,$3,$4,$5,$6)",
+            user["org_id"], entity, result["inserted"], result["updated"],
+            result["error_count"], user["user_id"])
+    return result
+
+
+@app.get("/api/events")
+async def list_events(limit: int = 20, user: dict = Depends(current_user)):
+    limit = max(1, min(limit, 100))
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT entity, inserted, updated, errors, created_at FROM import_events "
+            "WHERE org_id = $1 ORDER BY created_at DESC LIMIT $2", user["org_id"], limit)
+    return [dict(r) for r in rows]
 
 
 # --------------------------------------------------------------------------- #
