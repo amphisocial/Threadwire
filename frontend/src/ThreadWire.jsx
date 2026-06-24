@@ -2226,6 +2226,17 @@ function ThreadLink({ id, children, style }) {
   );
 }
 
+class ErrorBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { try { console.error("ThreadWire view error:", err, info); } catch (e) {} }
+  componentDidUpdate(prev) { if (prev.resetKey !== this.props.resetKey && this.state.err) this.setState({ err: null }); }
+  render() {
+    if (this.state.err) return this.props.fallback ? this.props.fallback(this.state.err) : null;
+    return this.props.children;
+  }
+}
+
 function ThreadModal({ stack, setStack }) {
   const id = stack[stack.length - 1];
   if (!id || !THREAD[id]) return null;
@@ -2589,50 +2600,59 @@ function BlockerModal({ id }) {
 /* ---------- sales order detail ---------- */
 function SOLinesModal({ so }) {
   const { blockers, openSO, closeSOLines } = useData();
-  const lines = linesOfSO(so);
-  if (!lines.length) return null;
-  const customer = lines[0].customer;
+  const soNum = String(so).includes("-L") ? String(so).split("-L")[0] : so;
+  const lines = linesOfSO(soNum);
+  const customer = lines[0]?.customer || "";
   const total = lines.reduce((a, l) => a + (l.value || 0), 0);
+  const reqDateOf = (promise) => { try { return isoOf(addDays(D(promise), -14)); } catch (e) { return "—"; } };
+  const cols = "44px 1.4fr 52px 100px 100px 86px";
   return (
     <div onClick={closeSOLines} style={{ position: "fixed", inset: 0, zIndex: 212, background: "rgba(5,8,13,.74)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
-      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 600, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 680, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <span className="tf-mono" style={{ fontSize: 12, color: "var(--amber)" }}>{so}</span>
-          <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>· {lines.length} line{lines.length > 1 ? "s" : ""}</span>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--amber)" }}>{soNum}</span>
+          <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>· {lines.length} line{lines.length === 1 ? "" : "s"}</span>
           <span onClick={closeSOLines} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
         </div>
-        <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{customer}</h3>
+        <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{customer || soNum}</h3>
 
-        <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 64px 84px 110px", padding: "8px 12px", borderBottom: "1px solid var(--line)", background: "var(--panel2)" }} className="tf-mono">
-            <span style={{ fontSize: 10, color: "var(--faint)" }}>LINE</span>
-            <span style={{ fontSize: 10, color: "var(--faint)" }}>END ITEM</span>
-            <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>QTY</span>
-            <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>COST</span>
-            <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>PROMISE</span>
+        {lines.length === 0 ? (
+          <div style={{ fontSize: 13, color: "var(--muted)", padding: "10px 0" }}>No lines found for {soNum}.</div>
+        ) : (
+          <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--line)", background: "var(--panel2)" }} className="tf-mono">
+              <span style={{ fontSize: 10, color: "var(--faint)" }}>LINE</span>
+              <span style={{ fontSize: 10, color: "var(--faint)" }}>PART #</span>
+              <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>QTY</span>
+              <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>REQUEST</span>
+              <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>PROMISE</span>
+              <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>COST</span>
+            </div>
+            {lines.map((l) => {
+              const blk = openBlockerForSO(blockers, l.id);
+              const revised = revisedForSO(blockers, l.id);
+              return (
+                <div key={l.id} onClick={() => { closeSOLines(); openSO(l.id); }} style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--line)", cursor: "pointer", alignItems: "center", background: blk ? "rgba(240,86,58,.07)" : "transparent" }}>
+                  <span className="tf-mono" style={{ fontSize: 12, color: "var(--ink)" }}>{l.line}</span>
+                  <span style={{ fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span className="tf-mono" style={{ color: "var(--thread)" }}>{l.part || "—"}</span>
+                    {l.part && ACTIVE_PART_DESC[l.part] ? <span style={{ color: "var(--faint)" }}> · {ACTIVE_PART_DESC[l.part]}</span> : null}
+                    {blk && <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--red)", marginLeft: 6 }}>● blocked</span>}
+                  </span>
+                  <span className="tf-mono" style={{ fontSize: 12, textAlign: "right" }}>{l.qty}</span>
+                  <span className="tf-mono" style={{ fontSize: 11, textAlign: "right", color: "var(--muted)" }}>{reqDateOf(l.promise)}</span>
+                  <span className="tf-mono" style={{ fontSize: 11, textAlign: "right", color: revised ? "var(--amber)" : "var(--muted)" }}>{revised || l.promise}</span>
+                  <span className="tf-disp" style={{ fontSize: 13, fontWeight: 700, textAlign: "right" }}>{fmtMoney(l.value)}</span>
+                </div>
+              );
+            })}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 86px", gap: 8, padding: "10px 12px", background: "var(--panel2)" }}>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>ORDER TOTAL ({lines.length} line{lines.length === 1 ? "" : "s"})</span>
+              <span className="tf-disp" style={{ fontSize: 15, fontWeight: 800, textAlign: "right" }}>{fmtMoney(total)}</span>
+            </div>
           </div>
-          {lines.map((l) => {
-            const blk = openBlockerForSO(blockers, l.id);
-            return (
-              <div key={l.id} onClick={() => { closeSOLines(); openSO(l.id); }} style={{ display: "grid", gridTemplateColumns: "52px 1fr 64px 84px 110px", padding: "10px 12px", borderBottom: "1px solid var(--line)", cursor: "pointer", alignItems: "center", background: blk ? "rgba(240,86,58,.07)" : "transparent" }}>
-                <span className="tf-mono" style={{ fontSize: 12, color: "var(--ink)" }}>{l.line}</span>
-                <span style={{ fontSize: 12.5, minWidth: 0 }}>
-                  <span className="tf-mono" style={{ color: "var(--thread)" }}>{l.part || "—"}</span>
-                  {l.part && ACTIVE_PART_DESC[l.part] ? <span style={{ color: "var(--faint)" }}> · {ACTIVE_PART_DESC[l.part]}</span> : null}
-                  {blk && <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--red)", marginLeft: 6 }}>● blocked</span>}
-                </span>
-                <span className="tf-mono" style={{ fontSize: 12, textAlign: "right" }}>{l.qty}</span>
-                <span className="tf-disp" style={{ fontSize: 13, fontWeight: 700, textAlign: "right" }}>{fmtMoney(l.value)}</span>
-                <span className="tf-mono" style={{ fontSize: 11.5, textAlign: "right", color: "var(--muted)" }}>{l.promise}</span>
-              </div>
-            );
-          })}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", padding: "10px 12px", background: "var(--panel2)" }}>
-            <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>ORDER TOTAL</span>
-            <span className="tf-disp" style={{ fontSize: 15, fontWeight: 800, textAlign: "right" }}>{fmtMoney(total)}</span>
-          </div>
-        </div>
-        <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 10 }}>Tap a line to open it.</div>
+        )}
+        <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 10 }}>Request date shown is the typical lead-time target (promise − 14 days). Tap a line to open it.</div>
       </div>
     </div>
   );
@@ -3214,10 +3234,23 @@ export default function App({ user }) {
       {/* subject-aware assistant, docked on every page */}
       <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} snapshot={aiContext} />
       <ThreadModal stack={tStack} setStack={setTStack} />
-      {bView && <BlockerModal id={bView} />}
-      {bForm && <BlockerForm pre={bForm} />}
-      {soView && <SalesOrderModal id={soView} />}
-      {soLinesView && <SOLinesModal so={soLinesView} />}
+      <ErrorBoundary
+        resetKey={`${bView || ""}|${bForm ? "f" : ""}|${soView || ""}|${soLinesView || ""}`}
+        fallback={() => (
+          <div onClick={() => { setBView(null); setBForm(null); setSoView(null); setSoLinesView(null); }}
+            style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(5,8,13,.8)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 14, padding: 22, textAlign: "center" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Couldn't open that view</div>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>Something went wrong rendering this popup. The rest of the app is fine — details are in the browser console.</div>
+              <button className="tf-btn tf-btn-primary" onClick={() => { setBView(null); setBForm(null); setSoView(null); setSoLinesView(null); }}>Dismiss</button>
+            </div>
+          </div>
+        )}>
+        {bView && <BlockerModal id={bView} />}
+        {bForm && <BlockerForm pre={bForm} />}
+        {soView && <SalesOrderModal id={soView} />}
+        {soLinesView && <SOLinesModal so={soLinesView} />}
+      </ErrorBoundary>
     </div>
     </DataCtx.Provider>
     </ThreadCtx.Provider>
