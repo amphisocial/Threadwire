@@ -88,8 +88,9 @@ const Styles = () => (
 );
 
 /* ----------------------------- helpers ---------------------------------- */
-async function askClaude(messages, system) {
+async function askClaude(system, userText, history = []) {
   try {
+    const messages = [...(history || []), { role: "user", content: userText }];
     const res = await fetch("/api/ai/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
       body: JSON.stringify({ messages: messages.map((m) => ({ role: m.role, content: m.content })), system: system || "" }),
