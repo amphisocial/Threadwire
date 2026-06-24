@@ -581,6 +581,48 @@ async def get_sales_orders(user: dict = Depends(current_user)):
     return out
 
 
+@app.get("/api/part_detail")
+async def get_part_detail(part: str, user: dict = Depends(current_user)):
+    async with db.pool().acquire() as con:
+        prow = await con.fetchrow(
+            "SELECT part_number, description, unit_cost, uom, commodity, revision, lifecycle, classification "
+            "FROM parts WHERE org_id = $1 AND part_number = $2", user["org_id"], part)
+        bom = await con.fetch(
+            "SELECT b.child_part_number, b.quantity, b.find_number, b.ref_designators, "
+            "p.description AS child_description "
+            "FROM boms b LEFT JOIN parts p ON p.org_id = b.org_id AND p.part_number = b.child_part_number "
+            "WHERE b.org_id = $1 AND b.parent_part_number = $2 "
+            "ORDER BY NULLIF(b.find_number,'')::int NULLS LAST, b.child_part_number", user["org_id"], part)
+        vendors = await con.fetch(
+            "SELECT vp.vendor_part_number, vp.unit_cost, vp.lead_time_days, vp.vendor AS vendor_code, "
+            "v.name AS vendor_name "
+            "FROM vendor_parts vp LEFT JOIN vendors v ON v.org_id = vp.org_id AND v.vendor_code = vp.vendor "
+            "WHERE vp.org_id = $1 AND vp.part_number = $2 ORDER BY v.name NULLS LAST, vp.vendor_part_number",
+            user["org_id"], part)
+    part_obj = None
+    if prow:
+        part_obj = {
+            "part_number": prow["part_number"], "description": prow["description"] or "",
+            "unit_cost": float(prow["unit_cost"]) if prow["unit_cost"] is not None else None,
+            "uom": prow["uom"] or "", "commodity": prow["commodity"] or "",
+            "revision": prow["revision"] or "", "lifecycle": prow["lifecycle"] or "",
+            "classification": prow["classification"] or "",
+        }
+    else:
+        part_obj = {"part_number": part, "description": "", "unit_cost": None, "uom": "",
+                    "commodity": "", "revision": "", "lifecycle": "", "classification": ""}
+    return {
+        "part": part_obj,
+        "bom": [{"child_part_number": r["child_part_number"], "child_description": r["child_description"] or "",
+                 "quantity": float(r["quantity"]) if r["quantity"] is not None else None,
+                 "find_number": r["find_number"] or "", "ref_designators": r["ref_designators"] or ""} for r in bom],
+        "vendors": [{"vendor_part_number": r["vendor_part_number"], "vendor_code": r["vendor_code"] or "",
+                     "vendor_name": r["vendor_name"] or "",
+                     "unit_cost": float(r["unit_cost"]) if r["unit_cost"] is not None else None,
+                     "lead_time_days": r["lead_time_days"]} for r in vendors],
+    }
+
+
 @app.get("/api/work_orders")
 async def get_work_orders(user: dict = Depends(current_user)):
     async with db.pool().acquire() as con:

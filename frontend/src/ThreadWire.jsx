@@ -171,6 +171,44 @@ const BOM = [
   { pn: "PN-3322", desc: "Shaft, hardened", level: 1, qty: 1, src: "Make", onhand: 22, demand: 65 },
   { pn: "PN-3323", desc: "Collet nut", level: 1, qty: 1, src: "Buy", onhand: 12, demand: 65 },
 ];
+const SAMPLE_PART_BOM = {
+  "PN-3320": [
+    { child: "PN-3321", desc: "Bearing, angular contact", qty: 2, line: "10", refdes: "B1,B2" },
+    { child: "PN-3322", desc: "Shaft, hardened 4140", qty: 1, line: "20", refdes: "S1" },
+    { child: "PN-3323", desc: "Collet nut", qty: 4, line: "30", refdes: "N1,N2,N3,N4" },
+  ],
+  "PN-1188": [
+    { child: "PN-3321", desc: "Bearing, angular contact", qty: 1, line: "10", refdes: "B1" },
+    { child: "PN-4501", desc: "Servo Bracket", qty: 2, line: "20", refdes: "K1,K2" },
+  ],
+  "PN-4501": [
+    { child: "PN-3323", desc: "Collet nut", qty: 2, line: "10", refdes: "N1,N2" },
+  ],
+};
+const SAMPLE_VENDOR_PARTS = {
+  "PN-3320": [
+    { code: "V-100", name: "Precision Castings Co", vpn: "PC-9920", cost: 405.0, lead: 35 },
+    { code: "V-220", name: "Apex Hardware", vpn: "AX-3320B", cost: 418.0, lead: 21 },
+  ],
+  "PN-3321": [{ code: "V-330", name: "Helix Alloys", vpn: "HX-7206", cost: 12.4, lead: 28 }],
+  "PN-3322": [{ code: "V-100", name: "Precision Castings Co", vpn: "PC-4140", cost: 64.0, lead: 30 }],
+  "PN-3323": [{ code: "V-220", name: "Apex Hardware", vpn: "AX-NUT-12", cost: 9.1, lead: 14 }],
+  "PN-4501": [
+    { code: "V-220", name: "Apex Hardware", vpn: "AX-BRK-45", cost: 86.0, lead: 18 },
+    { code: "V-410", name: "Northgate Sheet Metal", vpn: "NG-4501", cost: 91.0, lead: 12 },
+  ],
+};
+// Build a part-detail object from sample data (preview mode); members fetch /api/part_detail.
+const sampleDetail = (pn) => {
+  const meta = PART_META[pn] || {};
+  const isEnd = (ACTIVE_ORDERS || []).some((o) => o.part === pn);
+  return {
+    part: { part_number: pn, description: ACTIVE_PART_DESC[pn] || meta.desc || "", unit_cost: null, uom: "", commodity: meta.commodity || "", revision: meta.rev || "", lifecycle: meta.lifecycle || "", classification: isEnd ? "SOEI" : "" },
+    bom: (SAMPLE_PART_BOM[pn] || []).map((c) => ({ child_part_number: c.child, child_description: c.desc, quantity: c.qty, find_number: c.line, ref_designators: c.refdes })),
+    vendors: (SAMPLE_VENDOR_PARTS[pn] || []).map((v) => ({ vendor_part_number: v.vpn, vendor_code: v.code, vendor_name: v.name, unit_cost: v.cost, lead_time_days: v.lead })),
+  };
+};
+
 const ECO = [
   { id: "ECO-220", title: "Bearing supplier change", status: "Approved", affects: ["PN-3321"], jira: "MFG-410" },
   { id: "ECO-231", title: "Shaft tolerance tightening", status: "In Review", affects: ["PN-3322"], jira: "MFG-433" },
@@ -2465,7 +2503,7 @@ function BlockerForm({ pre }) {
         )}
 
         {parts.length > 0 && (
-          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 14 }}>End item{parts.length > 1 ? "s" : ""}: <span className="tf-mono" style={{ color: "var(--thread)" }}>{parts.join(", ")}</span></div>
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 14 }}>End item{parts.length > 1 ? "s" : ""}: {parts.map((pn, i) => <React.Fragment key={pn}>{i ? ", " : ""}<PartLink pn={pn}>{pn}</PartLink></React.Fragment>)}</div>
         )}
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
@@ -2539,7 +2577,7 @@ function BlockerModal({ id }) {
           <div style={{ marginBottom: 14 }}>
             <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Parts</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-              {b.parts.map((pn) => <ThreadLink key={pn} id={pn} style={{ color: "var(--green)", fontFamily: "var(--mono)", fontSize: 12, padding: "4px 9px", border: "1px solid var(--line2)", borderRadius: 8, borderBottom: "1px solid var(--line2)" }}>{pn}</ThreadLink>)}
+              {b.parts.map((pn) => <PartLink key={pn} pn={pn} style={{ fontSize: 12, padding: "4px 9px", border: "1px solid var(--line2)", borderRadius: 8 }}>{pn}</PartLink>)}
             </div>
           </div>
         )}
@@ -2550,7 +2588,7 @@ function BlockerModal({ id }) {
             <div key={sid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600 }}>{o.customer} <span onClick={() => openSOLines(o.so)} className="tf-mono" style={{ fontSize: 10.5, color: "var(--amber)", cursor: "pointer", textDecoration: "underline dotted" }} title={`View all lines of ${o.so}`}>{o.so}</span><span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}> · L{o.line}</span></div>
-                <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>promise {o.promise} · qty {o.qty} · {o.parts.map((pn, i) => <React.Fragment key={pn}>{i ? ", " : ""}<ThreadLink id={pn} style={{ color: "var(--green)" }}>{pn}</ThreadLink></React.Fragment>)}</div>
+                <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>promise {o.promise} · qty {o.qty} · {o.parts.map((pn, i) => <React.Fragment key={pn}>{i ? ", " : ""}<PartLink pn={pn} style={{ color: "var(--green)" }}>{pn}</PartLink></React.Fragment>)}</div>
               </div>
               <span className="tf-mono" style={{ fontSize: 12, color: "var(--ink)" }}>{fmtMoney(o.value)}</span>
             </div>
@@ -2645,7 +2683,7 @@ function SOLinesModal({ so }) {
                 <div key={l.id} onClick={() => { closeSOLines(); openSO(l.id); }} style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--line)", cursor: "pointer", alignItems: "center", background: blk ? "rgba(240,86,58,.07)" : "transparent" }}>
                   <span className="tf-mono" style={{ fontSize: 12, color: "var(--ink)" }}>{l.line}</span>
                   <span style={{ fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    <span className="tf-mono" style={{ color: "var(--thread)" }}>{l.part || "—"}</span>
+                    {l.part ? <PartLink pn={l.part}>{l.part}</PartLink> : <span className="tf-mono" style={{ color: "var(--faint)" }}>—</span>}
                     {l.part && ACTIVE_PART_DESC[l.part] ? <span style={{ color: "var(--faint)" }}> · {ACTIVE_PART_DESC[l.part]}</span> : null}
                     {blk && <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--red)", marginLeft: 6 }}>● blocked</span>}
                   </span>
@@ -2663,6 +2701,104 @@ function SOLinesModal({ so }) {
           </div>
         )}
         <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 10 }}>Request date shown is the typical lead-time target (promise − 14 days). Tap a line to open it.</div>
+      </div>
+    </div>
+  );
+}
+
+function PartLink({ pn, children, style }) {
+  const { openPart } = useData();
+  if (!pn) return <>{children}</>;
+  return <span onClick={(e) => { e.stopPropagation(); openPart(pn); }} title={"View " + pn}
+    style={{ cursor: "pointer", borderBottom: "1px dotted currentColor", color: "var(--thread)", fontFamily: "var(--mono)", ...style }}>{children ?? pn}</span>;
+}
+
+function PartModal({ pn }) {
+  const { closePart, getPartDetail } = useData();
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    let alive = true; setD(null);
+    (async () => { const r = await getPartDetail(pn); if (alive) setD(r); })();
+    return () => { alive = false; };
+  }, [pn]);
+  const p = d?.part;
+  const clsLabel = p && (p.classification === "SOEI" || p.classification === "end_item") ? "sales order end item" : (p?.classification || "");
+  const cell = { padding: "9px 11px", fontSize: 12, borderTop: "1px solid var(--line)" };
+
+  return (
+    <div onClick={closePart} style={{ position: "fixed", inset: 0, zIndex: 224, background: "rgba(5,8,13,.76)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 640, maxHeight: "88vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <span className="tf-mono" style={{ fontSize: 13, color: "var(--thread)" }}>{pn}</span>
+          {clsLabel && <Tag tone="amber">{clsLabel}</Tag>}
+          <span onClick={closePart} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
+        </div>
+        <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{p?.description || (d ? "—" : "Loading…")}</h3>
+
+        {!d ? (
+          <div style={{ fontSize: 13, color: "var(--muted)", padding: "8px 0" }}>Loading part…</div>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: "8px 14px", marginBottom: 18 }}>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>Commodity</span><span style={{ fontSize: 12.5 }}>{p.commodity || "—"}</span>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>Revision</span><span style={{ fontSize: 12.5 }}>{p.revision || "—"}</span>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>Lifecycle</span><span style={{ fontSize: 12.5 }}>{p.lifecycle || "—"}</span>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>UoM</span><span style={{ fontSize: 12.5 }}>{p.uom || "—"}</span>
+              {p.unit_cost != null && <><span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>Unit cost</span><span style={{ fontSize: 12.5 }}>${Number(p.unit_cost).toLocaleString()}</span></>}
+            </div>
+
+            <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Bill of material ({d.bom.length})</div>
+            {d.bom.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "var(--faint)", marginBottom: 18 }}>No bill of material on file for this part.</div>
+            ) : (
+              <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "54px 1.5fr 48px 1fr", gap: 8, padding: "8px 11px", background: "var(--panel2)" }} className="tf-mono">
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>BOM LN</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>COMPONENT</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>QTY</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>REF DES</span>
+                </div>
+                {d.bom.map((c, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "54px 1.5fr 48px 1fr", gap: 8, ...cell, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ color: "var(--muted)" }}>{c.find_number || "—"}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <PartLink pn={c.child_part_number} style={{ color: "var(--green)" }}>{c.child_part_number}</PartLink>
+                      {c.child_description ? <span style={{ color: "var(--faint)" }}> · {c.child_description}</span> : null}
+                    </span>
+                    <span className="tf-mono" style={{ textAlign: "right" }}>{c.quantity ?? "—"}</span>
+                    <span className="tf-mono" style={{ color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.ref_designators || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Vendors / vendor parts ({d.vendors.length})</div>
+            {d.vendors.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "var(--faint)" }}>No vendor parts on file for this part.</div>
+            ) : (
+              <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 80px 70px", gap: 8, padding: "8px 11px", background: "var(--panel2)" }} className="tf-mono">
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>VENDOR</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>VENDOR PART #</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>UNIT $</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>LEAD</span>
+                </div>
+                {d.vendors.map((v, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 80px 70px", gap: 8, ...cell, alignItems: "center" }}>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ fontSize: 12.5 }}>{v.vendor_name || "—"}</span>
+                      {v.vendor_code ? <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}> · {v.vendor_code}</span> : null}
+                    </span>
+                    <span className="tf-mono" style={{ color: "var(--thread)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vendor_part_number}</span>
+                    <span className="tf-mono" style={{ textAlign: "right" }}>{v.unit_cost != null ? "$" + Number(v.unit_cost).toLocaleString() : "—"}</span>
+                    <span className="tf-mono" style={{ textAlign: "right", color: "var(--muted)" }}>{v.lead_time_days != null ? v.lead_time_days + "d" : "—"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 10 }}>A part can have multiple vendor parts; each is unique by vendor + vendor part number.</div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -2690,7 +2826,7 @@ function SalesOrderModal({ id }) {
         <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{o.customer}</h3>
 
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", marginBottom: 16 }}>
-          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>End item</span><span style={{ fontSize: 13 }}>{o.part ? <ThreadLink id={o.part}>{o.part}</ThreadLink> : "—"}{o.part && ACTIVE_PART_DESC[o.part] ? <span style={{ color: "var(--muted)" }}> · {ACTIVE_PART_DESC[o.part]}</span> : null}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>End item</span><span style={{ fontSize: 13 }}>{o.part ? <PartLink pn={o.part} style={{ color: "var(--thread)" }}>{o.part}</PartLink> : "—"}{o.part && ACTIVE_PART_DESC[o.part] ? <span style={{ color: "var(--muted)" }}> · {ACTIVE_PART_DESC[o.part]}</span> : null}</span>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Site</span><span style={{ fontSize: 13 }}>{o.site}</span>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Promise date</span><span style={{ fontSize: 13, textDecoration: revised ? "line-through" : "none", opacity: revised ? 0.6 : 1 }}>{o.promise}</span>
           {revised && <><span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Revised promise</span><span style={{ fontSize: 13, fontWeight: 700, color: "var(--amber)" }}>{revised} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", fontWeight: 400 }}>· most probable</span></span></>}
@@ -2702,7 +2838,7 @@ function SalesOrderModal({ id }) {
           <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Parts</div>
           {o.parts.map((pn) => (
             <div key={pn} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
-              <ThreadLink id={pn} style={{ color: "var(--green)", fontFamily: "var(--mono)", fontSize: 12 }}>{pn}</ThreadLink>
+              <PartLink pn={pn} style={{ color: "var(--green)", fontSize: 12 }}>{pn}</PartLink>
               <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{PART_META[pn]?.desc || ACTIVE_PART_DESC[pn] || ""}</span>
             </div>
           ))}
@@ -2829,7 +2965,7 @@ function DeliveryPage() {
           <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{o.so} · L{o.line} · qty {o.qty}</div>
           {revisedForSO(blockers, o.id) && <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--amber)", marginTop: 2 }}>↪ revised from {o.promise}</div>}
           <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {o.parts.map((pn) => <ThreadLink key={pn} id={pn} style={{ color: "var(--green)", fontFamily: "var(--mono)", fontSize: 10, padding: "1px 6px", border: "1px solid var(--line2)", borderRadius: 6, borderBottom: "1px solid var(--line2)" }}>{pn}</ThreadLink>)}
+            {o.parts.map((pn) => <PartLink key={pn} pn={pn} style={{ fontSize: 10, padding: "1px 6px", border: "1px solid var(--line2)", borderRadius: 6 }}>{pn}</PartLink>)}
           </div>
         </div>
       </div>
@@ -3115,6 +3251,7 @@ export default function App({ user }) {
   const [bForm, setBForm] = useState(null);
   const [soView, setSoView] = useState(null);
   const [soLinesView, setSoLinesView] = useState(null);
+  const [partView, setPartView] = useState(null);
   const [delivSite, setDelivSite] = useState("All");
   const [delivWeek, setDelivWeek] = useState(() => mondayOf(D(SALES_ORDERS.map((s) => s.promise).sort()[0])));
   const [events, setEvents] = useState([]);
@@ -3170,6 +3307,11 @@ export default function App({ user }) {
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
     openSO: (id) => setSoView(id), closeSO: () => setSoView(null),
     openSOLines: (so) => setSoLinesView(so), closeSOLines: () => setSoLinesView(null),
+    openPart: (pn) => setPartView(pn), closePart: () => setPartView(null),
+    getPartDetail: async (pn) => {
+      if (backend) { const r = await apiGet("/api/part_detail?part=" + encodeURIComponent(pn)); if (r && r.part) return r; }
+      return sampleDetail(pn);
+    },
   };
 
   // live context so the offline assistant can give real numbers
@@ -3245,14 +3387,14 @@ export default function App({ user }) {
       <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} snapshot={aiContext} />
       <ThreadModal stack={tStack} setStack={setTStack} />
       <ErrorBoundary
-        resetKey={`${bView || ""}|${bForm ? "f" : ""}|${soView || ""}|${soLinesView || ""}`}
+        resetKey={`${bView || ""}|${bForm ? "f" : ""}|${soView || ""}|${soLinesView || ""}|${partView || ""}`}
         fallback={() => (
-          <div onClick={() => { setBView(null); setBForm(null); setSoView(null); setSoLinesView(null); }}
+          <div onClick={() => { setBView(null); setBForm(null); setSoView(null); setSoLinesView(null); setPartView(null); }}
             style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(5,8,13,.8)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
             <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 14, padding: 22, textAlign: "center" }}>
               <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Couldn't open that view</div>
               <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>Something went wrong rendering this popup. The rest of the app is fine — details are in the browser console.</div>
-              <button className="tf-btn tf-btn-primary" onClick={() => { setBView(null); setBForm(null); setSoView(null); setSoLinesView(null); }}>Dismiss</button>
+              <button className="tf-btn tf-btn-primary" onClick={() => { setBView(null); setBForm(null); setSoView(null); setSoLinesView(null); setPartView(null); }}>Dismiss</button>
             </div>
           </div>
         )}>
@@ -3260,6 +3402,7 @@ export default function App({ user }) {
         {bForm && <BlockerForm pre={bForm} />}
         {soView && <SalesOrderModal id={soView} />}
         {soLinesView && <SOLinesModal so={soLinesView} />}
+        {partView && <PartModal pn={partView} />}
       </ErrorBoundary>
     </div>
     </DataCtx.Provider>
