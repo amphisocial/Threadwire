@@ -17,7 +17,7 @@ class Settings:
     openai_api_key = os.environ.get("OPENAI_API_KEY", "")
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
-    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-1.5-flash")
+    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
     # Billing (Stripe). Card entry happens on Stripe's hosted Checkout — keys stay server-side.
     # PAYMENT_MODE picks the key/price set: "test" (sandbox) or "prod"/"live" (real charges).
