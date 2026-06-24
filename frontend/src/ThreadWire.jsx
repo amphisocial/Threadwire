@@ -2371,7 +2371,15 @@ let ACTIVE_USER = CURRENT_USER;
 // backend → app shape mappers (members)
 const mapSO = (r) => ({ id: r.so_number + "-L" + (r.line_number || 10), so: r.so_number, line: r.line_number || 10, customer: r.customer, site: r.site || "", promise: r.promise_date, part: r.part_number || "", parts: r.part_number ? [r.part_number] : [], qty: Number(r.quantity) || 0, value: Number(r.value) || 0 });
 const mapWO = (r) => ({ id: r.wo_number, part: r.part_number || "", desc: r.description || "" });
-const mapBlk = (r) => ({ id: r.id, title: r.title, status: r.status, assignee: r.assignee || null, openedBy: r.opened_by || null, created: r.created_at, closedAt: r.closed_at || null, closedBy: r.closed_by || null, newPromise: r.new_promise || null, action: r.action || "", wo: r.wo || null, sos: r.sos || [], parts: r.parts || [], comments: r.comments || [] });
+// Legacy blockers referenced bare SO numbers; expand them to line ids so older
+// blockers keep their relationship to (now line-level) sales orders.
+const normalizeSos = (arr) => [...new Set((arr || []).flatMap((e) => {
+  if (typeof e !== "string") return [];
+  if (e.includes("-L")) return [e];
+  const ls = linesOfSO(e).map((l) => l.id);
+  return ls.length ? ls : [e + "-L10"];
+}))];
+const mapBlk = (r) => ({ id: r.id, title: r.title, status: r.status, assignee: r.assignee || null, openedBy: r.opened_by || null, created: r.created_at, closedAt: r.closed_at || null, closedBy: r.closed_by || null, newPromise: r.new_promise || null, action: r.action || "", wo: r.wo || null, sos: normalizeSos(r.sos), parts: r.parts || [], comments: r.comments || [] });
 // effective promise = revised date from an open blocker (if any), else the original committed date
 const revisedForSO = (blockers, soId) => { const b = blockers.find((x) => x.status !== "closed" && x.newPromise && x.sos.includes(soId)); return b ? b.newPromise : null; };
 const effPromise = (blockers, o) => revisedForSO(blockers, o.id) || o.promise;
@@ -2436,11 +2444,13 @@ function BlockerForm({ pre }) {
                 <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--muted)", marginLeft: "auto" }}>{soById(preLines[0])?.customer}</span>
               </div>
             </div>
-            {soLines.length > 1 && (
+            {soLines.length > 1 ? (
               <label style={{ ...chk(applyAll), marginBottom: 14 }}>
                 <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} style={{ accentColor: "var(--amber)" }} />
-                Apply to all lines of {primarySO} ({soLines.length} lines)
+                Apply to all {soLines.length} lines of {primarySO}
               </label>
+            ) : (
+              <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 14 }}>{primarySO} has a single line — this blocker covers the whole order.</div>
             )}
           </>
         ) : (
