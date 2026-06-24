@@ -96,17 +96,19 @@ ENTITIES = [
     {
         "entity": "sales_orders", "label": "Sales orders", "order": 6,
         "table": "sales_orders",
-        "note": "Drives the delivery calendar, blockers and forecast. promise_date is YYYY-MM-DD. value is the order's total revenue.",
+        "note": "Multi-line. Each row is one sales-order LINE: so_number + line_number + one end-item part (SOEI) with its own quantity, value and promise_date. line_number goes in 10s (10,20,30…); leave blank to default to 10. promise_date is YYYY-MM-DD.",
         "cols": [
-            ("so_number", True, "text"), ("customer", True, "text"),
+            ("so_number", True, "text"), ("line_number", False, "int"),
+            ("customer", True, "text"),
             ("site", False, "text"), ("promise_date", True, "date"),
             ("part_number", False, "text"), ("quantity", False, "num"),
             ("value", False, "num"), ("status", False, "text"),
         ],
-        "conflict": ["so_number"],
+        "conflict": ["so_number", "line_number"],
         "sample": [
-            ["SO-5001", "Vertex Aerospace", "Lawrence, MA", "2026-06-22", "PN-3320", "40", "128000", "open"],
-            ["SO-5004", "Apex Defense", "Greenville, SC", "2026-06-24", "PN-4501", "200", "96000", "open"],
+            ["SO-5001", "10", "Vertex Aerospace", "Lawrence, MA", "2026-06-22", "PN-3320", "40", "128000", "open"],
+            ["SO-5001", "20", "Vertex Aerospace", "Lawrence, MA", "2026-06-24", "PN-3321", "100", "40000", "open"],
+            ["SO-5004", "10", "Apex Defense", "Greenville, SC", "2026-06-24", "PN-4501", "200", "96000", "open"],
         ],
     },
     {
@@ -204,6 +206,8 @@ async def _upsert(con, org_id, spec, row):
             vals[col] = _cast(raw, kind)
         except Exception:
             raise ValueError("bad value for '%s': %r" % (col, raw))
+    if "line_number" in vals and vals.get("line_number") is None:
+        vals["line_number"] = 10  # sales-order lines default to 10
     collist = ["org_id"] + cols
     placeholders = ["$1"] + ["$%d" % (i + 2) for i in range(len(cols))]
     updates = ["%s=EXCLUDED.%s" % (c, c) for c in cols if c not in spec["conflict"]]
@@ -242,6 +246,15 @@ async def do_import(con, org_id, entity: str, rows: list):
             if len(res["errors"]) < 50:
                 res["errors"].append({"row": i, "message": str(e)})
     res["error_count"] = (res["total"] - res["inserted"] - res["updated"])
+    if entity == "sales_orders" and (res["inserted"] or res["updated"]):
+        # mark every part used as a sales-order end item (SOEI), if not already classified
+        try:
+            await con.execute(
+                "UPDATE parts p SET classification='SOEI' FROM sales_orders s "
+                "WHERE s.org_id=p.org_id AND s.part_number=p.part_number AND p.org_id=$1 "
+                "AND (p.classification IS NULL OR p.classification='')", org_id)
+        except Exception:
+            pass
     return res
 
 

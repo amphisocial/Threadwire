@@ -88,23 +88,16 @@ const Styles = () => (
 );
 
 /* ----------------------------- helpers ---------------------------------- */
-async function askClaude(system, userText, history = []) {
+async function askClaude(messages, system) {
   try {
     const res = await fetch("/api/ai/chat", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system,
-        messages: [...history, { role: "user", content: userText }],
-      }),
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ messages: messages.map((m) => ({ role: m.role, content: m.content })), system: system || "" }),
     });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.text || null;
-  } catch {
-    return null;
-  }
+    return (data && typeof data.text === "string") ? data.text : null;
+  } catch (e) { return null; }
 }
 
 const fmtUSD = (n) =>
@@ -2314,37 +2307,42 @@ function ThreadModal({ stack, setStack }) {
 
 const PEOPLE = ["Anu Mishra", "M. Reyes", "A. Kidd", "J. Cole", "Floor Lead", "Procurement Desk"];
 const SITES = ["Lawrence, MA", "Greenville, SC", "Monterrey, MX"];
-const SALES_ORDERS = [
-  { id: "SO-5001", customer: "Vertex Aerospace", site: "Lawrence, MA", promise: "2026-06-22", parts: ["PN-3320"], qty: 40, value: 128000 },
-  { id: "SO-5002", customer: "Helios Robotics", site: "Lawrence, MA", promise: "2026-06-22", parts: ["PN-3322", "PN-3323"], qty: 120, value: 54000 },
-  { id: "SO-5003", customer: "Northwind Motors", site: "Greenville, SC", promise: "2026-06-23", parts: ["PN-1188"], qty: 12, value: 38000 },
-  { id: "SO-5004", customer: "Apex Defense", site: "Greenville, SC", promise: "2026-06-24", parts: ["PN-4501"], qty: 200, value: 96000 },
-  { id: "SO-5005", customer: "Cascade Pumps", site: "Monterrey, MX", promise: "2026-06-25", parts: ["PN-3320"], qty: 25, value: 81000 },
-  { id: "SO-5006", customer: "Vertex Aerospace", site: "Lawrence, MA", promise: "2026-06-26", parts: ["PN-3321"], qty: 300, value: 42000 },
-  { id: "SO-5007", customer: "Orion Systems", site: "Greenville, SC", promise: "2026-06-20", parts: ["PN-3322"], qty: 65, value: 33000 },
-  { id: "SO-5008", customer: "Helios Robotics", site: "Lawrence, MA", promise: "2026-06-19", parts: ["PN-3320"], qty: 18, value: 59000 },
-  { id: "SO-5009", customer: "Apex Defense", site: "Greenville, SC", promise: "2026-06-27", parts: ["PN-4501", "PN-1188"], qty: 150, value: 120000 },
-  { id: "SO-5010", customer: "Cascade Pumps", site: "Monterrey, MX", promise: "2026-07-01", parts: ["PN-3323"], qty: 65, value: 28000 },
-  { id: "SO-5011", customer: "Northwind Motors", site: "Greenville, SC", promise: "2026-07-02", parts: ["PN-3320"], qty: 30, value: 99000 },
-  { id: "SO-5012", customer: "Orion Systems", site: "Lawrence, MA", promise: "2026-06-29", parts: ["PN-3321", "PN-3322"], qty: 90, value: 47000 },
-  { id: "SO-5013", customer: "Vertex Aerospace", site: "Lawrence, MA", promise: "2026-07-10", parts: ["PN-3320"], qty: 35, value: 112000 },
-  { id: "SO-5014", customer: "Apex Defense", site: "Greenville, SC", promise: "2026-07-18", parts: ["PN-4501"], qty: 180, value: 88000 },
-  { id: "SO-5015", customer: "Cascade Pumps", site: "Monterrey, MX", promise: "2026-08-05", parts: ["PN-3320"], qty: 28, value: 90000 },
-  { id: "SO-5016", customer: "Helios Robotics", site: "Lawrence, MA", promise: "2026-08-21", parts: ["PN-3322", "PN-3323"], qty: 140, value: 63000 },
-  { id: "SO-5017", customer: "Northwind Motors", site: "Greenville, SC", promise: "2026-09-09", parts: ["PN-1188"], qty: 16, value: 51000 },
-  { id: "SO-5018", customer: "Orion Systems", site: "Lawrence, MA", promise: "2026-09-24", parts: ["PN-3321"], qty: 260, value: 39000 },
-  { id: "SO-5019", customer: "Vertex Aerospace", site: "Lawrence, MA", promise: "2026-10-08", parts: ["PN-3320"], qty: 50, value: 158000 },
-  { id: "SO-5020", customer: "Apex Defense", site: "Greenville, SC", promise: "2026-10-22", parts: ["PN-4501", "PN-1188"], qty: 160, value: 131000 },
-  { id: "SO-5021", customer: "Cascade Pumps", site: "Monterrey, MX", promise: "2026-11-12", parts: ["PN-3323"], qty: 70, value: 30000 },
-  { id: "SO-5022", customer: "Northwind Motors", site: "Greenville, SC", promise: "2026-11-26", parts: ["PN-3320"], qty: 33, value: 104000 },
-  { id: "SO-5023", customer: "Helios Robotics", site: "Lawrence, MA", promise: "2026-12-10", parts: ["PN-3322"], qty: 80, value: 44000 },
-  { id: "SO-5024", customer: "Orion Systems", site: "Greenville, SC", promise: "2026-12-18", parts: ["PN-4501"], qty: 120, value: 97000 },
+// Sales orders are multi-line. Each line carries its own end-item part (SOEI),
+// quantity, value and promise date. Cards and blockers operate at the line level.
+const SO_DEF = [
+  ["SO-5001", "Vertex Aerospace", "Lawrence, MA", [["PN-3320", 40, 128000, "2026-06-22"], ["PN-3321", 100, 40000, "2026-06-24"]]],
+  ["SO-5002", "Helios Robotics", "Lawrence, MA", [["PN-3322", 120, 54000, "2026-06-22"], ["PN-3323", 200, 18000, "2026-06-26"]]],
+  ["SO-5003", "Northwind Motors", "Greenville, SC", [["PN-1188", 12, 38000, "2026-06-23"]]],
+  ["SO-5004", "Apex Defense", "Greenville, SC", [["PN-4501", 200, 96000, "2026-06-24"], ["PN-1188", 50, 24000, "2026-06-27"]]],
+  ["SO-5005", "Cascade Pumps", "Monterrey, MX", [["PN-3320", 25, 81000, "2026-06-25"]]],
+  ["SO-5006", "Vertex Aerospace", "Lawrence, MA", [["PN-3321", 300, 42000, "2026-06-26"]]],
+  ["SO-5007", "Orion Systems", "Greenville, SC", [["PN-3322", 65, 33000, "2026-06-20"]]],
+  ["SO-5008", "Helios Robotics", "Lawrence, MA", [["PN-3320", 18, 59000, "2026-06-19"]]],
+  ["SO-5009", "Apex Defense", "Greenville, SC", [["PN-4501", 150, 120000, "2026-06-27"]]],
+  ["SO-5010", "Cascade Pumps", "Monterrey, MX", [["PN-3323", 65, 28000, "2026-07-01"]]],
+  ["SO-5011", "Northwind Motors", "Greenville, SC", [["PN-3320", 30, 99000, "2026-07-02"]]],
+  ["SO-5012", "Orion Systems", "Lawrence, MA", [["PN-3321", 90, 47000, "2026-06-29"], ["PN-3322", 60, 26000, "2026-07-03"]]],
+  ["SO-5013", "Vertex Aerospace", "Lawrence, MA", [["PN-3320", 35, 112000, "2026-07-10"]]],
+  ["SO-5014", "Apex Defense", "Greenville, SC", [["PN-4501", 180, 88000, "2026-07-18"]]],
+  ["SO-5015", "Cascade Pumps", "Monterrey, MX", [["PN-3320", 28, 90000, "2026-08-05"]]],
+  ["SO-5016", "Helios Robotics", "Lawrence, MA", [["PN-3322", 140, 63000, "2026-08-21"]]],
+  ["SO-5017", "Northwind Motors", "Greenville, SC", [["PN-1188", 16, 51000, "2026-09-09"]]],
+  ["SO-5018", "Orion Systems", "Lawrence, MA", [["PN-3321", 260, 39000, "2026-09-24"]]],
+  ["SO-5019", "Vertex Aerospace", "Lawrence, MA", [["PN-3320", 50, 158000, "2026-10-08"]]],
+  ["SO-5020", "Apex Defense", "Greenville, SC", [["PN-4501", 160, 131000, "2026-10-22"]]],
+  ["SO-5021", "Cascade Pumps", "Monterrey, MX", [["PN-3323", 70, 30000, "2026-11-12"]]],
+  ["SO-5022", "Northwind Motors", "Greenville, SC", [["PN-3320", 33, 104000, "2026-11-26"]]],
+  ["SO-5023", "Helios Robotics", "Lawrence, MA", [["PN-3322", 80, 44000, "2026-12-10"]]],
+  ["SO-5024", "Orion Systems", "Greenville, SC", [["PN-4501", 120, 97000, "2026-12-18"]]],
 ];
+const SALES_ORDERS = SO_DEF.flatMap(([so, customer, site, lines]) =>
+  lines.map((ln, i) => ({ id: so + "-L" + (i + 1) * 10, so, line: (i + 1) * 10, customer, site, part: ln[0], parts: [ln[0]], qty: ln[1], value: ln[2], promise: ln[3] }))
+);
 const SEED_BLOCKERS = [
-  { id: "BLK-2001", title: "CNC-07 fixture failure halting servo bracket", status: "assigned", assignee: "Floor Lead", openedBy: "Floor Lead", action: "Replace fixture and re-qualify first article before resuming WO-7790.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5004", "SO-5009"], created: "2026-06-18T13:10:00Z", closedAt: null, closedBy: null, newPromise: "2026-07-01", comments: [{ ts: "2026-06-18T14:20:00Z", who: "Floor Lead", text: "Replacement fixture ordered, ETA Jun 26. Re-qual ~2 days after." }, { ts: "2026-06-19T09:05:00Z", who: "A. Kidd", text: "Maintenance confirmed spindle is fine; isolated to fixture." }] },
-  { id: "BLK-2002", title: "PN-3323 collet-nut shortage — PO-9920 delayed", status: "open", assignee: null, openedBy: "Procurement Desk", action: "Expedite PO-9920 or re-source PN-3323 to an alternate supplier.", wo: "WO-7781", parts: ["PN-3323"], sos: ["SO-5002"], created: "2026-06-19T08:40:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
-  { id: "BLK-2003", title: "Anodize capacity risk on Q3 servo brackets", status: "open", assignee: null, openedBy: "Anu Mishra", action: "Qualify a second anodize vendor before the July build.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5014"], created: "2026-06-20T11:15:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
-  { id: "BLK-2004", title: "Long-lead casting risk on Q4 spindle housings", status: "assigned", assignee: "Procurement Desk", openedBy: "Anu Mishra", action: "Place long-lead PO for PN-3320 castings now to protect Q4.", wo: null, parts: ["PN-3320"], sos: ["SO-5019", "SO-5022"], created: "2026-06-20T15:30:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
+  { id: "BLK-2001", title: "CNC-07 fixture failure halting servo bracket", status: "assigned", assignee: "Floor Lead", openedBy: "Floor Lead", action: "Replace fixture and re-qualify first article before resuming WO-7790.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5004-L10", "SO-5009-L10"], created: "2026-06-18T13:10:00Z", closedAt: null, closedBy: null, newPromise: "2026-07-01", comments: [{ ts: "2026-06-18T14:20:00Z", who: "Floor Lead", text: "Replacement fixture ordered, ETA Jun 26. Re-qual ~2 days after." }, { ts: "2026-06-19T09:05:00Z", who: "A. Kidd", text: "Maintenance confirmed spindle is fine; isolated to fixture." }] },
+  { id: "BLK-2002", title: "PN-3323 collet-nut shortage — PO-9920 delayed", status: "open", assignee: null, openedBy: "Procurement Desk", action: "Expedite PO-9920 or re-source PN-3323 to an alternate supplier.", wo: "WO-7781", parts: ["PN-3323"], sos: ["SO-5002-L10"], created: "2026-06-19T08:40:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
+  { id: "BLK-2003", title: "Anodize capacity risk on Q3 servo brackets", status: "open", assignee: null, openedBy: "Anu Mishra", action: "Qualify a second anodize vendor before the July build.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5014-L10"], created: "2026-06-20T11:15:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
+  { id: "BLK-2004", title: "Long-lead casting risk on Q4 spindle housings", status: "assigned", assignee: "Procurement Desk", openedBy: "Anu Mishra", action: "Place long-lead PO for PN-3320 castings now to protect Q4.", wo: null, parts: ["PN-3320"], sos: ["SO-5019-L10", "SO-5022-L10"], created: "2026-06-20T15:30:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
 ];
 
 // Active datasets: sample by default (demo / signed-out), swapped to backend rows for signed-in members.
@@ -2353,13 +2351,14 @@ let ACTIVE_WOS = WORKORDERS;
 let ACTIVE_PART_NUMBERS = Object.keys(PART_META);
 let ACTIVE_PART_DESC = Object.fromEntries(Object.entries(PART_META).map(([k, v]) => [k, v.desc || ""]));
 const soById = (id) => ACTIVE_ORDERS.find((s) => s.id === id);
+const linesOfSO = (soNum) => ACTIVE_ORDERS.filter((s) => s.so === soNum);
 const blockerValue = (b) => b.sos.reduce((a, id) => a + (soById(id)?.value || 0), 0);
 const openBlockerForSO = (blockers, soId) => blockers.find((b) => b.status !== "closed" && b.sos.includes(soId));
 const BLK_TONE = { open: "red", assigned: "yellow", closed: "green" };
 const CURRENT_USER = "Anu Mishra";
 let ACTIVE_USER = CURRENT_USER;
 // backend → app shape mappers (members)
-const mapSO = (r) => ({ id: r.so_number, customer: r.customer, site: r.site || "", promise: r.promise_date, parts: r.part_number ? [r.part_number] : [], qty: Number(r.quantity) || 0, value: Number(r.value) || 0 });
+const mapSO = (r) => ({ id: r.so_number + "-L" + (r.line_number || 10), so: r.so_number, line: r.line_number || 10, customer: r.customer, site: r.site || "", promise: r.promise_date, part: r.part_number || "", parts: r.part_number ? [r.part_number] : [], qty: Number(r.quantity) || 0, value: Number(r.value) || 0 });
 const mapWO = (r) => ({ id: r.wo_number, part: r.part_number || "", desc: r.description || "" });
 const mapBlk = (r) => ({ id: r.id, title: r.title, status: r.status, assignee: r.assignee || null, openedBy: r.opened_by || null, created: r.created_at, closedAt: r.closed_at || null, closedBy: r.closed_by || null, newPromise: r.new_promise || null, action: r.action || "", wo: r.wo || null, sos: r.sos || [], parts: r.parts || [], comments: r.comments || [] });
 // effective promise = revised date from an open blocker (if any), else the original committed date
@@ -2380,12 +2379,25 @@ function useData() { return useContext(DataCtx); }
 
 /* ---------- blocker create form ---------- */
 function BlockerForm({ pre }) {
-  const { sos, people, addBlocker, closeForm } = useData();
-  const [f, setF] = useState({ title: "", sos: pre.sos || [], parts: [], wo: "", assignee: "", action: "" });
+  const { sos, people, addBlocker, closeForm, openSOLines } = useData();
+  const preLines = pre.sos || [];
+  // the SO this card belongs to (card flow pre-selects exactly one line)
+  const primarySO = preLines.length ? soById(preLines[0])?.so : null;
+  const sameSO = primarySO && preLines.every((id) => soById(id)?.so === primarySO);
+  const cardMode = preLines.length === 1 && sameSO;
+  const soLines = primarySO ? linesOfSO(primarySO) : [];
+
+  const [applyAll, setApplyAll] = useState(false);
+  const [f, setF] = useState({ title: "", sos: preLines, wo: "", assignee: "", action: "" });
   const tog = (key, v) => setF((s) => ({ ...s, [key]: s[key].includes(v) ? s[key].filter((x) => x !== v) : [...s[key], v] }));
-  const val = f.sos.reduce((a, id) => a + (soById(id)?.value || 0), 0);
-  const canSave = f.title.trim() && f.sos.length > 0;
-  const save = () => addBlocker({ title: f.title.trim(), sos: f.sos, parts: f.parts, wo: f.wo || null, assignee: f.assignee || null, action: f.action.trim(), status: f.assignee ? "assigned" : "open" });
+
+  // effective scope: card mode + applyAll => every line of the SO
+  const scopeIds = cardMode && applyAll ? soLines.map((l) => l.id) : f.sos;
+  const scopeLines = scopeIds.map((id) => soById(id)).filter(Boolean);
+  const parts = [...new Set(scopeLines.map((l) => l.part).filter(Boolean))];
+  const val = scopeLines.reduce((a, l) => a + (l.value || 0), 0);
+  const canSave = f.title.trim() && scopeIds.length > 0;
+  const save = () => addBlocker({ title: f.title.trim(), sos: scopeIds, parts, wo: f.wo || null, assignee: f.assignee || null, action: f.action.trim(), status: f.assignee ? "assigned" : "open" });
 
   const box = { fontFamily: "var(--mono)", fontSize: 12.5, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "9px 11px", color: "var(--ink)", width: "100%", outline: "none", boxSizing: "border-box" };
   const chk = (on) => ({ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${on ? "var(--amber)" : "var(--line)"}`, background: on ? "var(--panel2)" : "var(--bg2)", color: on ? "var(--ink)" : "var(--muted)" });
@@ -2402,19 +2414,38 @@ function BlockerForm({ pre }) {
         <label style={{ fontSize: 12, color: "var(--muted)" }}>Summary</label>
         <input style={{ ...box, margin: "5px 0 14px" }} placeholder="What's blocking delivery?" value={f.title} onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} />
 
-        <label style={{ fontSize: 12, color: "var(--muted)" }}>Sales orders impacted</label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0 14px" }}>
-          {sos.map((o) => (
-            <span key={o.id} onClick={() => tog("sos", o.id)} style={chk(f.sos.includes(o.id))}>{o.id} · {o.customer} · {fmtMoney(o.value)}</span>
-          ))}
-        </div>
+        {cardMode ? (
+          <>
+            <label style={{ fontSize: 12, color: "var(--muted)" }}>Sales order line</label>
+            <div style={{ background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 10, padding: "11px 13px", margin: "6px 0 10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span onClick={() => openSOLines(primarySO)} className="tf-mono" style={{ fontSize: 12.5, color: "var(--amber)", cursor: "pointer", textDecoration: "underline dotted" }} title={`View all lines of ${primarySO}`}>{primarySO}</span>
+                {!applyAll && <span className="tf-mono" style={{ fontSize: 12.5, color: "var(--faint)" }}>· Line {soById(preLines[0])?.line}</span>}
+                <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--thread)" }}>{applyAll ? `${soLines.length} lines` : soById(preLines[0])?.part}</span>
+                <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--muted)", marginLeft: "auto" }}>{soById(preLines[0])?.customer}</span>
+              </div>
+            </div>
+            {soLines.length > 1 && (
+              <label style={{ ...chk(applyAll), marginBottom: 14 }}>
+                <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} style={{ accentColor: "var(--amber)" }} />
+                Apply to all lines of {primarySO} ({soLines.length} lines)
+              </label>
+            )}
+          </>
+        ) : (
+          <>
+            <label style={{ fontSize: 12, color: "var(--muted)" }}>Sales order lines impacted</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0 14px" }}>
+              {sos.map((o) => (
+                <span key={o.id} onClick={() => tog("sos", o.id)} style={chk(f.sos.includes(o.id))}>{o.so} · L{o.line} · {o.part || "—"} · {fmtMoney(o.value)}</span>
+              ))}
+            </div>
+          </>
+        )}
 
-        <label style={{ fontSize: 12, color: "var(--muted)" }}>Part number(s)</label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0 14px" }}>
-          {ACTIVE_PART_NUMBERS.map((pn) => (
-            <span key={pn} onClick={() => tog("parts", pn)} style={chk(f.parts.includes(pn))}>{pn}</span>
-          ))}
-        </div>
+        {parts.length > 0 && (
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 14 }}>End item{parts.length > 1 ? "s" : ""}: <span className="tf-mono" style={{ color: "var(--thread)" }}>{parts.join(", ")}</span></div>
+        )}
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
           <div style={{ flex: "1 1 200px" }}>
@@ -2437,7 +2468,7 @@ function BlockerForm({ pre }) {
         <textarea style={{ ...box, margin: "5px 0 14px", minHeight: 64, resize: "vertical" }} placeholder="Detailed action to clear the blocker…" value={f.action} onChange={(e) => setF((s) => ({ ...s, action: e.target.value }))} />
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 10, marginBottom: 16 }}>
-          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>$ at risk (sum of orders)</span>
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>$ at risk ({scopeIds.length} line{scopeIds.length === 1 ? "" : "s"})</span>
           <span className="tf-disp" style={{ marginLeft: "auto", fontSize: 20, fontWeight: 800, color: "var(--red)" }}>{fmtMoney(val)}</span>
         </div>
 
@@ -2452,7 +2483,7 @@ function BlockerForm({ pre }) {
 
 /* ---------- blocker detail / close ---------- */
 function BlockerModal({ id }) {
-  const { blockers, closeBlocker, assignBlocker, setBlockerStatus, setNewPromise, addComment, closeView, people } = useData();
+  const { blockers, closeBlocker, assignBlocker, setBlockerStatus, setNewPromise, addComment, closeView, people, openSOLines } = useData();
   const [draft, setDraft] = useState("");
   const b = blockers.find((x) => x.id === id);
   if (!b) return null;
@@ -2493,11 +2524,11 @@ function BlockerModal({ id }) {
         )}
 
         <div style={{ marginBottom: 16 }}>
-          <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Impacted sales orders ({b.sos.length})</div>
+          <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Impacted sales order lines ({b.sos.length})</div>
           {b.sos.map((sid) => { const o = soById(sid); if (!o) return null; return (
             <div key={sid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{o.customer} <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>· {o.id}</span></div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{o.customer} <span onClick={() => openSOLines(o.so)} className="tf-mono" style={{ fontSize: 10.5, color: "var(--amber)", cursor: "pointer", textDecoration: "underline dotted" }} title={`View all lines of ${o.so}`}>{o.so}</span><span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}> · L{o.line}</span></div>
                 <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>promise {o.promise} · qty {o.qty} · {o.parts.map((pn, i) => <React.Fragment key={pn}>{i ? ", " : ""}<ThreadLink id={pn} style={{ color: "var(--green)" }}>{pn}</ThreadLink></React.Fragment>)}</div>
               </div>
               <span className="tf-mono" style={{ fontSize: 12, color: "var(--ink)" }}>{fmtMoney(o.value)}</span>
@@ -2556,26 +2587,80 @@ function BlockerModal({ id }) {
 }
 
 /* ---------- sales order detail ---------- */
+function SOLinesModal({ so }) {
+  const { blockers, openSO, closeSOLines } = useData();
+  const lines = linesOfSO(so);
+  if (!lines.length) return null;
+  const customer = lines[0].customer;
+  const total = lines.reduce((a, l) => a + (l.value || 0), 0);
+  return (
+    <div onClick={closeSOLines} style={{ position: "fixed", inset: 0, zIndex: 212, background: "rgba(5,8,13,.74)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 600, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--amber)" }}>{so}</span>
+          <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>· {lines.length} line{lines.length > 1 ? "s" : ""}</span>
+          <span onClick={closeSOLines} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
+        </div>
+        <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{customer}</h3>
+
+        <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 64px 84px 110px", padding: "8px 12px", borderBottom: "1px solid var(--line)", background: "var(--panel2)" }} className="tf-mono">
+            <span style={{ fontSize: 10, color: "var(--faint)" }}>LINE</span>
+            <span style={{ fontSize: 10, color: "var(--faint)" }}>END ITEM</span>
+            <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>QTY</span>
+            <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>COST</span>
+            <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>PROMISE</span>
+          </div>
+          {lines.map((l) => {
+            const blk = openBlockerForSO(blockers, l.id);
+            return (
+              <div key={l.id} onClick={() => { closeSOLines(); openSO(l.id); }} style={{ display: "grid", gridTemplateColumns: "52px 1fr 64px 84px 110px", padding: "10px 12px", borderBottom: "1px solid var(--line)", cursor: "pointer", alignItems: "center", background: blk ? "rgba(240,86,58,.07)" : "transparent" }}>
+                <span className="tf-mono" style={{ fontSize: 12, color: "var(--ink)" }}>{l.line}</span>
+                <span style={{ fontSize: 12.5, minWidth: 0 }}>
+                  <span className="tf-mono" style={{ color: "var(--thread)" }}>{l.part || "—"}</span>
+                  {l.part && ACTIVE_PART_DESC[l.part] ? <span style={{ color: "var(--faint)" }}> · {ACTIVE_PART_DESC[l.part]}</span> : null}
+                  {blk && <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--red)", marginLeft: 6 }}>● blocked</span>}
+                </span>
+                <span className="tf-mono" style={{ fontSize: 12, textAlign: "right" }}>{l.qty}</span>
+                <span className="tf-disp" style={{ fontSize: 13, fontWeight: 700, textAlign: "right" }}>{fmtMoney(l.value)}</span>
+                <span className="tf-mono" style={{ fontSize: 11.5, textAlign: "right", color: "var(--muted)" }}>{l.promise}</span>
+              </div>
+            );
+          })}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 110px", padding: "10px 12px", background: "var(--panel2)" }}>
+            <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>ORDER TOTAL</span>
+            <span className="tf-disp" style={{ fontSize: 15, fontWeight: 800, textAlign: "right" }}>{fmtMoney(total)}</span>
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 10 }}>Tap a line to open it.</div>
+      </div>
+    </div>
+  );
+}
+
 function SalesOrderModal({ id }) {
-  const { blockers, openBlocker, openForm, closeSO } = useData();
+  const { blockers, openBlocker, openForm, closeSO, openSOLines } = useData();
   const o = soById(id);
   if (!o) return null;
   const blk = openBlockerForSO(blockers, id);
   const related = blockers.filter((b) => b.sos.includes(id)).sort((a, b) => (a.status === "closed") - (b.status === "closed") || blockerValue(b) - blockerValue(a));
   const revised = related.find((x) => x.status !== "closed" && x.newPromise)?.newPromise;
   const wos = ACTIVE_WOS.filter((w) => o.parts.includes(w.part));
+  const siblings = linesOfSO(o.so);
 
   return (
     <div onClick={closeSO} style={{ position: "fixed", inset: 0, zIndex: 206, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 540, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <Tag tone={blk ? "red" : "green"}>{blk ? "at risk" : "on track"}</Tag>
-          <span className="tf-mono" style={{ fontSize: 12, color: "var(--amber)" }}>{o.id}</span>
+          <span onClick={() => openSOLines(o.so)} className="tf-mono" style={{ fontSize: 12, color: "var(--amber)", cursor: "pointer", textDecoration: "underline dotted" }} title={`View all lines of ${o.so}`}>{o.so}</span>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>· Line {o.line}{siblings.length > 1 ? ` of ${siblings.length}` : ""}</span>
           <span onClick={closeSO} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
         </div>
         <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{o.customer}</h3>
 
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", marginBottom: 16 }}>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>End item</span><span style={{ fontSize: 13 }}>{o.part ? <ThreadLink id={o.part}>{o.part}</ThreadLink> : "—"}{o.part && ACTIVE_PART_DESC[o.part] ? <span style={{ color: "var(--muted)" }}> · {ACTIVE_PART_DESC[o.part]}</span> : null}</span>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Site</span><span style={{ fontSize: 13 }}>{o.site}</span>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Promise date</span><span style={{ fontSize: 13, textDecoration: revised ? "line-through" : "none", opacity: revised ? 0.6 : 1 }}>{o.promise}</span>
           {revised && <><span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Revised promise</span><span style={{ fontSize: 13, fontWeight: 700, color: "var(--amber)" }}>{revised} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", fontWeight: 400 }}>· most probable</span></span></>}
@@ -2711,7 +2796,7 @@ function DeliveryPage() {
             </span>
           </div>
           <div className="tf-disp" style={{ fontSize: 16, fontWeight: 800, margin: "3px 0 1px" }}>{fmtMoney(o.value)}</div>
-          <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{o.id} · qty {o.qty}</div>
+          <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{o.so} · L{o.line} · qty {o.qty}</div>
           {revisedForSO(blockers, o.id) && <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--amber)", marginTop: 2 }}>↪ revised from {o.promise}</div>}
           <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 4 }}>
             {o.parts.map((pn) => <ThreadLink key={pn} id={pn} style={{ color: "var(--green)", fontFamily: "var(--mono)", fontSize: 10, padding: "1px 6px", border: "1px solid var(--line2)", borderRadius: 6, borderBottom: "1px solid var(--line2)" }}>{pn}</ThreadLink>)}
@@ -2999,6 +3084,7 @@ export default function App({ user }) {
   const [bView, setBView] = useState(null);
   const [bForm, setBForm] = useState(null);
   const [soView, setSoView] = useState(null);
+  const [soLinesView, setSoLinesView] = useState(null);
   const [delivSite, setDelivSite] = useState("All");
   const [delivWeek, setDelivWeek] = useState(() => mondayOf(D(SALES_ORDERS.map((s) => s.promise).sort()[0])));
   const [events, setEvents] = useState([]);
@@ -3053,6 +3139,7 @@ export default function App({ user }) {
     openBlocker: (id) => setBView(id), closeView: () => setBView(null),
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
     openSO: (id) => setSoView(id), closeSO: () => setSoView(null),
+    openSOLines: (so) => setSoLinesView(so), closeSOLines: () => setSoLinesView(null),
   };
 
   // live context so the offline assistant can give real numbers
@@ -3082,7 +3169,7 @@ export default function App({ user }) {
   // full live snapshot appended to the system prompt so the model always sees
   // the current orders, blockers (with audit + revised dates) and recent changes
   const aiContext = (() => {
-    const orders = sos.map((o) => ({ id: o.id, customer: o.customer, site: o.site, promise: o.promise, effective: effPromise(blockers, o), qty: o.qty, value: o.value, blocked: !!openBlockerForSO(blockers, o.id) }));
+    const orders = sos.map((o) => ({ id: o.id, so: o.so, line: o.line, part: o.part, customer: o.customer, site: o.site, promise: o.promise, effective: effPromise(blockers, o), qty: o.qty, value: o.value, blocked: !!openBlockerForSO(blockers, o.id) }));
     const blks = blockers.map((b) => ({ id: b.id, title: b.title, status: b.status, assignee: b.assignee || null, openedBy: b.openedBy || null, opened: b.created, closedAt: b.closedAt || null, closedBy: b.closedBy || null, revisedPromise: b.newPromise || null, action: b.action, orders: b.sos, parts: b.parts, workOrder: b.wo || null, dollarsAtRisk: blockerValue(b), updates: (b.comments || []).map((c) => ({ who: c.who, ts: c.ts, text: c.text })) }));
     return [
       "LIVE THREADWIRE DATA — authoritative current state. Answer using these exact values (dollar amounts, dates, owners, statuses here override any assumption). Money is in USD.",
@@ -3130,6 +3217,7 @@ export default function App({ user }) {
       {bView && <BlockerModal id={bView} />}
       {bForm && <BlockerForm pre={bForm} />}
       {soView && <SalesOrderModal id={soView} />}
+      {soLinesView && <SOLinesModal so={soLinesView} />}
     </div>
     </DataCtx.Provider>
     </ThreadCtx.Provider>

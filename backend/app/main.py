@@ -565,12 +565,13 @@ async def list_events(limit: int = 20, user: dict = Depends(current_user)):
 async def get_sales_orders(user: dict = Depends(current_user)):
     async with db.pool().acquire() as con:
         rows = await con.fetch(
-            "SELECT so_number, customer, site, promise_date, part_number, quantity, value, status "
-            "FROM sales_orders WHERE org_id = $1 ORDER BY promise_date NULLS LAST, so_number", user["org_id"])
+            "SELECT so_number, line_number, customer, site, promise_date, part_number, quantity, value, status "
+            "FROM sales_orders WHERE org_id = $1 ORDER BY promise_date NULLS LAST, so_number, line_number", user["org_id"])
     out = []
     for r in rows:
         out.append({
-            "so_number": r["so_number"], "customer": r["customer"], "site": r["site"] or "",
+            "so_number": r["so_number"], "line_number": r["line_number"] or 10,
+            "customer": r["customer"], "site": r["site"] or "",
             "promise_date": r["promise_date"].isoformat() if r["promise_date"] else None,
             "part_number": r["part_number"] or "",
             "quantity": float(r["quantity"]) if r["quantity"] is not None else 0,
@@ -595,7 +596,7 @@ async def get_work_orders(user: dict = Depends(current_user)):
 async def get_parts(user: dict = Depends(current_user)):
     async with db.pool().acquire() as con:
         rows = await con.fetch(
-            "SELECT part_number, description, unit_cost, commodity, revision, lifecycle FROM parts "
+            "SELECT part_number, description, unit_cost, commodity, revision, lifecycle, classification FROM parts "
             "WHERE org_id = $1 ORDER BY part_number", user["org_id"])
     return [dict(r) | {"unit_cost": float(r["unit_cost"]) if r["unit_cost"] is not None else None} for r in rows]
 
