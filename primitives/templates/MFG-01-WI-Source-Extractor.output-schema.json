@@ -1,0 +1,315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "MFG-01-WI-Source-Extractor.output-schema.json",
+  "title": "Work-Instruction Source Extraction Record",
+  "description": "Output contract for MFG-01-WI-Source-Extractor v1.0.0. Structured manufacturing facts extracted from drawings, ECOs, planning sheets, and process specs. Consumed by the MFG-01 Guided Work-Instruction Author copilot.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "work_order_id",
+    "part_number",
+    "operation",
+    "effectivity",
+    "critical_features",
+    "tolerances",
+    "fasteners",
+    "torque_specs",
+    "process_specs",
+    "tooling",
+    "consumables",
+    "ppe",
+    "environmental_controls",
+    "inspection_points",
+    "traceability_requirements",
+    "eco_changes",
+    "unresolved_ambiguities",
+    "refusal_reason",
+    "overall_confidence"
+  ],
+  "properties": {
+    "schema_id": { "const": "MFG-01-WI-Source-Extractor.output-schema.json" },
+    "schema_version": { "const": "1.0.0" },
+    "work_order_id": { "type": "string" },
+    "part_number": { "type": "string" },
+    "operation": { "type": "string" },
+    "effectivity": { "type": ["string", "null"] },
+
+    "critical_features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature_id", "criticality_marker", "description", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "feature_id": { "type": ["string", "null"], "description": "Source-provided identifier (e.g. 'KC-001')." },
+          "criticality_marker": {
+            "enum": ["KC", "KPC", "CSI", "FlightSafetyCritical", "FractureCritical", "Other"]
+          },
+          "description": { "type": "string", "maxLength": 500 },
+          "gdt_callout": { "type": ["string", "null"], "maxLength": 300 },
+          "location_reference": { "type": ["string", "null"], "maxLength": 200, "description": "Which hole, surface, or feature this applies to." },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "tolerances": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature", "nominal", "upper", "lower", "units", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "feature": { "type": "string", "maxLength": 300 },
+          "nominal": { "type": ["number", "null"] },
+          "upper": { "type": ["number", "null"] },
+          "lower": { "type": ["number", "null"] },
+          "units": { "type": ["string", "null"], "description": "Preserve source units exactly (in, mm, deg, etc.)." },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "fasteners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["part_number", "callout_text", "quantity", "location_reference", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "part_number": { "type": "string" },
+          "callout_text": { "type": "string", "maxLength": 300 },
+          "quantity": { "type": ["integer", "null"], "minimum": 0 },
+          "location_reference": { "type": ["string", "null"], "maxLength": 200 },
+          "reuse_rule": {
+            "enum": ["one-time-use", "reusable", "reuse-with-inspection", "unspecified", null]
+          },
+          "grip_length": { "type": ["string", "null"] },
+          "finish_or_plating": { "type": ["string", "null"] },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "torque_specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["fastener_reference", "value", "tolerance", "units", "wet_or_dry", "sequence_reference", "preload_notes", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "fastener_reference": { "type": ["string", "null"], "description": "Either a fastener part number, a hole range, or a pattern descriptor this torque applies to." },
+          "value": { "type": ["number", "null"] },
+          "tolerance": { "type": ["number", "null"] },
+          "units": { "enum": ["in-lb", "ft-lb", "N-m", "N-cm", "kgf-cm", "kgf-m", "Other", null] },
+          "wet_or_dry": { "enum": ["Wet", "Dry", "Unspecified"] },
+          "sequence_reference": { "type": ["string", "null"], "maxLength": 200 },
+          "preload_notes": { "type": ["string", "null"], "maxLength": 500 },
+          "run_down_spec": { "type": ["string", "null"], "maxLength": 200 },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "process_specs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["spec_number", "revision", "process_class", "application", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "spec_number": { "type": "string" },
+          "revision": { "type": ["string", "null"] },
+          "process_class": { "type": ["string", "null"], "description": "Class, type, or grade as called out (e.g. 'Class 2', 'Type I Comp A')." },
+          "application": { "type": ["string", "null"], "maxLength": 500, "description": "What the spec is applied to and when." },
+          "nadcap_accreditation_required": { "type": ["boolean", "null"] },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "tooling": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "identifier", "description", "calibration_required", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "kind": {
+            "enum": ["Fixture", "Gage", "TorqueWrench", "Drill", "Reamer", "PressTool", "HeatSource", "InspectionTool", "Other"]
+          },
+          "identifier": { "type": ["string", "null"], "description": "Tool number, gage number, or fixture part number if stated." },
+          "description": { "type": "string", "maxLength": 500 },
+          "calibration_required": { "type": ["boolean", "null"] },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "consumables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "description", "part_or_spec_number", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "kind": {
+            "enum": ["Sealant", "Adhesive", "Lubricant", "Solvent", "Primer", "Paint", "Tape", "Wire", "Solder", "Abrasive", "Other"]
+          },
+          "description": { "type": "string", "maxLength": 300 },
+          "part_or_spec_number": { "type": ["string", "null"] },
+          "shelf_life_note": { "type": ["string", "null"], "maxLength": 200 },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "ppe": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "description", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "category": {
+            "enum": ["eye", "hand", "respiratory", "hearing", "ESD", "cleanroom", "fall-protection", "other"]
+          },
+          "description": { "type": "string", "maxLength": 300 },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "environmental_controls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "notes", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "kind": {
+            "enum": ["cleanroom_class", "temperature_control", "humidity_control", "ESD_protected_area", "FOD_control", "no_silicone_area", "other"]
+          },
+          "notes": { "type": "string", "maxLength": 500 },
+          "measurement": { "type": ["string", "null"], "description": "Numeric bound if given, e.g. 'ISO Class 8', '18\u201327 C', '<60% RH'." },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "inspection_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "description", "acceptance_criteria", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "kind": {
+            "enum": ["InProcess", "FirstArticle", "Buyoff", "NDT", "Dimensional", "Visual", "Leak", "Electrical", "Other"]
+          },
+          "description": { "type": "string", "maxLength": 500 },
+          "acceptance_criteria": { "type": ["string", "null"], "maxLength": 500 },
+          "buyoff_role": { "type": ["string", "null"], "description": "Role required to sign off, e.g. 'QA', 'DER', 'Customer Source'." },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "traceability_requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "description", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "kind": {
+            "enum": ["SerializedComponent", "LotControl", "MaterialHeatCert", "CofC", "DPAS_Rating", "FlightHardwareLog", "Other"]
+          },
+          "description": { "type": "string", "maxLength": 500 },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "eco_changes": {
+      "type": "array",
+      "description": "Populated only when an ECO is included in sources. Captures the delta the ECO introduces versus the baseline.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["eco_number", "part_number", "effectivity", "description", "from", "to", "verbatim_source_text", "citation", "confidence"],
+        "properties": {
+          "eco_number": { "type": "string" },
+          "part_number": { "type": ["string", "null"] },
+          "effectivity": { "type": ["string", "null"] },
+          "description": { "type": "string", "maxLength": 500 },
+          "from": { "type": ["string", "null"], "maxLength": 500 },
+          "to": { "type": ["string", "null"], "maxLength": 500 },
+          "verbatim_source_text": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "unresolved_ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field_hint", "text", "citation"],
+        "properties": {
+          "field_hint": { "type": ["string", "null"] },
+          "text": { "type": "string", "maxLength": 1000 },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "refusal_reason": {
+      "type": ["string", "null"],
+      "description": "Non-null only if the extractor refused to process, e.g. 'prompt_injection_detected' or 'not_a_manufacturing_source'."
+    },
+
+    "overall_confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "zone", "section", "note_id", "doc_id"],
+      "properties": {
+        "page": { "type": ["integer", "null"], "minimum": 1 },
+        "zone": { "type": ["string", "null"], "description": "Drawing grid zone, e.g. 'B4', 'C7'." },
+        "section": { "type": ["string", "null"], "description": "Text document section, e.g. '4.2.1'." },
+        "note_id": { "type": ["string", "null"], "description": "Drawing note identifier, e.g. 'NOTE 7' or 'FLAG 12'." },
+        "doc_id": { "type": ["string", "null"], "description": "Source document identifier from the '<page ... doc=\"<id>\">' marker." }
+      }
+    }
+  }
+}

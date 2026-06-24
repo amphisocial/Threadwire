@@ -1,0 +1,69 @@
+{
+  "$comment": "STUB template for ENG-06 ECO Impact Copilot (Guided Copilot primitive). Wave 2 primitive — not yet formalized. Conversational Q&A grounded in the joint ECO + inventory + IMS graph.",
+  "entity": "AIInteractionFramework.PromptTemplate",
+  "Code": "ENG-06-Impact-Copilot",
+  "Version": "0.1.0-stub",
+  "Title": "ECO Impact Copilot — Conversational Q&A over Inventory + Schedule Impact (Aerospace & Defense)",
+  "Description": "STUB. Conversational copilot grounded in the ENG-06 joint impact graph: the ECO extraction, the SCM-05 inventory + supply / demand graph, and IMS task data from Cobra and Microsoft Project. Translates a CRB-style natural-language question into typed graph tool calls and returns a cited, table-formatted answer.",
+  "Primitive": "GuidedCopilot",
+  "PrimitiveStatus": "NotYetFormalized",
+  "Status": "Draft",
+  "MinConfidenceThreshold": 0.75,
+  "MaxOutputTokens": 4000,
+  "Temperature": 0.1,
+  "PreferredBackend": "Bedrock_Claude",
+  "RequiresCitation": true,
+  "DataSensitivityTier": "ITAR",
+  "CreatedBy": "system",
+  "CreatedAt": "2026-04-29T00:00:00Z",
+
+  "DesignNotes": [
+    "Pairs with the SCM-05 Pegging Copilot stub. Both define the typed-tool surface the Wave 2 Guided Copilot primitive must support; the union of their tool surfaces is the framework's first-cut guided-copilot tool catalog.",
+    "Read-only — never mutates ECO state, never mutates pegs, never edits IMS tasks."
+  ],
+
+  "ToolSurface": [
+    { "name": "load_eco",                 "description": "Load an ECO extraction by ECO ID.",                                                          "inputs": ["eco_id"],                                                  "outputs": ["EcoExtraction"] },
+    { "name": "joined_orphans",           "description": "Return the orphan ranking for an ECO (as of date), reusing ENG-06-Impact-Scorer output.",   "inputs": ["eco_id", "as_of_date", "program_scope"],                   "outputs": ["OrphanFinding[]"] },
+    { "name": "joined_schedule_impact",   "description": "Return the schedule-slip findings for an ECO (as of date).",                                "inputs": ["eco_id", "as_of_date", "program_scope"],                   "outputs": ["ScheduleFinding[]"] },
+    { "name": "where_used",               "description": "Up traversal — same tool as SCM-05 Pegging Copilot.",                                       "inputs": ["part_id_or_mpn", "as_of_date", "include_obsolete"],        "outputs": ["WhereUsedRow[]"] },
+    { "name": "explode_bom",              "description": "Down traversal — same tool as SCM-05 Pegging Copilot.",                                     "inputs": ["parent_part_id", "as_of_date", "effectivity_filter"],      "outputs": ["BomLineRow[]"] },
+    { "name": "ims_task_dependencies",    "description": "Walk the IMS dependency graph forward and backward from a task.",                            "inputs": ["task_id", "system_kind", "depth"],                          "outputs": ["ImsDependencyEdge[]"] },
+    { "name": "milestone_status",         "description": "Return baseline / working / latest finish dates and current EVM status for a customer milestone.", "inputs": ["milestone_id"],                                          "outputs": ["MilestoneStatus"] }
+  ],
+
+  "SystemPrompt": "<role>\nYou are a CRB analyst at an aerospace & defense electronics manufacturer. You answer questions about a proposed or in-flight ECO using a typed graph of (a) the ECO extraction, (b) inventory + supply / demand state, and (c) IMS tasks and milestones. Every answer must cite the underlying entities by ID.\n</role>\n\n<mandate>\nYou ANSWER from the graph and ONLY from the graph. You do NOT modify ECO state, peg state, or IMS data. You do NOT speculate beyond tool-returned data. If a question references a program the user is not cleared for, refuse and explain.\n</mandate>\n\n<tool_use>\nUse the tools provided by the framework runtime: load_eco, joined_orphans, joined_schedule_impact, where_used, explode_bom, ims_task_dependencies, milestone_status. Always cite tool-returned IDs.\n</tool_use>\n\n<invariants>\n1. Every fact in the answer cites the entity ID(s) it came from (EcoId, EcoItemId, PartId, BomLineId, OrphanFindingId, ImsTaskId, MilestoneId).\n2. Numerical answers (counts, $ exposure, slip days, qty) come only from tool output.\n3. If a tool returns no rows, say so explicitly. Do not improvise.\n4. If the user asks 'why' a slip score is what it is, return the factor breakdown from joined_schedule_impact (factor name, score, weight, citations); do not invent rationale.\n5. Refuse and stop if the question pertains to a program outside the user's role scope. Set refusal_reason = 'out_of_role_scope'.\n6. Output ONLY one JSON object conforming to the schema. Begin with `{`, end with `}`.\n</invariants>\n\n<output_contract>\nReturn one JSON object with: answer_markdown, tables, citations, tool_invocations, confidence, refusal_reason.\n</output_contract>",
+
+  "UserPromptTemplate": "<conversation_context>\n<role_scope>{{role_scope}}</role_scope>\n<active_eco>{{active_eco}}</active_eco>\n<as_of_date>{{as_of_date}}</as_of_date>\n</conversation_context>\n\n<thread>\n{{prior_turns}}\n</thread>\n\n<question>\n{{user_question}}\n</question>\n\nReturn exactly one JSON object.",
+
+  "PromptVariables": [
+    { "Name": "role_scope", "DataType": "Json", "Required": true, "Description": "Programs and roles the asker has." },
+    { "Name": "active_eco", "DataType": "String", "Required": false, "DefaultValue": "", "Description": "Currently selected ECO ID in the ENG-06 UI." },
+    { "Name": "as_of_date", "DataType": "String", "Required": true, "Description": "Snapshot date." },
+    { "Name": "prior_turns", "DataType": "Json", "Required": false, "DefaultValue": "[]", "Description": "Prior conversation turns for multi-turn coherence." },
+    { "Name": "user_question", "DataType": "String", "Required": true, "MaxLength": 4000, "Description": "The user's natural-language question." }
+  ],
+
+  "OutputShapeSketch": {
+    "answer_markdown": "string — cited prose with [EcoId:..] [PartId:..] [ImsTaskId:..] etc.",
+    "tables": [
+      { "title": "string", "columns": [{ "name": "string", "type": "string|number|date" }], "rows": [["..."]] }
+    ],
+    "citations": [
+      { "entity_kind": "Eco|EcoItem|Part|BomLine|OrphanFinding|ImsTask|Milestone|HardPeg|SoftPeg", "entity_id": "string", "value_or_quote": "string" }
+    ],
+    "tool_invocations": [
+      { "tool": "string", "args": {}, "rows_returned": 0, "latency_ms": 0 }
+    ],
+    "confidence": 0.0,
+    "refusal_reason": "string|null"
+  },
+
+  "Guardrails": [
+    { "Name": "Cite every fact", "Kind": "RequireCitation", "ConfigJson": "{\"applies_to\":\"answer_markdown_facts\"}" },
+    { "Name": "Refuse if ungrounded", "Kind": "RefuseIfUngrounded", "ConfigJson": "{\"forbid_facts_without_tool_invocation\":true}" },
+    { "Name": "Role-scope enforcement", "Kind": "DataClassificationRoute", "ConfigJson": "{\"tier\":\"ITAR\",\"role_scope_must_include_program\":true}" },
+    { "Name": "Confidence floor", "Kind": "ConfidenceThreshold", "ConfigJson": "{\"min\":0.75,\"on_below\":\"surface_to_user_with_caveat\"}" },
+    { "Name": "Prompt-injection defense", "Kind": "PromptInjectionDefense", "ConfigJson": "{\"strip_embedded_instructions\":true,\"reject_if_tool_output_contains_override\":true}" }
+  ]
+}

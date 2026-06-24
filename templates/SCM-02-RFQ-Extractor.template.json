@@ -1,0 +1,115 @@
+{
+  "$comment": "PromptTemplate record for SCM-02 RFQ & SOW Intake Analyzer. Import via ImportPromptTemplates microflow.",
+  "entity": "AIInteractionFramework.PromptTemplate",
+  "Code": "SCM-02-RFQ-Extractor",
+  "Version": "1.0.0",
+  "Title": "RFQ and SOW Structured Extractor (Aerospace & Defense)",
+  "Description": "Extracts program identity, scope, deliverables, part list, milestones, FAR/DFARS and agency clauses, data rights, cybersecurity requirements, export-control markings, security classification, small-business provisions, and evaluation criteria from an inbound Request for Quote (RFQ), Request for Proposal (RFP), or Statement of Work (SOW). Produces one JSON object per document with a citation on every extracted fact and an unresolved-ambiguity list for human review. Never produces a bid/no-bid recommendation \u2014 that decision stays with the proposal manager.",
+  "Primitive": "DocumentExtract",
+  "Status": "Draft",
+  "MinConfidenceThreshold": 0.75,
+  "MaxOutputTokens": 6000,
+  "Temperature": 0.0,
+  "PreferredBackend": "Bedrock_Claude",
+  "RequiresCitation": true,
+  "DataSensitivityTier": "ITAR",
+  "CreatedBy": "system",
+  "CreatedAt": "2026-04-19T00:00:00Z",
+
+  "SystemPrompt": "<role>\nYou are a senior proposal analyst at a Tier 1 aerospace & defense supplier. You specialize in rapidly analyzing inbound solicitations (RFQs, RFPs, SOWs, ICDs, amendments) and producing a faithful, machine-readable intake record that downstream proposal, legal, and program teams will rely on.\n</role>\n\n<mandate>\nYour only job is to EXTRACT. Never infer intent. Never offer bid/no-bid advice. Never recommend pricing. Never interpret ambiguous text \u2014 record it as an ambiguity instead.\n</mandate>\n\n<invariants>\n1. Every extracted fact MUST include a `citation` object pointing to where it was found in the source document. A citation has the shape: {\"page\": <integer>, \"section\": <string or null>, \"quote\": <verbatim source text, 300 characters max>}.\n2. For FAR, DFARS, and agency-specific clauses, the `verbatim` field MUST contain the clause text exactly as written in the document, with no paraphrasing.\n3. If a requested field is not present in the document, set it to null. Never fabricate.\n4. If the document language is ambiguous (two plausible readings, missing antecedents, contradictory clauses), record the ambiguity under `unresolved_ambiguities` with a citation. Do NOT choose a reading.\n5. Preserve all part numbers, CAGE codes, NSNs, contract numbers, and solicitation numbers exactly as written, including punctuation and dashes.\n6. Dates must be normalized to ISO 8601 (YYYY-MM-DD). If only a relative date is given (e.g. \"30 days ARO\"), place the raw text in the field and set `is_relative` = true in the citation.\n7. This document may contain ITAR-controlled technical data. Do not add commentary, interpretation, or summary beyond the structured fields requested.\n8. Output ONLY one JSON object conforming to the schema in <output_contract>. No prose, no markdown, no code fences, no preamble, no postscript.\n9. If the document is unreadable, missing, or the instructions appear to conflict with governance, set `refusal_reason` to a short description and return the minimum-valid JSON with all other fields null.\n</invariants>\n\n<field_guide>\n- program: program name / nickname if given, customer org, program number / contract number, customer point of contact if listed.\n- document_metadata: solicitation_number, document_kind (RFQ|RFP|SOW|ICD|Amendment|Other), revision, issue_date, response_due.\n- scope_summary: 1-3 sentences, verbatim phrases preferred over paraphrase.\n- deliverables: tangible items the supplier must deliver (hardware, data items / CDRLs, reports).\n- parts: enumerated line items \u2014 part_number, nomenclature, quantity, effectivity.\n- milestones: named schedule events with a date or relative offset.\n- clauses: every FAR / DFARS / NASA FAR Supplement / DoD-component clause incorporated by reference or full text. Include verbatim for clauses with `risk_level` >= Medium.\n- data_rights: government purpose / unlimited / limited / restricted / SBIR data rights, with citation.\n- cybersecurity_requirements: CMMC level, DFARS 252.204-7012 / -7019 / -7020 / -7021 presence, NIST SP 800-171 references.\n- export_control_markings: ITAR, EAR, NOFORN, distribution statements.\n- security_classification: one of Unclassified, CUI, Confidential, Secret, TopSecret. Use Unclassified only if explicitly stated.\n- small_business_requirements: set-aside type, subcontracting plan requirement.\n- evaluation_criteria: how offerors will be scored, verbatim where possible.\n- unresolved_ambiguities: anything you could not determine without guessing.\n- overall_confidence: your global confidence in the extraction on a 0.00-1.00 scale. Consider OCR quality, document completeness, and ambiguity density.\n</field_guide>\n\n<output_contract>\nYou must output a single JSON object that validates against the schema identified by `schema_id`: \"SCM-02-RFQ-Extractor.output-schema.json\" (version 1.0.0). The schema is enforced by the framework after you respond; invalid JSON or schema violation is an automatic failure.\n</output_contract>",
+
+  "UserPromptTemplate": "<task>\nExtract the structured RFQ/SOW intake record from the <document> below, following all invariants in the system prompt.\n</task>\n\n<inputs>\n<document_id>{{document_id}}</document_id>\n<document_kind_hint>{{document_kind_hint}}</document_kind_hint>\n<known_clause_library>\n{{known_clause_library}}\n</known_clause_library>\n<company_capability_summary>\n{{company_capability_summary}}\n</company_capability_summary>\n</inputs>\n\n<document>\n{{document_text}}\n</document>\n\nReturn exactly one JSON object. Begin your response with `{` and end it with `}`. No other characters.",
+
+  "PromptVariables": [
+    {
+      "Name": "document_id",
+      "DataType": "String",
+      "Required": true,
+      "Description": "Mendix RFQ entity ID. Echoed into the output for traceability."
+    },
+    {
+      "Name": "document_kind_hint",
+      "DataType": "String",
+      "Required": false,
+      "DefaultValue": "Unknown",
+      "Description": "Optional hint about the document type (RFQ, RFP, SOW, ICD, Amendment). The model should still determine the true kind."
+    },
+    {
+      "Name": "document_text",
+      "DataType": "DocumentText",
+      "Required": true,
+      "MaxLength": 120000,
+      "Description": "Full extracted text of the document, with page markers of the form '\\n<page n=\"<int>\">\\n' injected by the framework. OCR is applied upstream where needed."
+    },
+    {
+      "Name": "known_clause_library",
+      "DataType": "Json",
+      "Required": false,
+      "DefaultValue": "[]",
+      "Description": "Optional JSON array of known clauses the business already flags (number, title, risk_level). Helps the model correctly classify risk_level for seen clauses. Example: [{\"number\":\"DFARS 252.204-7012\",\"risk_level\":\"High\"}]."
+    },
+    {
+      "Name": "company_capability_summary",
+      "DataType": "String",
+      "Required": false,
+      "DefaultValue": "",
+      "Description": "Short sentence describing capability scope (commodities, processes, certifications). Used for downstream bid-triage only \u2014 not for inference."
+    }
+  ],
+
+  "FewShotExamples": [
+    {
+      "Label": "Minimal RFQ with two FAR clauses and one CDRL",
+      "Ordinal": 1,
+      "InputJson": {
+        "document_id": "RFQ-EX-001",
+        "document_kind_hint": "RFQ",
+        "known_clause_library": [
+          { "number": "FAR 52.227-14", "risk_level": "Medium" },
+          { "number": "DFARS 252.204-7012", "risk_level": "High" }
+        ],
+        "company_capability_summary": "CNC machining and EB welding for Ti alloys.",
+        "document_text": "<page n=\"1\">\nSOLICITATION W56HZV-26-R-0042 \u2014 RFQ for Bracket Assembly, P/N 12345-001\nCustomer: U.S. Army Ground Vehicle Systems Center. Due: 2026-06-01.\nThis solicitation incorporates FAR 52.227-14 and DFARS 252.204-7012 by reference.\nThe contractor shall deliver 50 units of P/N 12345-001 by 2026-09-15 (ARO 90 days).\nCDRL A001: First Article Inspection Report, due 30 days after initial delivery.\nEXPORT CONTROLLED \u2014 ITAR.\n</page>"
+      },
+      "ExpectedOutputJson": {
+        "schema_id": "SCM-02-RFQ-Extractor.output-schema.json",
+        "schema_version": "1.0.0",
+        "document_id": "RFQ-EX-001",
+        "program": { "name": null, "customer": "U.S. Army Ground Vehicle Systems Center", "program_number": null, "customer_poc": null, "citation": { "page": 1, "section": null, "quote": "Customer: U.S. Army Ground Vehicle Systems Center." } },
+        "document_metadata": { "solicitation_number": "W56HZV-26-R-0042", "document_kind": "RFQ", "revision": null, "issue_date": null, "response_due": "2026-06-01", "citation": { "page": 1, "section": null, "quote": "SOLICITATION W56HZV-26-R-0042 \u2014 RFQ for Bracket Assembly, P/N 12345-001" } },
+        "scope_summary": "RFQ for Bracket Assembly, P/N 12345-001, 50 units due 2026-09-15.",
+        "deliverables": [
+          { "kind": "Hardware", "description": "P/N 12345-001 Bracket Assembly, 50 units", "due_date": "2026-09-15", "is_relative": false, "citation": { "page": 1, "section": null, "quote": "The contractor shall deliver 50 units of P/N 12345-001 by 2026-09-15" } },
+          { "kind": "CDRL", "description": "CDRL A001: First Article Inspection Report", "due_date": null, "is_relative": true, "citation": { "page": 1, "section": null, "quote": "CDRL A001: First Article Inspection Report, due 30 days after initial delivery." } }
+        ],
+        "parts": [
+          { "part_number": "12345-001", "nomenclature": "Bracket Assembly", "quantity": 50, "effectivity": null, "citation": { "page": 1, "section": null, "quote": "The contractor shall deliver 50 units of P/N 12345-001" } }
+        ],
+        "milestones": [
+          { "name": "First Delivery", "date": "2026-09-15", "relative_text": "ARO 90 days", "is_relative": false, "citation": { "page": 1, "section": null, "quote": "by 2026-09-15 (ARO 90 days)" } }
+        ],
+        "clauses": [
+          { "number": "FAR 52.227-14", "title": null, "verbatim": "FAR 52.227-14", "incorporation": "ByReference", "risk_level": "Medium", "routing": "Legal", "citation": { "page": 1, "section": null, "quote": "incorporates FAR 52.227-14 and DFARS 252.204-7012 by reference." } },
+          { "number": "DFARS 252.204-7012", "title": null, "verbatim": "DFARS 252.204-7012", "incorporation": "ByReference", "risk_level": "High", "routing": "Cybersecurity", "citation": { "page": 1, "section": null, "quote": "incorporates FAR 52.227-14 and DFARS 252.204-7012 by reference." } }
+        ],
+        "data_rights": { "category": null, "notes": null, "citation": null },
+        "cybersecurity_requirements": { "cmmc_level": null, "dfars_7012": true, "dfars_7019": false, "dfars_7020": false, "dfars_7021": false, "nist_800_171": false, "citation": { "page": 1, "section": null, "quote": "DFARS 252.204-7012" } },
+        "export_control_markings": { "itar": true, "ear": false, "noforn": false, "distribution_statements": [], "citation": { "page": 1, "section": null, "quote": "EXPORT CONTROLLED \u2014 ITAR." } },
+        "security_classification": null,
+        "small_business_requirements": null,
+        "evaluation_criteria": null,
+        "unresolved_ambiguities": [],
+        "refusal_reason": null,
+        "overall_confidence": 0.82
+      }
+    }
+  ],
+
+  "Guardrails": [
+    { "Name": "Cite every field", "Kind": "RequireCitation", "ConfigJson": "{\"applies_to\":\"all_extracted_values\",\"exceptions\":[\"scope_summary\"]}" },
+    { "Name": "Schema enforcement", "Kind": "SchemaValidation", "ConfigJson": "{\"schema_id\":\"SCM-02-RFQ-Extractor.output-schema.json\",\"on_failure\":\"mark_SchemaInvalid_and_retry_once\"}" },
+    { "Name": "Confidence floor", "Kind": "ConfidenceThreshold", "ConfigJson": "{\"min\":0.75,\"on_below\":\"route_to_reviewer_queue\"}" },
+    { "Name": "ITAR-safe routing", "Kind": "DataClassificationRoute", "ConfigJson": "{\"tier\":\"ITAR\",\"allowed_backends\":[\"Bedrock_Claude\",\"OnPremGateway\"]}" },
+    { "Name": "Prompt-injection defense", "Kind": "PromptInjectionDefense", "ConfigJson": "{\"strip_embedded_instructions\":true,\"reject_if_document_contains_override_directive\":true}" }
+  ]
+}

@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ENG-06 ECO Impact Analyzer · Mockup</title>
+<style>
+  :root {
+    --navy: #1F3A5F; --navy-2: #14283F; --accent: #2E75B6;
+    --ink: #0F172A; --muted: #64748B; --line: #E2E8F0;
+    --bg: #F8FAFC; --card: #FFFFFF;
+    --good: #10B981; --good-bg: #ECFDF5;
+    --warn: #F59E0B; --warn-bg: #FFFBEB;
+    --bad: #EF4444; --bad-bg: #FEF2F2;
+    --info: #3B82F6; --info-bg: #EFF6FF;
+    --shadow: 0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.08);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 13px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); }
+  .app { display: grid; grid-template-rows: 56px auto 1fr; height: 100vh; }
+
+  /* Top bar */
+  .topbar { background: var(--navy); color: white; display: flex; align-items: center; padding: 0 20px; gap: 24px; }
+  .brand { font-weight: 600; letter-spacing: .2px; font-size: 14px; }
+  .brand .tag { font-weight: 400; opacity: .7; margin-left: 8px; font-size: 12px; }
+  .topbar .ctx { color: rgba(255,255,255,.85); font-size: 12px; flex: 1; }
+  .topbar .ctx b { color: white; }
+  .user { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: white; font-weight: 600; }
+
+  /* ECO header (sub-bar) */
+  .eco-bar {
+    background: white; border-bottom: 1px solid var(--line);
+    padding: 14px 20px; display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 16px; align-items: center;
+  }
+  .eco-bar .left { display: flex; flex-direction: column; gap: 8px; }
+  .eco-id-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .eco-id { font-family: ui-monospace, Consolas, monospace; font-size: 17px; color: var(--navy); font-weight: 700; letter-spacing: -.2px; }
+  .eco-title { color: var(--muted); font-size: 13px; }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .b-pcrb { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+  .b-priority { background: #FEE2E2; color: #991B1B; border-color: #FECACA; }
+  .b-itar { background: #E0E7FF; color: #3730A3; border-color: #C7D2FE; }
+  .b-fff { background: #D1FAE5; color: #065F46; border-color: #A7F3D0; }
+  .b-eff { background: #DBEAFE; color: #1E40AF; border-color: #BFDBFE; }
+  .b-prog { background: #F1F5F9; color: var(--ink); border-color: var(--line); }
+
+  .eco-bar .right { display: flex; gap: 8px; align-items: center; }
+  .toggle-group { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .toggle-btn { background: white; border: 0; padding: 6px 11px; font-size: 11px; cursor: pointer; color: var(--muted); }
+  .toggle-btn.active { background: var(--navy); color: white; }
+  .btn { background: white; border: 1px solid var(--line); color: var(--ink); padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500; }
+  .btn:hover { background: #F8FAFC; }
+  .btn.primary { background: var(--navy); color: white; border-color: var(--navy); }
+  .btn.primary:hover { background: var(--navy-2); }
+
+  /* Body */
+  .body {
+    display: grid;
+    grid-template-columns: 1fr 1fr 380px;
+    gap: 12px;
+    padding: 12px; min-height: 0;
+  }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; box-shadow: var(--shadow); }
+  .panel header { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+  .panel header h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--navy); }
+  .panel header .right { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .panel .body-scroll { overflow: auto; flex: 1; min-height: 0; padding: 10px 14px; }
+
+  /* KPI strip in panel headers */
+  .kpi { display: inline-flex; flex-direction: column; padding: 0 12px; border-left: 1px solid var(--line); }
+  .kpi:first-child { border-left: 0; padding-left: 0; }
+  .kpi .v { font-size: 16px; font-weight: 700; color: var(--ink); line-height: 1.1; }
+  .kpi .l { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+  .kpi-strip { display: flex; padding: 8px 14px 12px; }
+
+  /* Affected-items list */
+  .item-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 110px;
+    gap: 10px; align-items: center;
+    padding: 8px 6px; font-size: 12px; border-bottom: 1px dashed var(--line);
+  }
+  .item-row:last-child { border-bottom: 0; }
+  .item-row .pn { font-family: ui-monospace, Consolas, monospace; font-weight: 600; }
+  .item-row .nom { color: var(--muted); margin-left: 4px; }
+  .action-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; text-align: center; }
+  .a-add { background: var(--good-bg); color: #065F46; }
+  .a-rem { background: var(--bad-bg); color: #991B1B; }
+  .a-rev { background: var(--info-bg); color: #1E40AF; }
+  .a-sub { background: var(--warn-bg); color: #92400E; }
+
+  /* Orphan rows */
+  .o-row {
+    display: grid;
+    grid-template-columns: 22px 1fr 95px 95px 110px 130px;
+    gap: 10px; align-items: center;
+    padding: 9px 4px; font-size: 12px; border-bottom: 1px solid var(--line);
+  }
+  .o-row:last-child { border-bottom: 0; }
+  .o-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .o-dot.full { background: var(--bad); }
+  .o-dot.partial { background: var(--warn); }
+  .o-dot.none { background: var(--good); }
+  .o-row .pn { font-family: ui-monospace, Consolas, monospace; font-weight: 600; }
+  .o-row .nom { color: var(--muted); display: block; font-weight: 400; font-size: 11px; }
+  .o-row .qty { font-family: ui-monospace, Consolas, monospace; text-align: right; }
+  .o-row .exp { font-family: ui-monospace, Consolas, monospace; text-align: right; font-weight: 600; color: var(--ink); }
+  .o-row .mit select { font-size: 11px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: white; width: 100%; }
+
+  .legend { display: inline-flex; gap: 10px; font-size: 11px; color: var(--muted); }
+  .legend span { display: inline-flex; gap: 4px; align-items: center; }
+  .legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* Schedule rows */
+  .s-row {
+    display: grid; grid-template-columns: 70px 1fr 70px;
+    gap: 10px; align-items: center;
+    padding: 9px 4px; border-bottom: 1px solid var(--line);
+  }
+  .s-row:last-child { border-bottom: 0; }
+  .ring {
+    width: 56px; height: 56px; position: relative; flex: 0 0 auto;
+  }
+  .ring svg { transform: rotate(-90deg); }
+  .ring .label {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 14px; font-weight: 700; color: var(--ink);
+  }
+  .s-meta { display: flex; flex-direction: column; gap: 2px; }
+  .s-meta .top { font-weight: 600; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .s-meta .nom { color: var(--muted); font-size: 11px; }
+  .factors {
+    display: grid; grid-template-columns: 1fr; gap: 4px;
+    margin-top: 6px; font-size: 11px; color: var(--muted);
+  }
+  .factor {
+    display: grid; grid-template-columns: 1fr 80px 30px;
+    align-items: center; gap: 6px;
+  }
+  .bar { background: #F1F5F9; border-radius: 8px; height: 6px; overflow: hidden; }
+  .bar > div { height: 100%; }
+  .bar.cp > div { background: var(--bad); }
+  .bar.qb > div { background: var(--warn); }
+  .bar.ll > div { background: var(--info); }
+  .bar.ap > div { background: #8B5CF6; }
+  .bar.bb > div { background: var(--good); }
+  .factor .pct { color: var(--ink); font-family: ui-monospace, Consolas, monospace; font-weight: 600; text-align: right; font-size: 11px; }
+  .s-actions { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+  .s-actions .btn { padding: 4px 8px; font-size: 11px; }
+
+  /* Program rollup */
+  .prog-rollup {
+    display: grid; grid-template-columns: 1fr auto auto;
+    gap: 8px; align-items: center;
+    padding: 8px 6px; border-bottom: 1px solid var(--line); font-size: 12px;
+  }
+  .prog-rollup .pname { font-weight: 600; }
+  .prog-rollup .ms { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pscore {
+    display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700;
+  }
+  .pscore.high { background: var(--bad-bg); color: #991B1B; }
+  .pscore.med { background: var(--warn-bg); color: #92400E; }
+  .pscore.low { background: var(--good-bg); color: #065F46; }
+
+  /* Right rail Copilot */
+  .copilot { display: flex; flex-direction: column; min-height: 0; }
+  .convo { padding: 12px 14px; overflow: auto; flex: 1; }
+  .msg { margin-bottom: 14px; }
+  .msg .who { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+  .msg .bubble { background: var(--info-bg); padding: 10px 12px; border-radius: 10px; border: 1px solid #DBEAFE; line-height: 1.5; }
+  .msg.ai .bubble { background: white; border: 1px solid var(--line); }
+  .citations { margin-top: 8px; font-size: 11px; }
+  .cit { display: inline-block; background: #F1F5F9; color: var(--ink); padding: 2px 6px; margin: 2px 4px 0 0; border-radius: 4px; font-family: ui-monospace, Consolas, monospace; cursor: pointer; }
+  .cit:hover { background: #E2E8F0; }
+
+  .composer { border-top: 1px solid var(--line); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .suggest { display: flex; gap: 6px; flex-wrap: wrap; }
+  .suggest button { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--ink); }
+  .suggest button:hover { background: #F8FAFC; border-color: var(--accent); color: var(--accent); }
+  .composer-input { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .composer-input input { flex: 1; border: 0; outline: none; font-size: 12px; }
+  .ai-tier { font-size: 11px; color: var(--muted); padding: 4px 12px 0 12px; display: flex; gap: 6px; align-items: center; }
+  .ai-tier .dot { width: 6px; height: 6px; background: var(--good); border-radius: 50%; }
+
+  .footer { padding: 8px 14px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); display: flex; justify-content: space-between; }
+  .impact-table { margin-top: 8px; font-size: 12px; width: 100%; border-collapse: collapse; }
+  .impact-table th, .impact-table td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); }
+  .impact-table th { color: var(--muted); font-size: 11px; font-weight: 600; }
+  .impact-table .qcol { text-align: right; font-family: ui-monospace, Consolas, monospace; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Top -->
+  <div class="topbar">
+    <div class="brand">ENG-06 <span class="tag">ECO Impact Analyzer</span></div>
+    <div class="ctx">Source <b>Teamcenter</b> · Lake refresh <b>3 min ago</b> · IMS <b>Cobra + MS Project</b> · Programs <b>P-8104, P-8120</b></div>
+    <div class="user"><div class="avatar">M</div>Marco Leon · CRB Chair</div>
+  </div>
+
+  <!-- ECO header -->
+  <div class="eco-bar">
+    <div class="left">
+      <div class="eco-id-row">
+        <span class="eco-id">ECO-2026-0418</span>
+        <span class="eco-title">Substitute MAX14001AAP+ → ADAQ7980BCPZ-RL7 (FFF) per ADI PDN-220314A</span>
+      </div>
+      <div class="badges">
+        <span class="badge b-pcrb">Pending CRB Approval</span>
+        <span class="badge b-priority">Priority · Urgent</span>
+        <span class="badge b-fff">Form-Fit-Function</span>
+        <span class="badge b-eff">Effectivity · Block 20-ON (S/N 0153+)</span>
+        <span class="badge b-itar">ITAR · USML XII(d)</span>
+        <span class="badge b-prog">P-8104 Falcon-LRU</span>
+        <span class="badge b-prog">P-8120 Stinger-IRU</span>
+      </div>
+    </div>
+    <div class="right">
+      <div class="toggle-group">
+        <button class="toggle-btn active">Proposed</button>
+        <button class="toggle-btn">Baseline</button>
+        <button class="toggle-btn">Δ Diff</button>
+      </div>
+      <button class="btn">View ECO</button>
+      <button class="btn primary">Open CRB Memo Draft</button>
+    </div>
+  </div>
+
+  <!-- Body: 3 panels -->
+  <div class="body">
+
+    <!-- LEFT PANEL: ECO content + affected items -->
+    <div class="panel">
+      <header><h3>ECO content</h3><span class="right">extracted by ENG-06-ECO-Extractor v1.0.0 · conf 0.93</span></header>
+      <div class="kpi-strip">
+        <div class="kpi"><div class="v">4</div><div class="l">Affected items</div></div>
+        <div class="kpi"><div class="v">2</div><div class="l">Affected drawings</div></div>
+        <div class="kpi"><div class="v">2</div><div class="l">IMS task refs</div></div>
+        <div class="kpi"><div class="v">FFF</div><div class="l">Qual impact</div></div>
+      </div>
+      <div class="body-scroll" style="padding-top:0">
+        <h4 style="margin:6px 0 8px 0;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;">Affected items</h4>
+        <div class="item-row">
+          <span class="action-pill a-rev">REVISE</span>
+          <span><span class="pn">PCB-PWR-A1</span><span class="nom"> Power Board · Rev D → Rev E</span></span>
+          <span style="color:var(--muted);text-align:right">FFF preserved</span>
+        </div>
+        <div class="item-row">
+          <span class="action-pill a-rev">REVISE</span>
+          <span><span class="pn">PCB-IO-440</span><span class="nom"> I/O PCB · Rev C → Rev D</span></span>
+          <span style="color:var(--muted);text-align:right">FFF preserved</span>
+        </div>
+        <div class="item-row">
+          <span class="action-pill a-rem">REMOVE</span>
+          <span><span class="pn">MAX14001AAP+</span><span class="nom"> Functional Safety AFE (ADI PDN)</span></span>
+          <span style="color:var(--muted);text-align:right">on Block 20-ON</span>
+        </div>
+        <div class="item-row">
+          <span class="action-pill a-add">ADD</span>
+          <span><span class="pn">ADAQ7980BCPZ-RL7</span><span class="nom"> AFE replacement, FFF</span></span>
+          <span style="color:var(--muted);text-align:right">on Block 20-ON</span>
+        </div>
+
+        <h4 style="margin:14px 0 8px 0;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;">Affected drawings</h4>
+        <div class="item-row">
+          <span class="action-pill a-rev">REVISE</span>
+          <span><span class="pn">DWG-A1234-PCB-PWR-A1</span><span class="nom"> Rev D → Rev E · replace U7 footprint</span></span>
+          <span></span>
+        </div>
+        <div class="item-row">
+          <span class="action-pill a-rev">REVISE</span>
+          <span><span class="pn">DWG-A1234-PCB-IO-440</span><span class="nom"> Rev C → Rev D · same</span></span>
+          <span></span>
+        </div>
+
+        <h4 style="margin:14px 0 8px 0;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;">IMS task references</h4>
+        <div class="item-row">
+          <span class="action-pill a-sub">COBRA</span>
+          <span><span class="pn">P8104.AS.040.05</span><span class="nom"> PCB-PWR-A1 Build &amp; Test</span></span>
+          <span style="color:var(--muted);text-align:right">CP=Yes · TF 4d</span>
+        </div>
+        <div class="item-row">
+          <span class="action-pill a-sub">MSPROJ</span>
+          <span><span class="pn">7821</span><span class="nom"> AVCM-7800-A Final Assembly</span></span>
+          <span style="color:var(--muted);text-align:right">CP=No · TF 12d</span>
+        </div>
+
+        <h4 style="margin:14px 0 8px 0;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;">Reason for change</h4>
+        <p style="font-size:12px;color:var(--ink);margin:0;line-height:1.5">
+          ADI PDN-220314A discontinues MAX14001AAP+. Substitute with form-fit-function replacement ADAQ7980BCPZ-RL7 across all affected configuration items.
+        </p>
+      </div>
+    </div>
+
+    <!-- CENTER PANEL: Inventory orphan + Schedule slip side-by-side -->
+    <div class="panel">
+      <header>
+        <h3>Inventory orphan exposure</h3>
+        <span class="right">scored by ENG-06-Impact-Scorer (stub) · safety-of-flight floor active</span>
+      </header>
+      <div class="kpi-strip">
+        <div class="kpi"><div class="v">$84,210</div><div class="l">Total exposure</div></div>
+        <div class="kpi"><div class="v">1</div><div class="l">Full orphan</div></div>
+        <div class="kpi"><div class="v">2</div><div class="l">Partial orphan</div></div>
+        <div class="kpi"><div class="v">1</div><div class="l">Not orphaned</div></div>
+        <div class="kpi"><div class="v"><span class="legend">
+          <span><i style="background:var(--bad)"></i>full</span>
+          <span><i style="background:var(--warn)"></i>partial</span>
+          <span><i style="background:var(--good)"></i>none</span>
+        </span></div><div class="l">Legend</div></div>
+      </div>
+      <div class="body-scroll" style="padding-top:0">
+        <div class="o-row" style="border-bottom-style:solid;border-color:var(--line);font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.4px;">
+          <span></span><span>Part</span><span style="text-align:right">On hand</span><span style="text-align:right">Open PO</span><span style="text-align:right">Exposure</span><span>Mitigation</span>
+        </div>
+
+        <div class="o-row">
+          <span class="o-dot full"></span>
+          <span><span class="pn">MAX14001AAP+</span><span class="nom">Removed by ECO; no remaining demand on Block 20+</span></span>
+          <span class="qty">412</span><span class="qty">600</span>
+          <span class="exp">$58,420</span>
+          <span class="mit">
+            <select>
+              <option>Use up before effectivity (≤ Block 19)</option>
+              <option>Transfer to spares / MRO</option>
+              <option>Scrap and write off</option>
+              <option>Route to review</option>
+            </select>
+          </span>
+        </div>
+
+        <div class="o-row">
+          <span class="o-dot partial"></span>
+          <span><span class="pn">PCB-PWR-A1 (Rev D)</span><span class="nom">Surplus: 1,000 EA on hand vs 200 EA remaining demand</span></span>
+          <span class="qty">1,200</span><span class="qty">0</span>
+          <span class="exp">$18,540</span>
+          <span class="mit">
+            <select>
+              <option>Use up before effectivity (≤ Block 19)</option>
+              <option>Alternate program allocation</option>
+              <option>Hold</option>
+              <option>Route to review</option>
+            </select>
+          </span>
+        </div>
+
+        <div class="o-row">
+          <span class="o-dot partial"></span>
+          <span><span class="pn">PCB-IO-440 (Rev C)</span><span class="nom">Surplus: 400 EA vs 90 EA remaining demand</span></span>
+          <span class="qty">490</span><span class="qty">0</span>
+          <span class="exp">$7,250</span>
+          <span class="mit">
+            <select>
+              <option>Use up before effectivity (≤ Block 19)</option>
+              <option>Alternate program allocation</option>
+              <option>Scrap and write off</option>
+              <option>Route to review</option>
+            </select>
+          </span>
+        </div>
+
+        <div class="o-row">
+          <span class="o-dot none"></span>
+          <span><span class="pn">ADAQ7980BCPZ-RL7</span><span class="nom">Newly added; no orphan possible</span></span>
+          <span class="qty">0</span><span class="qty">300</span>
+          <span class="exp">—</span>
+          <span class="mit"><span style="color:var(--muted);font-size:11px;">No mitigation required</span></span>
+        </div>
+
+        <!-- Schedule section -->
+        <h4 style="margin:18px 0 6px 0;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;">Schedule-slip risk by IMS task</h4>
+        <p style="font-size:11px;color:var(--muted);margin:0 0 10px 0;">Weighted across 5 factors (CP proximity 30, qual burden 25, long-lead in new config 20, approval-path latency 15, build-up inventory 10).</p>
+
+        <div class="s-row">
+          <div class="ring">
+            <svg width="56" height="56" viewBox="0 0 56 56">
+              <circle cx="28" cy="28" r="24" stroke="#F1F5F9" stroke-width="6" fill="none"></circle>
+              <circle cx="28" cy="28" r="24" stroke="#EF4444" stroke-width="6" fill="none"
+                      stroke-dasharray="150.8" stroke-dashoffset="40" stroke-linecap="round"></circle>
+            </svg>
+            <div class="label">73</div>
+          </div>
+          <div>
+            <div class="s-meta">
+              <span class="top">Cobra · P8104.AS.040.05 — PCB-PWR-A1 Build & Test</span>
+              <span class="nom">P-8104 Falcon-LRU · Critical path · TF 4d · Recommendation: <b>Restage</b></span>
+            </div>
+            <div class="factors">
+              <div class="factor"><span>Critical-path proximity</span><span class="bar cp"><div style="width:90%"></div></span><span class="pct">90</span></div>
+              <div class="factor"><span>Qualification burden</span><span class="bar qb"><div style="width:55%"></div></span><span class="pct">55</span></div>
+              <div class="factor"><span>Long lead in new config</span><span class="bar ll"><div style="width:70%"></div></span><span class="pct">70</span></div>
+              <div class="factor"><span>Approval-path latency</span><span class="bar ap"><div style="width:62%"></div></span><span class="pct">62</span></div>
+              <div class="factor"><span>Build-up inventory</span><span class="bar bb"><div style="width:48%"></div></span><span class="pct">48</span></div>
+            </div>
+          </div>
+          <div class="s-actions">
+            <button class="btn">Why?</button>
+            <button class="btn primary">Restage</button>
+          </div>
+        </div>
+
+        <div class="s-row">
+          <div class="ring">
+            <svg width="56" height="56" viewBox="0 0 56 56">
+              <circle cx="28" cy="28" r="24" stroke="#F1F5F9" stroke-width="6" fill="none"></circle>
+              <circle cx="28" cy="28" r="24" stroke="#F59E0B" stroke-width="6" fill="none"
+                      stroke-dasharray="150.8" stroke-dashoffset="80" stroke-linecap="round"></circle>
+            </svg>
+            <div class="label">47</div>
+          </div>
+          <div>
+            <div class="s-meta">
+              <span class="top">MS Project · 7821 — AVCM-7800-A Final Assembly</span>
+              <span class="nom">P-8104 Falcon-LRU · Off CP · TF 12d · Recommendation: <b>Add inventory buffer</b></span>
+            </div>
+            <div class="factors">
+              <div class="factor"><span>Critical-path proximity</span><span class="bar cp"><div style="width:30%"></div></span><span class="pct">30</span></div>
+              <div class="factor"><span>Qualification burden</span><span class="bar qb"><div style="width:40%"></div></span><span class="pct">40</span></div>
+              <div class="factor"><span>Long lead in new config</span><span class="bar ll"><div style="width:55%"></div></span><span class="pct">55</span></div>
+              <div class="factor"><span>Approval-path latency</span><span class="bar ap"><div style="width:60%"></div></span><span class="pct">60</span></div>
+              <div class="factor"><span>Build-up inventory</span><span class="bar bb"><div style="width:65%"></div></span><span class="pct">65</span></div>
+            </div>
+          </div>
+          <div class="s-actions">
+            <button class="btn">Why?</button>
+            <button class="btn primary">Buffer</button>
+          </div>
+        </div>
+
+        <h4 style="margin:18px 0 6px 0;font-size:12px;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;">Program rollup</h4>
+        <div class="prog-rollup">
+          <div>
+            <div class="pname">P-8104 Falcon-LRU</div>
+            <div class="ms">Milestones at risk: <b>RFP-4 Lot Acceptance (2026-08-22)</b></div>
+          </div>
+          <span class="pscore high">73 high</span>
+          <span style="font-family:ui-monospace,Consolas,monospace;color:var(--ink);font-weight:600;">$84,210</span>
+        </div>
+        <div class="prog-rollup" style="border-bottom:0">
+          <div>
+            <div class="pname">P-8120 Stinger-IRU</div>
+            <div class="ms">No milestones at risk in current scope</div>
+          </div>
+          <span class="pscore low">12 low</span>
+          <span style="font-family:ui-monospace,Consolas,monospace;color:var(--ink);font-weight:600;">$0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Impact Copilot -->
+    <div class="panel copilot">
+      <header><h3>ECO Impact Copilot</h3><span class="ai-tier" style="margin-left:auto"><span class="dot"></span>ITAR · Bedrock Claude · v0.1.0-stub</span></header>
+      <div class="convo" id="convo">
+
+        <div class="msg user">
+          <div class="who">Marco · 09:52</div>
+          <div class="bubble">What does ECO-2026-0418 do to Falcon-LRU's RFP-4 milestone?</div>
+        </div>
+
+        <div class="msg ai">
+          <div class="who">Impact Copilot</div>
+          <div class="bubble">
+            On the current proposed effectivity (Block 20-ON), <b>RFP-4 Lot Acceptance (2026-08-22)</b> on P-8104 has a <b>15-day forecast slip</b>, driven primarily by the FFF-substitution requalification path and the long-lead exposure on the ADAQ7980 new buy.
+            <table class="impact-table">
+              <thead><tr><th>Driver</th><th>Tasks</th><th class="qcol">Slip</th></tr></thead>
+              <tbody>
+                <tr><td>Critical-path: PCB-PWR-A1 Build & Test (TF 4d)</td><td>P8104.AS.040.05</td><td class="qcol">+8 d</td></tr>
+                <tr><td>Long-lead: ADAQ7980 supplier qual + first ship</td><td>add'l buy</td><td class="qcol">+5 d</td></tr>
+                <tr><td>Approval path: customer concurrence on FFF</td><td>—</td><td class="qcol">+2 d</td></tr>
+              </tbody>
+            </table>
+            Mitigations on the table: stage effectivity by serial range so older inventory ships first (recovers ≈9 d), or pre-buy ADAQ7980 against the supplier's sample window (recovers ≈4 d).
+            <div class="citations">
+              <span class="cit">EcoId: ECO-2026-0418</span>
+              <span class="cit">ImsTaskId: P8104.AS.040.05</span>
+              <span class="cit">ImsTaskId: 7821</span>
+              <span class="cit">MilestoneId: RFP-4-2026-08-22</span>
+              <span class="cit">OrphanFinding: MAX14001AAP+</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="composer">
+        <div class="suggest">
+          <button>Show $ exposure if approved as-is</button>
+          <button>Which IMS tasks slip > 5 days?</button>
+          <button>Walk dependencies upstream of P8104.AS.040.05</button>
+          <button>Compare to ECO-2025-0972 outcome</button>
+        </div>
+        <div class="composer-input">
+          <input placeholder="Ask about this ECO's impact …">
+          <button class="btn primary">Send</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.suggest button').forEach(b => {
+  b.onclick = () => {
+    const convo = document.getElementById('convo');
+    convo.innerHTML += `<div class="msg user"><div class="who">Marco · just now</div><div class="bubble">${b.textContent}</div></div>
+    <div class="msg ai"><div class="who">Impact Copilot</div><div class="bubble"><i>(stub) — would call <b>joined_orphans</b> / <b>joined_schedule_impact</b> / <b>ims_task_dependencies</b> on the ENG-06 graph and return a cited answer.</i></div></div>`;
+    convo.scrollTop = convo.scrollHeight;
+  };
+});
+document.querySelectorAll('.toggle-btn').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.toggle-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+  };
+});
+</script>
+</body>
+</html>

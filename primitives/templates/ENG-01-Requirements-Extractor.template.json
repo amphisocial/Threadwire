@@ -1,0 +1,153 @@
+{
+  "$comment": "PromptTemplate record for ENG-01 Requirements Extraction & Traceability. Import via ImportPromptTemplates microflow.",
+  "entity": "AIInteractionFramework.PromptTemplate",
+  "Code": "ENG-01-Requirements-Extractor",
+  "Version": "1.0.0",
+  "Title": "Customer Specification Requirements Extractor (Aerospace & Defense)",
+  "Description": "Extracts shall-style requirements from customer specifications, ICDs, and SOWs. Classifies each requirement, proposes a verification method, flags requirement-quality weaknesses, and produces a per-statement citation to the source paragraph. Used by ENG-01 Requirements Extraction & Traceability as the first step of baselining a requirement set.",
+  "Primitive": "DocumentExtract",
+  "Status": "Draft",
+  "MinConfidenceThreshold": 0.80,
+  "MaxOutputTokens": 8000,
+  "Temperature": 0.0,
+  "PreferredBackend": "Bedrock_Claude",
+  "RequiresCitation": true,
+  "DataSensitivityTier": "ITAR",
+  "CreatedBy": "system",
+  "CreatedAt": "2026-04-19T00:00:00Z",
+
+  "SystemPrompt": "<role>\nYou are a senior requirements analyst at an aerospace & defense systems-engineering organization. Your job is to extract verifiable, atomic requirements from customer specifications in a way that survives audit and supports formal verification planning.\n</role>\n\n<mandate>\nYou EXTRACT, CLASSIFY, and ASSESS. You do NOT author, reword, or improve requirements. You do NOT decompose stakeholder requirements into system requirements (that is ENG-05). You do NOT generate test cases (that is ENG-04).\n</mandate>\n\n<invariants>\n1. A requirement is a statement that establishes an obligation on the system, subsystem, or supplier. Look for normative verbs: shall, will, must, is required to. \"Should\", \"may\", \"can\" are NOT requirements \u2014 classify those as GoalsOrGuidance.\n2. `extracted_text` MUST be verbatim (character-for-character) from the source document, including any grammatical errors. Do not normalize.\n3. Each requirement MUST be atomic. If one source statement contains multiple obligations joined by \"and\" or \"as well as\", split it into multiple requirement records and set `split_from_source` = true on each child.\n4. Every requirement MUST include `source` with `page` and `section` (e.g. \"3.2.1\") pointing back to the document. If the section identifier is missing, set it to null and record the ambiguity.\n5. `classification` must come from: Functional, Performance, Interface, Environmental, Safety, Security, Regulatory, HumanFactors, Reliability, Maintainability, Cybersecurity, VerificationAndValidation, Other.\n6. `verification_method` must come from: Test, Analysis, Inspection, Demonstration, Undetermined.\n7. Flag requirement-quality weaknesses in `quality_flags`. Recognized flags: ambiguous_word, subjective_term, missing_tolerance, unverifiable, compound_statement, implementation_specified, rationale_missing, multiple_subjects, passive_voice_unclear_subject. Examples of ambiguous/subjective words: \"sufficient\", \"adequate\", \"appropriate\", \"easy\", \"reasonable\", \"user-friendly\", \"as needed\", \"where possible\", \"to the extent practical\".\n8. If a sentence looks like a requirement but uses \"should\" or \"may\", record it with `classification`: \"GoalsOrGuidance\" and `is_requirement`: false so the requirements engineer can confirm.\n9. Do not produce requirements from definitions, scope descriptions, acronym lists, revision history, or figure captions unless they contain normative verbs.\n10. Output ONLY one JSON object conforming to the schema. Begin with `{`, end with `}`. No prose or markdown.\n</invariants>\n\n<output_contract>\nReturn one JSON object that validates against schema \"ENG-01-Requirements-Extractor.output-schema.json\" (version 1.0.0). The framework enforces the schema after you respond.\n</output_contract>",
+
+  "UserPromptTemplate": "<task>\nExtract every requirement from the <specification> below. Follow all invariants in the system prompt.\n</task>\n\n<inputs>\n<document_id>{{document_id}}</document_id>\n<spec_title>{{spec_title}}</spec_title>\n<spec_revision>{{spec_revision}}</spec_revision>\n<allowed_classifications>{{allowed_classifications}}</allowed_classifications>\n<allowed_verification_methods>{{allowed_verification_methods}}</allowed_verification_methods>\n</inputs>\n\n<specification>\n{{spec_text}}\n</specification>\n\nReturn exactly one JSON object.",
+
+  "PromptVariables": [
+    {
+      "Name": "document_id",
+      "DataType": "String",
+      "Required": true,
+      "Description": "Mendix Specification entity ID."
+    },
+    {
+      "Name": "spec_title",
+      "DataType": "String",
+      "Required": false,
+      "DefaultValue": "",
+      "Description": "Title of the spec as known to the business, e.g. 'Avionics Subsystem Performance Spec'."
+    },
+    {
+      "Name": "spec_revision",
+      "DataType": "String",
+      "Required": false,
+      "DefaultValue": "",
+      "Description": "Revision identifier, e.g. 'Rev C'."
+    },
+    {
+      "Name": "allowed_classifications",
+      "DataType": "String",
+      "Required": true,
+      "DefaultValue": "Functional, Performance, Interface, Environmental, Safety, Security, Regulatory, HumanFactors, Reliability, Maintainability, Cybersecurity, VerificationAndValidation, Other, GoalsOrGuidance",
+      "Description": "Comma-separated allowed classification values."
+    },
+    {
+      "Name": "allowed_verification_methods",
+      "DataType": "String",
+      "Required": true,
+      "DefaultValue": "Test, Analysis, Inspection, Demonstration, Undetermined",
+      "Description": "Comma-separated allowed verification methods."
+    },
+    {
+      "Name": "spec_text",
+      "DataType": "DocumentText",
+      "Required": true,
+      "MaxLength": 200000,
+      "Description": "Full text of the specification with page markers '<page n=\"<int>\">' injected by the framework. Section headings preserved in-line."
+    }
+  ],
+
+  "FewShotExamples": [
+    {
+      "Label": "Compound shall, one goal, one ambiguous",
+      "Ordinal": 1,
+      "InputJson": {
+        "document_id": "SPEC-EX-001",
+        "spec_title": "Example Avionics Spec",
+        "spec_revision": "Rev A",
+        "allowed_classifications": "Functional, Performance, Interface, Environmental, Safety, Security, Regulatory, HumanFactors, Reliability, Maintainability, Cybersecurity, VerificationAndValidation, Other, GoalsOrGuidance",
+        "allowed_verification_methods": "Test, Analysis, Inspection, Demonstration, Undetermined",
+        "spec_text": "<page n=\"14\">\n3.2.1 Data Bus Performance\nThe system shall transmit telemetry at 10 Hz and shall receive commands at 1 Hz.\nThe system should provide a user-friendly status display.\nThe system shall operate reliably in the mission environment.\n</page>"
+      },
+      "ExpectedOutputJson": {
+        "schema_id": "ENG-01-Requirements-Extractor.output-schema.json",
+        "schema_version": "1.0.0",
+        "document_id": "SPEC-EX-001",
+        "spec_title": "Example Avionics Spec",
+        "spec_revision": "Rev A",
+        "requirements": [
+          {
+            "requirement_id_hint": "3.2.1-a",
+            "extracted_text": "The system shall transmit telemetry at 10 Hz",
+            "is_requirement": true,
+            "classification": "Performance",
+            "verification_method": "Test",
+            "quality_flags": [],
+            "split_from_source": true,
+            "parent_section": "3.2.1 Data Bus Performance",
+            "source": { "page": 14, "section": "3.2.1", "quote": "The system shall transmit telemetry at 10 Hz and shall receive commands at 1 Hz." },
+            "confidence": 0.95
+          },
+          {
+            "requirement_id_hint": "3.2.1-b",
+            "extracted_text": "shall receive commands at 1 Hz",
+            "is_requirement": true,
+            "classification": "Performance",
+            "verification_method": "Test",
+            "quality_flags": [],
+            "split_from_source": true,
+            "parent_section": "3.2.1 Data Bus Performance",
+            "source": { "page": 14, "section": "3.2.1", "quote": "The system shall transmit telemetry at 10 Hz and shall receive commands at 1 Hz." },
+            "confidence": 0.93
+          },
+          {
+            "requirement_id_hint": "3.2.1-c",
+            "extracted_text": "The system should provide a user-friendly status display.",
+            "is_requirement": false,
+            "classification": "GoalsOrGuidance",
+            "verification_method": "Undetermined",
+            "quality_flags": ["subjective_term"],
+            "split_from_source": false,
+            "parent_section": "3.2.1 Data Bus Performance",
+            "source": { "page": 14, "section": "3.2.1", "quote": "The system should provide a user-friendly status display." },
+            "confidence": 0.88
+          },
+          {
+            "requirement_id_hint": "3.2.1-d",
+            "extracted_text": "The system shall operate reliably in the mission environment.",
+            "is_requirement": true,
+            "classification": "Reliability",
+            "verification_method": "Undetermined",
+            "quality_flags": ["ambiguous_word", "missing_tolerance", "unverifiable"],
+            "split_from_source": false,
+            "parent_section": "3.2.1 Data Bus Performance",
+            "source": { "page": 14, "section": "3.2.1", "quote": "The system shall operate reliably in the mission environment." },
+            "confidence": 0.82
+          }
+        ],
+        "non_requirement_notes": [],
+        "unresolved_ambiguities": [
+          { "field_hint": "requirements[3].verification_method", "text": "'Operate reliably' lacks a measurable reliability figure; verification method cannot be chosen without tolerance.", "citation": { "page": 14, "section": "3.2.1", "quote": "The system shall operate reliably in the mission environment." } }
+        ],
+        "refusal_reason": null,
+        "overall_confidence": 0.89
+      }
+    }
+  ],
+
+  "Guardrails": [
+    { "Name": "Cite every requirement", "Kind": "RequireCitation", "ConfigJson": "{\"applies_to\":\"requirements[*].source\"}" },
+    { "Name": "Schema enforcement", "Kind": "SchemaValidation", "ConfigJson": "{\"schema_id\":\"ENG-01-Requirements-Extractor.output-schema.json\",\"on_failure\":\"mark_SchemaInvalid_and_retry_once\"}" },
+    { "Name": "Confidence floor", "Kind": "ConfidenceThreshold", "ConfigJson": "{\"min\":0.80,\"on_below\":\"route_to_reviewer_queue\"}" },
+    { "Name": "ITAR-safe routing", "Kind": "DataClassificationRoute", "ConfigJson": "{\"tier\":\"ITAR\",\"allowed_backends\":[\"Bedrock_Claude\",\"OnPremGateway\"]}" },
+    { "Name": "Verbatim preservation", "Kind": "OutputRedaction", "ConfigJson": "{\"rule\":\"extracted_text_must_appear_in_source\",\"on_failure\":\"mark_SchemaInvalid\"}" },
+    { "Name": "Prompt-injection defense", "Kind": "PromptInjectionDefense", "ConfigJson": "{\"strip_embedded_instructions\":true,\"reject_if_document_contains_override_directive\":true}" }
+  ]
+}

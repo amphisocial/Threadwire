@@ -1,0 +1,96 @@
+{
+  "$comment": "STUB template for SCM-05 Pegging Risk Scorer (Decision Support & Triage primitive). The Decision Support & Triage primitive is scheduled for design in Wave 3 and is not yet formalized in the AI Interaction Framework. This stub captures the system prompt, scoring rubric, and output shape so the Wave 3 primitive design has a concrete consumer to anchor against. DO NOT IMPORT YET; the framework will reject Decision-Support templates until the primitive ships.",
+  "entity": "AIInteractionFramework.PromptTemplate",
+  "Code": "SCM-05-Pegging-Risk-Scorer",
+  "Version": "0.1.0-stub",
+  "Title": "Pegging Risk Scorer — Score Soft Pegs That Should Be Hardened (Aerospace & Defense Electronics)",
+  "Description": "STUB. Batch decision-support primitive. For each open soft peg in a program scope, returns a 0–100 risk score with factor attribution and a recommended action (Harden, Expedite, AltMPN, AltSource, NoAction). Designed to run nightly off the data lake and populate a reviewer queue. Never executes the recommended action — always presents to a human approver.",
+  "Primitive": "DecisionSupportAndTriage",
+  "PrimitiveStatus": "NotYetFormalized",
+  "Status": "Draft",
+  "MinConfidenceThreshold": 0.70,
+  "MaxOutputTokens": 6000,
+  "Temperature": 0.0,
+  "PreferredBackend": "Bedrock_Claude",
+  "RequiresCitation": true,
+  "DataSensitivityTier": "ITAR",
+  "CreatedBy": "system",
+  "CreatedAt": "2026-04-29T00:00:00Z",
+
+  "DesignNotes": [
+    "The Decision Support & Triage primitive (Wave 3) needs to support: structured input rows (1..N decision items), a scoring rubric declared on the template, factor attribution that reviewers can trust, and an explicit recommended action that the framework records but never executes.",
+    "This template anchors the primitive design with a concrete rubric: five weighted factors (obsolescence, supplier risk, lead time, schedule criticality, single-source) summing to 100.",
+    "Until the primitive ships, this template is illustrative only — the framework's ImportPromptTemplates microflow will reject it on the DecisionSupportAndTriage primitive."
+  ],
+
+  "ScoringRubric": {
+    "version": "1.0.0",
+    "factors": [
+      { "name": "obsolescence_pressure",      "weight": 25, "inputs": ["affected_by_open_pcn_eol_ltb", "ltb_window_days_remaining"] },
+      { "name": "supplier_risk",              "weight": 20, "inputs": ["supplier_risk_score (SCM-01)", "single_or_dual_source"] },
+      { "name": "lead_time_exposure",         "weight": 20, "inputs": ["std_lead_time_weeks", "current_open_lead_time_variance"] },
+      { "name": "schedule_criticality",       "weight": 25, "inputs": ["program_priority", "weeks_to_need_by", "is_safety_of_flight"] },
+      { "name": "soft_peg_volatility",        "weight": 10, "inputs": ["rank_changes_in_last_30d", "competing_demand_count"] }
+    ],
+    "scale": "0 = no action needed; 100 = harden or expedite immediately."
+  },
+
+  "RecommendedActions": [
+    "Harden",
+    "Expedite",
+    "AltMPN",
+    "AltSource",
+    "BookLastTimeBuy",
+    "NoAction",
+    "RouteToReview"
+  ],
+
+  "SystemPrompt": "<role>\nYou are a senior planning analyst at an aerospace & defense electronics manufacturer. You score open soft pegs by risk and recommend an action for a human approver to evaluate.\n</role>\n\n<mandate>\nYou SCORE and RECOMMEND. You do NOT execute the recommended action; the framework records it and routes it to an approver. You do NOT invent inputs not provided. You do NOT score pegs whose inputs are incomplete; emit a partial record with `status` = 'InsufficientData'.\n</mandate>\n\n<rubric>\nUse the rubric provided in <rubric_inputs> with these factors and weights:\n  obsolescence_pressure: 25\n  supplier_risk: 20\n  lead_time_exposure: 20\n  schedule_criticality: 25\n  soft_peg_volatility: 10\nFactor scores are 0–100. Final score is the weighted average. Show factor scores and the citation for each input you used.\n</rubric>\n\n<invariants>\n1. Every input you cite MUST be from <pegs_to_score> (provided by the runtime). Do not infer.\n2. Score only pegs whose `peg_kind` = 'Soft' AND `status` = 'Open'. Skip others and note in `skipped[]`.\n3. Each output record MUST include factor_scores with one entry per rubric factor and a per-factor citation list.\n4. `recommended_action` MUST be one of: Harden, Expedite, AltMPN, AltSource, BookLastTimeBuy, NoAction, RouteToReview.\n5. If `is_safety_of_flight` = true on the affected end item, the floor for `recommended_action` is RouteToReview (never NoAction).\n6. Output ONLY one JSON object conforming to the schema.\n</invariants>\n\n<output_contract>\nReturn one JSON object with: scored_pegs[], skipped[], rubric_version, overall_confidence, refusal_reason.\n</output_contract>",
+
+  "UserPromptTemplate": "<rubric_inputs>\n{{rubric_inputs}}\n</rubric_inputs>\n\n<pegs_to_score>\n{{pegs_to_score}}\n</pegs_to_score>\n\n<context>\n<program_scope>{{program_scope}}</program_scope>\n<as_of_date>{{as_of_date}}</as_of_date>\n</context>\n\nReturn exactly one JSON object.",
+
+  "PromptVariables": [
+    { "Name": "rubric_inputs", "DataType": "Json", "Required": true, "Description": "Per-peg input data (supplier_risk_score, lead_time_variance, program_priority, ltb_window_days_remaining, etc.) keyed by soft_peg_id." },
+    { "Name": "pegs_to_score", "DataType": "Json", "Required": true, "Description": "Array of soft pegs in scope. Each peg has: soft_peg_id, part_id, mpn, demand_id, supply_id, ranked_score, peg_kind, status, computed_at." },
+    { "Name": "program_scope", "DataType": "Json", "Required": true, "Description": "Programs the batch is scoped to. Pegs outside scope are dropped before invocation." },
+    { "Name": "as_of_date", "DataType": "String", "Required": true, "Description": "Snapshot date." }
+  ],
+
+  "OutputShapeSketch": {
+    "scored_pegs": [
+      {
+        "soft_peg_id": "string",
+        "part_id": "string",
+        "mpn": "string",
+        "score": 0,
+        "factor_scores": [
+          {
+            "name": "obsolescence_pressure|supplier_risk|lead_time_exposure|schedule_criticality|soft_peg_volatility",
+            "score": 0,
+            "weight": 0,
+            "rationale": "string",
+            "citations": [{ "entity_kind": "string", "entity_id": "string", "value": "string" }]
+          }
+        ],
+        "recommended_action": "Harden|Expedite|AltMPN|AltSource|BookLastTimeBuy|NoAction|RouteToReview",
+        "rationale_summary": "string",
+        "confidence": 0.0
+      }
+    ],
+    "skipped": [
+      { "soft_peg_id": "string", "reason": "InsufficientData|OutOfScope|NotSoft|Closed" }
+    ],
+    "rubric_version": "string",
+    "overall_confidence": 0.0,
+    "refusal_reason": "string|null"
+  },
+
+  "Guardrails": [
+    { "Name": "No autonomous action", "Kind": "OutputRedaction", "ConfigJson": "{\"forbid_field\":\"executed_action\"}" },
+    { "Name": "Cite every factor", "Kind": "RequireCitation", "ConfigJson": "{\"applies_to\":\"factor_scores[*].citations\"}" },
+    { "Name": "Safety-of-flight floor", "Kind": "OutputRedaction", "ConfigJson": "{\"rule\":\"if_safety_of_flight_then_recommended_action_floor=RouteToReview\"}" },
+    { "Name": "Confidence floor", "Kind": "ConfidenceThreshold", "ConfigJson": "{\"min\":0.70,\"on_below\":\"route_to_reviewer_queue\"}" },
+    { "Name": "ITAR-safe routing", "Kind": "DataClassificationRoute", "ConfigJson": "{\"tier\":\"ITAR\",\"allowed_backends\":[\"Bedrock_Claude\",\"OnPremGateway\"]}" },
+    { "Name": "Prompt-injection defense", "Kind": "PromptInjectionDefense", "ConfigJson": "{\"strip_embedded_instructions\":true,\"reject_if_inputs_contain_override\":true}" }
+  ]
+}

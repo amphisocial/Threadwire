@@ -1,0 +1,53 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~
+*.bak
+
+# Node (build scripts when added)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+.pnp.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Mendix (when this repo grows to host module sources)
+deployment/
+releases/
+javasource/build/
+*.mpr.lock
+*.launch
+.classpath
+.project
+.metadata/
+mxbuildcache/
+
+# Office temp / lock files
+~$*
+*.tmp
+*.~tmp
+
+# Docs build artifacts
+*.pdf.preview
+*.pdf.review
+docs/_build/
+
+# Local environment
+.env
+.env.local
+*.pem
+secrets/

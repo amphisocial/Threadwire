@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ENG-06-ECO-Extractor.output-schema.json",
+  "title": "Engineering Change Order Extraction Record",
+  "description": "Output contract for ENG-06-ECO-Extractor v1.0.0. Structured extraction of an Engineering Change Order package for ENG-06 ECO Impact Analyzer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_id",
+    "schema_version",
+    "document_id",
+    "eco_metadata",
+    "reason_for_change",
+    "affected_items",
+    "effectivity",
+    "affected_documents",
+    "ims_schedule_references",
+    "qualification_summary",
+    "approval_state",
+    "unresolved_ambiguities",
+    "refusal_reason",
+    "overall_confidence"
+  ],
+  "properties": {
+    "schema_id": { "const": "ENG-06-ECO-Extractor.output-schema.json" },
+    "schema_version": { "const": "1.0.0" },
+    "document_id": { "type": "string" },
+
+    "eco_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eco_id", "change_kind", "priority", "status", "issue_date", "originator", "affected_programs", "verbatim_quote", "citation"],
+      "properties": {
+        "eco_id": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "change_kind": { "enum": ["ECO", "ECR", "DCN", "TempDeviation", "Waiver", "FieldBulletin", "ServiceBulletin", "Other"] },
+        "priority": { "enum": ["Routine", "Urgent", "Emergency", "Mandatory", "Other"] },
+        "status": { "type": ["string", "null"], "maxLength": 200 },
+        "issue_date": { "type": ["string", "null"], "format": "date" },
+        "originator": { "type": ["string", "null"], "maxLength": 200 },
+        "affected_programs": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+        "verbatim_quote": { "type": "string", "maxLength": 300 },
+        "citation": { "$ref": "#/$defs/citation" }
+      }
+    },
+
+    "reason_for_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "verbatim_quote", "citation"],
+      "properties": {
+        "text": { "type": "string", "maxLength": 4000 },
+        "verbatim_quote": { "type": "string", "maxLength": 300 },
+        "citation": { "$ref": "#/$defs/citation" }
+      }
+    },
+
+    "affected_items": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "from", "to", "qualification_impact_per_item", "qty_per_change", "verbatim_quote", "citation", "confidence"],
+        "properties": {
+          "action": { "enum": ["Add", "Remove", "Revise", "ReviseQty", "Substitute", "MarkObsolete", "NoChangeButReKitting", "Other"] },
+          "from": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["part_number", "revision"],
+            "properties": {
+              "part_number": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "revision": { "type": ["string", "null"], "maxLength": 50 }
+            }
+          },
+          "to": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["part_number", "revision"],
+            "properties": {
+              "part_number": { "type": "string", "minLength": 1, "maxLength": 200 },
+              "revision": { "type": ["string", "null"], "maxLength": 50 }
+            }
+          },
+          "qualification_impact_per_item": {
+            "enum": ["NoneStated", "FormFitFunctionPreserved", "RequiresRequalification", "RequiresFlightQualification", "RequiresFirstArticleInspection", "NotApplicable", "Unknown"]
+          },
+          "qty_per_change": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["from_qty", "to_qty", "unit_of_measure"],
+            "properties": {
+              "from_qty": { "type": ["number", "null"] },
+              "to_qty": { "type": ["number", "null"] },
+              "unit_of_measure": { "type": ["string", "null"], "maxLength": 50 }
+            }
+          },
+          "verbatim_quote": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "effectivity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "literal_text", "verbatim_quote", "citation"],
+      "properties": {
+        "kind": { "enum": ["Date", "SerialNumber", "BlockNumber", "NextAssembly", "Lot", "ImmediateOnApproval", "Other"] },
+        "literal_text": { "type": "string", "maxLength": 1000 },
+        "verbatim_quote": { "type": "string", "maxLength": 300 },
+        "citation": { "$ref": "#/$defs/citation" }
+      }
+    },
+
+    "affected_documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["identifier", "from_revision", "to_revision", "change_description", "verbatim_quote", "citation"],
+        "properties": {
+          "identifier": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "from_revision": { "type": ["string", "null"], "maxLength": 50 },
+          "to_revision": { "type": ["string", "null"], "maxLength": 50 },
+          "change_description": { "type": ["string", "null"], "maxLength": 1000 },
+          "verbatim_quote": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "ims_schedule_references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["system_kind", "identifier", "task_label", "identifier_format_unrecognized", "verbatim_quote", "citation"],
+        "properties": {
+          "system_kind": { "enum": ["Cobra", "MSProject", "P6", "OpenPlan", "Generic", "Unknown"] },
+          "identifier": { "type": "string", "maxLength": 200 },
+          "task_label": { "type": ["string", "null"], "maxLength": 500 },
+          "identifier_format_unrecognized": { "type": "boolean" },
+          "verbatim_quote": { "type": "string", "maxLength": 300 },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "qualification_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "verbatim_quote", "citation"],
+      "properties": {
+        "level": {
+          "enum": ["NoneStated", "FormFitFunctionPreserved", "RequiresRequalification", "RequiresFlightQualification", "RequiresFirstArticleInspection", "NotApplicable", "Unknown"]
+        },
+        "verbatim_quote": { "type": "string", "maxLength": 300 },
+        "citation": { "$ref": "#/$defs/citation" }
+      }
+    },
+
+    "approval_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current", "verbatim_quote", "citation"],
+      "properties": {
+        "current": {
+          "enum": ["Draft", "InReview", "PendingCRB", "Approved", "Rejected", "Withdrawn", "Implemented", "Closed", "Unknown"]
+        },
+        "verbatim_quote": { "type": "string", "maxLength": 300 },
+        "citation": { "$ref": "#/$defs/citation" }
+      }
+    },
+
+    "unresolved_ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field_hint", "text", "citation"],
+        "properties": {
+          "field_hint": { "type": ["string", "null"] },
+          "text": { "type": "string", "maxLength": 1000 },
+          "citation": { "$ref": "#/$defs/citation" }
+        }
+      }
+    },
+
+    "refusal_reason": { "type": ["string", "null"] },
+    "overall_confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  },
+
+  "$defs": {
+    "citation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["page", "section_or_anchor", "field_label"],
+      "properties": {
+        "page": { "type": "integer", "minimum": 1 },
+        "section_or_anchor": { "type": ["string", "null"], "maxLength": 200, "description": "Section heading, table reference, or anchor (e.g. 'Affected Items', 'Block 14')." },
+        "field_label": { "type": ["string", "null"], "maxLength": 200, "description": "Form-field label as printed by the ECO template (e.g. 'Reason for Change', 'Effectivity'). Either section_or_anchor or field_label MUST be non-null." }
+      }
+    }
+  }
+}
