@@ -21,12 +21,69 @@ export function PlanBadge({ plan }) {
   return <span style={{ fontFamily: mono, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 6, color: m.tone, background: m.tone + "22" }}>★ {m.label}</span>;
 }
 
+export function PlanCompare({ onClose, isAdmin }) {
+  const [busy, setBusy] = useState("");
+  const go = async (plan) => {
+    setBusy(plan);
+    try { const r = await billingCheckout(plan); if (r?.url) window.location.href = r.url; else setBusy(""); }
+    catch { setBusy(""); }
+  };
+  const cols = [
+    { key: "free", label: "Free", tone: C.muted, price: "$0" },
+    { key: "pro", label: "Pro", tone: C.amber, price: "$4.99 / user · mo" },
+    { key: "enterprise", label: "Enterprise", tone: C.thread, price: "$29.99 / mo" },
+  ];
+  const rows = [
+    ["Assistant messages", "5 / day per user", "Unlimited", "Unlimited"],
+    ["Who's covered", "Everyone (capped)", "Just you", "Everyone in the company"],
+    ["Future invited members", "Capped at 5 / day", "—", "Included, unlimited"],
+    ["Billing", "—", "Per user", "One subscription (admin pays)"],
+    ["Best for", "Trying it out", "A single heavy user", "The whole team"],
+  ];
+  const cell = { padding: "10px 12px", fontSize: 12.5, borderTop: `1px solid ${C.line}` };
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 420, background: "rgba(4,7,12,.78)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18, fontFamily: "'IBM Plex Sans',sans-serif", color: C.ink }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');`}</style>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 720, background: `linear-gradient(180deg,${C.panel},${C.bg2})`, border: `1px solid ${C.line2}`, borderRadius: 16, padding: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+          <span style={{ fontFamily: "'Bricolage Grotesque',sans-serif", fontWeight: 800, fontSize: 20 }}>Compare plans</span>
+          <span onClick={onClose} style={{ marginLeft: "auto", cursor: "pointer", color: C.faint, fontSize: 18 }}>✕</span>
+        </div>
+        <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr 1fr 1fr" }}>
+            <div style={{ padding: "12px" }} />
+            {cols.map((c) => (
+              <div key={c.key} style={{ padding: "12px", textAlign: "center" }}>
+                <div style={{ fontWeight: 800, fontSize: 15, color: c.tone }}>★ {c.label}</div>
+                <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, marginTop: 3 }}>{c.price}</div>
+              </div>
+            ))}
+            {rows.map((r, ri) => (
+              <React.Fragment key={ri}>
+                <div style={{ ...cell, color: C.muted, fontWeight: 600 }}>{r[0]}</div>
+                <div style={{ ...cell, textAlign: "center", color: C.faint }}>{r[1]}</div>
+                <div style={{ ...cell, textAlign: "center", color: C.ink }}>{r[2]}</div>
+                <div style={{ ...cell, textAlign: "center", color: C.ink }}>{r[3]}</div>
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18, flexWrap: "wrap" }}>
+          <button style={btnP} disabled={busy === "pro"} onClick={() => go("pro")}>{busy === "pro" ? "Opening…" : "Get Pro · $4.99/mo"}</button>
+          {isAdmin && <button style={{ ...btn, borderColor: C.thread, color: C.thread }} disabled={busy === "enterprise"} onClick={() => go("enterprise")}>{busy === "enterprise" ? "Opening…" : "Get Enterprise · $29.99/mo"}</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Profile({ user, onClose }) {
   const isAdmin = user.role === "org_admin" || user.role === "superadmin";
   const plan = user.plan || "free";
   const m = PLAN_META[plan] || PLAN_META.free;
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
+  const [compare, setCompare] = useState(false);
 
   const go = async (fn, key) => {
     setBusy(key); setErr("");
@@ -82,7 +139,9 @@ export default function Profile({ user, onClose }) {
               {busy === "portal" ? "Opening…" : "Manage subscription"}
             </button>
           )}
+          <button style={{ ...btn, background: "transparent", borderColor: C.line }} onClick={() => setCompare(true)}>Compare plans</button>
         </div>
+        {compare && <PlanCompare onClose={() => setCompare(false)} isAdmin={isAdmin} />}
         {isAdmin && (
           <div style={{ fontSize: 11.5, color: C.faint, marginTop: 14, lineHeight: 1.5 }}>
             Enterprise gives unlimited access to everyone in {user.org?.legal_name}. Per-user usage is in Admin → Membership &amp; usage.

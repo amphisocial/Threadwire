@@ -5,6 +5,7 @@ import {
   importEntities, importData, listEvents, sampleUrl,
   adminUsage, billingCheckout,
 } from "../lib/api.js";
+import { PlanCompare } from "./Profile.jsx";
 
 const C = {
   bg: "#0a0e15", panel: "#121a26", panel2: "#172132", bg2: "#0d121c",
@@ -247,34 +248,74 @@ function DataImport({ isAdmin }) {
 
 function MembershipUsage({ isAdmin }) {
   const [data, setData] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [compare, setCompare] = useState(false);
   useEffect(() => { if (isAdmin) adminUsage().then(setData).catch(() => {}); }, []);
   if (!isAdmin || !data) return null;
   const planTone = (p) => (p === "enterprise" ? "blue" : p === "pro" ? "amber" : "muted");
-  const upgrade = async () => {
-    setBusy(true);
-    try { const r = await billingCheckout("enterprise"); if (r?.url) window.location.href = r.url; else setBusy(false); }
-    catch { setBusy(false); }
+  const go = async (plan) => {
+    setBusy(plan);
+    try { const r = await billingCheckout(plan); if (r?.url) window.location.href = r.url; else setBusy(""); }
+    catch { setBusy(""); }
   };
+
+  const card = (accent) => ({ flex: "1 1 280px", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, borderTop: `2px solid ${accent}` });
+  const feat = (txt) => (
+    <div style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12.5, color: C.muted, marginBottom: 5 }}>
+      <span style={{ color: C.green }}>✓</span><span>{txt}</span>
+    </div>
+  );
+
   return (
     <>
       <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: ".22em", textTransform: "uppercase", color: C.amber, marginBottom: 14 }}>Membership &amp; usage</div>
-      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>{data.enterprise ? "Enterprise" : "Free / per-user Pro"}</span>
-          <Tag tone={data.enterprise ? "blue" : "muted"}>{data.enterprise ? "unlimited for everyone" : "free tier " + data.free_limit + " / day"}</Tag>
-          {!data.enterprise && (
-            <button style={{ ...btnP, marginLeft: "auto" }} disabled={busy} onClick={upgrade}>
-              {busy ? "Opening…" : "Upgrade company to Enterprise · $29.99/mo"}
-            </button>
-          )}
+
+      {data.enterprise ? (
+        <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 14, borderTop: `2px solid ${C.thread}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontWeight: 700, fontSize: 15, color: C.thread }}>★ Enterprise — active</span>
+            <Tag tone="blue">unlimited for everyone</Tag>
+          </div>
+          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8 }}>Everyone in your company has unlimited assistant access. Manage the subscription from your profile (bottom-left).</div>
         </div>
-        <div style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
-          {data.enterprise
-            ? "Everyone in your company has unlimited assistant access."
-            : "Each member gets " + data.free_limit + " assistant messages/day on Free. Members can upgrade themselves to Pro ($4.99/mo) from their profile, or buy Enterprise here to cover the whole company."}
-        </div>
-      </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
+            {/* Pro — first upgrade */}
+            <div style={card(C.amber)}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                <span style={{ fontWeight: 800, fontSize: 16, color: C.amber }}>★ Pro</span>
+                <span style={{ fontFamily: mono, fontSize: 11.5, color: C.muted, marginLeft: "auto" }}>$4.99 / user · mo</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>Unlimited assistant for a single user — the first step up from Free.</div>
+              {feat("Unlimited assistant messages for you")}
+              {feat("Best for one heavy user")}
+              <button style={{ ...btnP, width: "100%", marginTop: 12 }} disabled={busy === "pro"} onClick={() => go("pro")}>
+                {busy === "pro" ? "Opening…" : "Upgrade to Pro"}
+              </button>
+            </div>
+
+            {/* Enterprise — the bigger jump */}
+            <div style={card(C.thread)}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                <span style={{ fontWeight: 800, fontSize: 16, color: C.thread }}>★ Enterprise</span>
+                <span style={{ fontFamily: mono, fontSize: 11.5, color: C.muted, marginLeft: "auto" }}>$29.99 / mo</span>
+              </div>
+              <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>Unlimited for your whole company — the bigger jump, paid once by you.</div>
+              {feat("Unlimited for everyone in the company")}
+              {feat("Covers future invited members automatically")}
+              <button style={{ ...btn, width: "100%", marginTop: 12, borderColor: C.thread, color: C.thread }} disabled={busy === "enterprise"} onClick={() => go("enterprise")}>
+                {busy === "enterprise" ? "Opening…" : "Upgrade company to Enterprise"}
+              </button>
+            </div>
+          </div>
+          <div style={{ marginBottom: 18 }}>
+            <button style={{ ...btn, background: "transparent", borderColor: C.line }} onClick={() => setCompare(true)}>Compare plans →</button>
+            <span style={{ fontSize: 11.5, color: C.faint, marginLeft: 10 }}>Free gives every member {data.free_limit} assistant messages/day.</span>
+          </div>
+        </>
+      )}
+
       <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden", marginBottom: 36 }}>
         <div style={{ display: "flex", padding: "10px 16px", borderBottom: `1px solid ${C.line}`, fontFamily: mono, fontSize: 10.5, color: C.faint }}>
           <span style={{ flex: 1 }}>MEMBER</span><span style={{ width: 110 }}>PLAN</span><span style={{ width: 120, textAlign: "right" }}>TOKENS TODAY</span>
@@ -292,6 +333,8 @@ function MembershipUsage({ isAdmin }) {
           </div>
         ))}
       </div>
+
+      {compare && <PlanCompare onClose={() => setCompare(false)} isAdmin={isAdmin} />}
     </>
   );
 }
