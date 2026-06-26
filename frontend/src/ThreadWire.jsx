@@ -19,7 +19,10 @@ import {
    Rename the brand anywhere "ThreadWire" appears.
    ========================================================================= */
 
-const BRAND = "ThreadWire";
+const BRAND = "Threadwire";
+const TAGLINE = "Manufacturing Delivery Control";
+const HEADLINE = "Know what will not ship—and the cash impact—before the customer does.";
+const ONE_LINER = "Your ERP records the order. Threadwire protects the delivery.";
 
 /* ----------------------------- styles ----------------------------------- */
 const Styles = () => (
@@ -233,7 +236,7 @@ function genSPC(n = 28, target = 50, sigma = 1.1, seed = 7) {
 /* ----------------------------- shared UI -------------------------------- */
 function TopNav({ route, go, tier }) {
   const links = [
-    ["home", "Home"], ["thread", "Digital Thread"], ["visibility", "Delivery"], ["finance", "Forecast"], ["blockers", "Blockers"], ["directspend", "Direct Spend"], ["roi", "ROI Calculator"],
+    ["home", "Home"], ["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"], ["directspend", "Direct Spend"], ["roi", "ROI Calculator"],
   ];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(10,14,21,.72)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
@@ -242,7 +245,10 @@ function TopNav({ route, go, tier }) {
           <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center" }}>
             <Workflow size={17} color="#0a0e15" strokeWidth={2.4} />
           </div>
-          <span className="tf-disp" style={{ fontWeight: 800, fontSize: 19 }}>{BRAND}</span>
+          <div>
+            <span className="tf-disp" style={{ fontWeight: 800, fontSize: 19 }}>{BRAND}</span>
+            <span className="tf-mono" style={{ fontSize: 9, color: "var(--amber)", display: "block", letterSpacing: ".12em", textTransform: "uppercase", lineHeight: 1, marginTop: 1 }}>Delivery Control</span>
+          </div>
         </div>
         <div style={{ display: "flex", gap: 18, marginLeft: 8 }} className="tf-nav">
           {links.map(([k, l]) => (
@@ -254,9 +260,9 @@ function TopNav({ route, go, tier }) {
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           <span className="tf-chip" style={{ color: tier === "paid" ? "var(--amber)" : "var(--muted)" }}>
-            {tier === "paid" ? "● Connected tier" : "○ Free / sample"}
+            {tier === "paid" ? "● Connected" : "○ Sample data"}
           </span>
-          <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }}>Get started</button>
+          <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }}>Request a diagnostic</button>
         </div>
       </div>
     </div>
@@ -354,17 +360,17 @@ const CTX = {
     "\n\nECO:\n" + ECO.map((e) => `${e.id} ${e.title} ${e.status} affects ${e.affects.join(",")}`).join("\n") +
     "\n\nPURCHASE ORDERS:\n" + POs.map((p) => `${p.id} ${p.part} ${p.supplier} qty ${p.qty} eta ${p.eta} ${p.status}`).join("\n"),
   home:
-    "ThreadWire modules: Asset Management (lifecycle, OEE, SPC, PLC/HMI), Contract Lifecycle (NDAs/MSAs/SOWs), Requirements (Jama/DOORS, traceability), Digital Thread (work orders, BOM, ECO, PO, material forecasting). Free tier = sample data; Connected tier = live integrations.",
+    "Threadwire is a Manufacturing Delivery Control platform — not a generic AI or BI tool. It overlays Odoo, MRPeasy, JobBOSS, Sage, Epicor SMB, legacy SQL and Excel without replacing the ERP. Core promise: protect customer commitments and revenue. Target: mid-market discrete manufacturers ($20M–$200M revenue), high-mix/low-volume, make-to-order, engineer-to-order, contract manufacturing. Key modules: Delivery Calendar (sales orders by promise date, committed vs blocked revenue), Blockers (shop-floor issues tied to orders, owners, actions, revised dates, revenue at risk), Revenue Forecast (GM-level blocker-aware forecast by quarter/month), Digital Thread (work orders, BOM, ECO, PO, material forecasting), Direct Spend (BOM-linked sourcing, should-cost, Kraljic), ROI Calculator. Pricing: $2,500 Revenue at Risk Diagnostic (credited to pilot); $24K/yr Core (1 site, +$7.5K onboarding); $48K/yr Pro (3 sites, API, AI, +$15K onboarding); $90K–$150K/yr Enterprise. No free trial — the entry offer is a paid diagnostic. Sample data available in all tabs for exploration.",
 };
 
 /* ---- per-page assistant configuration (the "Claude for this tile") ---- */
 const ASSISTANT = {
   home: {
-    subject: "ThreadWire", accent: "var(--amber)",
-    intro: "Ask me anything about your digital thread — I can point you to the right module.",
-    suggestions: ["What can ThreadWire do?", "Where do I trace a part?", "Free vs Connected tier?"],
-    system: "You are the ThreadWire product assistant for a manufacturing platform. Help users understand and navigate the modules. Be concise.\n\n" + CTX.home,
-    fallback: () => "ThreadWire stitches Requirements, Contracts, Assets and the Digital Thread into one place, with an AI assistant on every page. Start on the Free tier with sample data, then connect Jama, DOORS, Jira, your MES/ERP and PLM on the Connected tier. Open any tile to dive in.",
+    subject: "Threadwire Delivery Control", accent: "var(--amber)",
+    intro: "Ask me about manufacturing delivery control, how Threadwire works, pricing, or how it overlays your ERP.",
+    suggestions: ["How does it overlay my ERP?", "What's the Revenue at Risk Diagnostic?", "How is pricing structured?"],
+    system: "You are the Threadwire product assistant. Threadwire is a Manufacturing Delivery Control platform — it protects customer commitments and revenue by connecting ERP and operational data, exposing blockers, assigning actions and using AI to prioritize recovery. It overlays existing ERPs (Odoo, MRPeasy, JobBOSS, Sage, Epicor SMB, legacy SQL, Excel) without replacement. Target buyers: COO/GM, VP Operations, CFO at mid-market discrete manufacturers ($20M–$200M, high-mix/make-to-order/contract). Pricing: $2,500 Revenue at Risk Diagnostic (credited to pilot); $24K/yr Core + $7.5K onboarding; $48K/yr Pro + $15K onboarding (flagship); $90K–$150K/yr Enterprise. No free trial — paid diagnostic is the entry motion. Be concise and outcome-focused. Never claim 'real-time' for CSV-based flows.\n\n" + CTX.home,
+    fallback: () => "Threadwire is Manufacturing Delivery Control — the operating layer that shows what will not ship, the revenue and cash exposure, why it is blocked, who owns recovery, and what promise date is now credible. It overlays your existing ERP without replacement and brings a live delivery review calendar, blocker workspace and AI-assisted investigation. Start with a $2,500 Revenue at Risk Diagnostic, then move to a paid 45-day pilot.",
   },
   assets: {
     subject: "Assets & Equipment", accent: "var(--amber)",
@@ -671,72 +677,108 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot 
 
 /* ----------------------------- HOME ------------------------------------- */
 function Home({ go }) {
-  // Problem-first: the user selects the problem(s) they're trying to solve,
-  // and the matching digital-thread solution surfaces with a way in.
   const [picked, setPicked] = useState([]);
   const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
+  // ICP-aligned operational pain points (mid-market discrete manufacturers)
   const PROBLEMS = [
-    { id: "blockers", icon: AlertTriangle, tone: "var(--red)",
-      q: "Shop-floor blockers and unplanned disruptions are eroding on-time delivery and putting committed orders at risk.",
-      sTitle: "Work-order & issue tracking, tied to order risk", route: "blockers",
-      s: "Every work order links to its parts, POs and Jira issues — so a blocked or late operation immediately surfaces the at-risk customer order and its root cause, turning OTD from a lagging metric into a live signal." },
-    { id: "visibility", icon: Gauge, tone: "var(--amber)",
-      q: "Order, inventory and production status live in disconnected ERP, MES, PLM and spreadsheets — there's no real-time answer to \u201cwhere is my order right now?\u201d",
-      sTitle: "A single, real-time view of the thread", route: "visibility",
-      s: "Work orders, BOM on-hand vs demand, ECOs and POs are stitched into one connected view you can query at any moment — with an AI assistant for point-in-time status and forecasts." },
-    { id: "change", icon: GitBranch, tone: "var(--blue)",
-      q: "Engineering changes propagate slowly and unpredictably across BOMs, work orders and suppliers — driving rework, scrap and obsolete inventory.",
-      sTitle: "Closed-loop change-impact analysis", route: "thread",
-      s: "Trace any ECO through every part, work order and supplier it touches before release, so change is planned upstream — not discovered on the floor." },
-    { id: "shortage", icon: PackageSearch, tone: "var(--green)",
-      q: "Material shortages and supplier delays surface too late, forcing expedites, line stoppages and missed schedules.",
-      sTitle: "Predictive shortage & clear-to-build", route: "thread",
-      s: "On-hand is continuously netted against work-order demand across the BOM; delayed POs raise shortage alerts naming the exact work orders and customer orders at risk." },
-    { id: "trace", icon: FileText, tone: "var(--blue)",
-      q: "We can't trace a requirement or quality issue through design, the as-built configuration and the work order that produced it — slowing audits, root-cause and recalls.",
-      sTitle: "End-to-end traceability & genealogy", route: "thread",
-      s: "Follow requirement \u2192 part \u2192 ECO \u2192 work order \u2192 PO as one clickable thread; open any object for its metadata and every linked record — built for AS9100 / IATF-grade traceability." },
-    { id: "cost", icon: Coins, tone: "var(--thread)",
-      q: "Direct material costs swing with volatile commodity markets and fragmented sourcing, eroding margin with little leverage at the table.",
-      sTitle: "BOM-linked sourcing, should-cost & commodity control", route: "directspend",
-      s: "BOM-driven sourcing events, weighted RFQs and bottom-up should-cost create real negotiation headroom — with commodity-index exposure and hedging alerts." },
-    { id: "risk", icon: Scale, tone: "var(--yellow)",
-      q: "Concentrated, single-source supply and limited multi-tier visibility leave us exposed to disruptions we can't see coming.",
-      sTitle: "Category strategy, supplier tiering & risk scoring", route: "directspend",
-      s: "A Kraljic view classifies every category by supply risk and profit impact, maps Tier 1\u20133 suppliers, and scores single-source and geographic exposure — so strategy becomes action." },
+    { id: "late-discovery", icon: AlertTriangle, tone: "var(--red)",
+      q: "You discover a promise will be missed the day before — not three weeks out, when recovery is still possible.",
+      sTitle: "Blocker-aware delivery calendar with live revenue exposure", route: "visibility",
+      s: "Every sales order is plotted by promise date. Open blockers surface a red band — with the dollar exposure, the assigned owner and the revised date — while recovery is still possible." },
+    { id: "blockers", icon: ClipboardList, tone: "var(--amber)",
+      q: "Your weekly delivery meeting runs in Excel. A planner spends four hours building the slide. The conversation is about the slide, not the plan.",
+      sTitle: "Run the delivery meeting from Threadwire — not a spreadsheet", route: "blockers",
+      s: "Blockers are tied to their work order, parts and impacted sales-order lines. Each carries an owner, an action and a revised promise date. The meeting starts with a ranked list of what to fix — sorted by revenue at risk." },
+    { id: "finance", icon: DollarSign, tone: "var(--green)",
+      q: "Finance asks for committed vs at-risk shipment value. You give them a number. You're not sure it's right.",
+      sTitle: "Committed vs blocked revenue — a forecast the CFO can read", route: "finance",
+      s: "Threadwire separates committed (no open blocker) from at-risk (blocked) shipment value by quarter and month, recomputed live as blockers open and close. The formulas are visible. The data is sourced." },
+    { id: "shortage", icon: PackageSearch, tone: "var(--thread)",
+      q: "A part shortage shuts down a line. Nobody knew the PO was delayed until the kit was pulled.",
+      sTitle: "Parts, work orders and sales orders — connected before it's too late", route: "thread",
+      s: "On-hand is netted against work-order demand across the BOM. A delayed PO flags the exact work orders and sales-order lines at risk — early enough to expedite or re-source." },
+    { id: "erp-gap", icon: Database, tone: "var(--blue)",
+      q: "Your ERP has the data. Your planners still use spreadsheets for the delivery meeting. That gap is where promises get missed.",
+      sTitle: "Overlay your ERP without replacing it", route: "thread",
+      s: "Threadwire ingests from Odoo, MRPeasy, JobBOSS, Sage, legacy SQL and Excel exports. No semantic model required. A data-health score flags freshness and mapping gaps on every view." },
+    { id: "ai", icon: Bot, tone: "var(--yellow)",
+      q: "Someone asks: 'What are the top three orders at risk this quarter and why?' It takes three reports and two phone calls to answer.",
+      sTitle: "AI that answers operational questions — with source evidence", route: "blockers",
+      s: "Ask the AI on any page about revenue exposure, blocker owners or at-risk orders. Every answer cites the sales order, blocker and date behind it — not a guess." },
   ];
   const chosen = PROBLEMS.filter((p) => picked.includes(p.id));
 
+  // Pricing tiers from GTM doc
+  const TIERS = [
+    { key: "diagnostic", label: "Revenue at Risk\nDiagnostic", price: "$2,500", period: "one-time", note: "Credited toward pilot", included: ["3–5 ERP/CSV data extracts", "Exposure map — committed vs blocked", "Data-health score", "Top blocker list", "Pilot design session"], highlight: false, cta: "Request a diagnostic" },
+    { key: "core", label: "Threadwire Core", price: "$24,000", period: "/ year", note: "+ $7,500 onboarding", included: ["1 site · up to 25 active users", "Broad viewer access (unlimited)", "CSV / SFTP integration", "Delivery calendar & blocker workspace", "Standard dashboards"], highlight: false, cta: "Start with Core" },
+    { key: "pro", label: "Threadwire Pro", price: "$48,000", period: "/ year", note: "+ $15,000 onboarding", included: ["Up to 3 sites", "API integration", "AI assistant (evidence-linked)", "Blocker-aware revenue forecast", "Advanced prioritization rules", "Quarterly value review"], highlight: true, cta: "Talk to us about Pro" },
+    { key: "enterprise", label: "Threadwire Enterprise", price: "$90K–$150K", period: "/ year", note: "+ custom SOW", included: ["Multi-site, multi-ERP", "SSO / SCIM / SLA", "Data warehouse integration", "Advanced governance", "Enterprise success plan"], highlight: false, cta: "Contact us" },
+  ];
+
   return (
     <div>
-      {/* hero */}
+      {/* ---- HERO ---- */}
       <div className="tf-grid-bg tf-fade" style={{ borderBottom: "1px solid var(--line)" }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "70px 22px 44px" }}>
-          <div className="tf-eyebrow" style={{ marginBottom: 18 }}>Industrial AI · the digital thread for manufacturing</div>
-          <h1 className="tf-disp" style={{ fontSize: "clamp(38px,6vw,66px)", fontWeight: 800, maxWidth: 940, margin: 0, lineHeight: 1.04 }}>
-            <span style={{ color: "var(--thread)" }}>Digital Thread</span>
-            <span style={{ color: "var(--line2)", fontWeight: 400, margin: "0 .28em" }}>|</span>
-            <span style={{ color: "var(--amber)" }}>AI for Manufacturing</span>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "70px 22px 54px" }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 18 }}>Manufacturing Delivery Control · ERP overlay · Revenue assurance</div>
+          <h1 className="tf-disp" style={{ fontSize: "clamp(32px,5.2vw,60px)", fontWeight: 800, maxWidth: 900, margin: 0, lineHeight: 1.06 }}>
+            {HEADLINE}
           </h1>
-          <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.6, maxWidth: 660, margin: "20px 0 30px" }}>
-            Connect work orders, BOMs, ECOs, parts and purchase orders into one live thread — then ask AI what's at risk and why.
-            Start free on sample data; connect Jira and your MES/ERP when you're ready.
+          <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.65, maxWidth: 640, margin: "22px 0 10px" }}>
+            {ONE_LINER}
+          </p>
+          <p style={{ color: "var(--faint)", fontSize: 15, lineHeight: 1.6, maxWidth: 640, margin: "0 0 32px" }}>
+            Threadwire connects ERP, work-order and sales-order data into a delivery operating system — exposing blockers, assigning owners and quantifying revenue exposure before a customer escalates.
           </p>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <button className="tf-btn tf-btn-primary" onClick={() => go("thread")}>Explore the digital thread <ArrowRight size={16} /></button>
-            <button className="tf-btn" onClick={() => go("roi")}>Build the ROI case</button>
+            <button className="tf-btn tf-btn-primary" onClick={() => go("visibility")}>
+              See the delivery calendar <ArrowRight size={16} />
+            </button>
+            <button className="tf-btn" onClick={() => go("blockers")}>Open a blocker</button>
+            <button className="tf-btn tf-btn-ghost" onClick={() => go("roi")}>Build the ROI case</button>
+          </div>
+
+          {/* credibility stats */}
+          <div style={{ display: "flex", gap: 32, marginTop: 44, flexWrap: "wrap" }}>
+            {[
+              ["87,800+", "U.S. manufacturers in our target market (20–249 employees)"],
+              ["30 days", "Standard time-to-value from first CSV to live delivery review"],
+              ["$24K–$48K", "Core annual contract value — pricing below ERP, above BI"],
+              ["2.8×", "Illustrative year-1 ROI: labor, expedite, and cash-timing benefit"],
+            ].map(([v, l]) => (
+              <div key={v}>
+                <div className="tf-disp" style={{ fontSize: 28, fontWeight: 800, color: "var(--amber)" }}>{v}</div>
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", maxWidth: 180, lineHeight: 1.4, marginTop: 4 }}>{l}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "44px 22px 70px" }}>
-        {/* problem chooser */}
-        <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Start with the problem — not the feature</div>
-        <h2 className="tf-disp" style={{ fontSize: 27, fontWeight: 800, margin: "0 0 6px" }}>What are you trying to solve?</h2>
-        <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 22px", maxWidth: 680 }}>Select the challenges that sound like yours. We'll map each to the digital-thread capability that solves it — and a way straight into it.</p>
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "54px 22px 0" }}>
 
-        <div className="tf-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))", gap: 14 }}>
+        {/* ---- ERP OVERLAY BANNER ---- */}
+        <div className="tf-panel" style={{ padding: "18px 22px", marginBottom: 48, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", borderColor: "var(--line2)", background: "linear-gradient(90deg,rgba(72,214,200,.06),rgba(255,138,61,.04))" }}>
+          <Plug size={18} color="var(--thread)" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>Overlays your ERP — no replacement required</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)" }}>Threadwire ingests from Odoo, MRPeasy, JobBOSS, Sage, Epicor SMB, medical-device ERP, legacy SQL and Excel. Keep the ERP; add the operating control layer.</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["Odoo", "MRPeasy", "JobBOSS", "Sage", "Epicor SMB", "Legacy SQL"].map((n) => (
+              <span key={n} className="tf-chip">{n}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* ---- PROBLEM CHOOSER ---- */}
+        <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Start with your situation</div>
+        <h2 className="tf-disp" style={{ fontSize: 28, fontWeight: 800, margin: "0 0 6px" }}>Which of these sounds like your week?</h2>
+        <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 24px", maxWidth: 680 }}>Select the ones that fit. We'll show the delivery-control capability that addresses each one — and a way straight into a live demo.</p>
+
+        <div className="tf-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))", gap: 14, marginBottom: 48 }}>
           {PROBLEMS.map((p) => {
             const on = picked.includes(p.id);
             return (
@@ -744,7 +786,7 @@ function Home({ go }) {
                 <div style={{ width: 40, height: 40, borderRadius: 11, background: "var(--bg2)", border: `1px solid ${on ? p.tone : "var(--line2)"}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
                   <p.icon size={20} color={p.tone} />
                 </div>
-                <span style={{ flex: 1, fontSize: 14.5, color: "var(--ink)", lineHeight: 1.45, fontWeight: 600 }}>{p.q}</span>
+                <span style={{ flex: 1, fontSize: 14, color: "var(--ink)", lineHeight: 1.5, fontWeight: 500 }}>{p.q}</span>
                 {on
                   ? <CheckCircle2 size={20} color={p.tone} style={{ flexShrink: 0, marginTop: 2 }} />
                   : <span style={{ width: 18, height: 18, borderRadius: 99, border: "2px solid var(--line2)", flexShrink: 0, marginTop: 3 }} />}
@@ -755,8 +797,8 @@ function Home({ go }) {
 
         {/* solutions */}
         {chosen.length > 0 && (
-          <div className="tf-fade" style={{ marginTop: 40 }}>
-            <div className="tf-eyebrow" style={{ marginBottom: 14 }}>Your digital thread solution{chosen.length > 1 ? "s" : ""}</div>
+          <div className="tf-fade" style={{ marginBottom: 48 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 14 }}>Delivery-control solution{chosen.length > 1 ? "s" : ""}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {chosen.map((p) => (
                 <div key={p.id} className="tf-panel tf-fade" style={{ padding: 18, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
@@ -768,7 +810,7 @@ function Home({ go }) {
                     <p style={{ color: "var(--muted)", fontSize: 13.5, lineHeight: 1.55, margin: "5px 0 0" }}>{p.s}</p>
                   </div>
                   <button className="tf-btn tf-btn-primary" onClick={() => go(p.route)} style={{ flexShrink: 0 }}>
-                    Open {{ directspend: "Direct Spend", blockers: "Blockers", visibility: "Delivery calendar" }[p.route] || "Digital Thread"} <ArrowRight size={16} />
+                    Open {{ finance: "Forecast", blockers: "Blockers", visibility: "Delivery calendar", thread: "Digital Thread" }[p.route] || "Digital Thread"} <ArrowRight size={16} />
                   </button>
                 </div>
               ))}
@@ -776,13 +818,149 @@ function Home({ go }) {
           </div>
         )}
 
-        {/* tier note */}
-        <div className="tf-panel" style={{ padding: "16px 18px", marginTop: 40, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--bg2)" }}>
+        {/* ---- HOW IT WORKS ---- */}
+        <div style={{ marginBottom: 56 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 10 }}>How it works</div>
+          <h2 className="tf-disp" style={{ fontSize: 28, fontWeight: 800, margin: "0 0 28px" }}>From first CSV to live delivery meeting in 30 days</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 16 }}>
+            {[
+              { step: "1", icon: Upload, color: "var(--thread)", title: "Revenue at Risk Diagnostic", time: "48 hours", desc: "Send 3–5 ERP exports. We map them, score data health, and produce an exposure map — committed vs blocked value, top blockers, pilot design." },
+              { step: "2", icon: Wrench, color: "var(--amber)", title: "Paid 45-day pilot", time: "10 business days to go-live", desc: "One site, one value stream, 10–25 users. A live delivery review calendar, blockers with owners, and a before/after baseline." },
+              { step: "3", icon: Activity, color: "var(--green)", title: "Annual subscription", time: "Production standard", desc: "Scheduled API/SFTP feeds, freshness badges, a per-quarter value review. Expand to a second site or function at renewal." },
+              { step: "4", icon: TrendingUp, color: "var(--blue)", title: "Multi-site & enterprise", time: "45–90 days", desc: "Multiple ERPs, SSO/SCIM, SLA, data warehouse, advanced governance. Priced by site count and integration complexity." },
+            ].map((s) => (
+              <div key={s.step} className="tf-panel" style={{ padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "var(--bg2)", border: `1px solid ${s.color}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                    <s.icon size={18} color={s.color} />
+                  </div>
+                  <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>{s.step} · {s.time}</span>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 7, lineHeight: 1.3 }}>{s.title}</div>
+                <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>{s.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ---- PRICING ---- */}
+        <div style={{ marginBottom: 60 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Pricing</div>
+          <h2 className="tf-disp" style={{ fontSize: 28, fontWeight: 800, margin: "0 0 8px" }}>Site-based pricing. No per-seat friction.</h2>
+          <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 28px", maxWidth: 660 }}>
+            Threadwire needs planners, operations, finance and customer service to participate. Per-seat pricing would undermine the cross-functional workflow that creates value. We price by site and integration complexity.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 14, alignItems: "start" }}>
+            {TIERS.map((t) => (
+              <div key={t.key} className="tf-panel" style={{ padding: 22, border: t.highlight ? "1px solid var(--amber)" : "1px solid var(--line)", position: "relative", overflow: "hidden" }}>
+                {t.highlight && (
+                  <div style={{ position: "absolute", top: 12, right: 12 }}><Tag tone="amber">Flagship</Tag></div>
+                )}
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, whiteSpace: "pre-line" }}>{t.label}</div>
+                </div>
+                <div className="tf-disp" style={{ fontSize: 30, fontWeight: 800, color: t.highlight ? "var(--amber)" : "var(--ink)", margin: "12px 0 2px", lineHeight: 1 }}>{t.price}</div>
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginBottom: 4 }}>{t.period}</div>
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--thread)", marginBottom: 16 }}>{t.note}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                  {t.included.map((item) => (
+                    <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "var(--muted)", lineHeight: 1.4 }}>
+                      <CheckCircle2 size={14} color="var(--green)" style={{ flexShrink: 0, marginTop: 1 }} />
+                      {item}
+                    </div>
+                  ))}
+                </div>
+                <button className={`tf-btn${t.highlight ? " tf-btn-primary" : ""}`} style={{ width: "100%", justifyContent: "center" }}>
+                  {t.cta}
+                </button>
+              </div>
+            ))}
+          </div>
+
+          <div className="tf-panel" style={{ padding: "14px 18px", marginTop: 14, display: "flex", alignItems: "center", gap: 10, background: "var(--bg2)", flexWrap: "wrap" }}>
+            <Scale size={16} color="var(--amber)" />
+            <span style={{ fontSize: 13.5, color: "var(--muted)" }}>
+              <b style={{ color: "var(--ink)" }}>No free trial.</b> Value requires your data and your team's participation. The low-friction start is a <b style={{ color: "var(--amber)" }}>$2,500 Revenue at Risk Diagnostic</b> — credited to your pilot if you proceed.
+            </span>
+          </div>
+        </div>
+
+        {/* ---- WHO IT'S FOR ---- */}
+        <div style={{ marginBottom: 60 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Who it's for</div>
+          <h2 className="tf-disp" style={{ fontSize: 28, fontWeight: 800, margin: "0 0 8px" }}>Built for mid-market discrete manufacturers</h2>
+          <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 24px", maxWidth: 680 }}>$20M–$200M revenue · 50–500 employees · 1–5 sites · High-mix, make-to-order, engineer-to-order or contract manufacturing. Multiple open-source or SMB ERPs, or spreadsheets.</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(270px,1fr))", gap: 14 }}>
+            {[
+              { icon: Factory, color: "var(--amber)", label: "Precision machining", sub: "Aerospace/defense suppliers" },
+              { icon: Cpu, color: "var(--thread)", label: "Electronics / PCBA", sub: "Electromechanical manufacturing" },
+              { icon: ShieldCheck, color: "var(--blue)", label: "Medical devices", sub: "Laboratory equipment" },
+              { icon: Wrench, color: "var(--green)", label: "Industrial equipment", sub: "Contract manufacturers" },
+            ].map((v) => (
+              <div key={v.label} className="tf-panel" style={{ padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--bg2)", border: `1px solid ${v.color}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <v.icon size={22} color={v.color} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{v.label}</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)" }}>{v.sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ---- EXPLORE THE PRODUCT ---- */}
+        <div className="tf-panel" style={{ padding: "20px 22px", marginBottom: 60, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "var(--bg2)" }}>
           <Sparkles size={17} color="var(--amber)" />
           <span style={{ fontSize: 13.5, color: "var(--muted)" }}>
-            <b style={{ color: "var(--ink)" }}>Free</b> — explore on bundled sample data.&nbsp;
-            <b style={{ color: "var(--amber)" }}>Connected</b> — wire up Jira and your MES/ERP for live data.
+            <b style={{ color: "var(--ink)" }}>Explore on sample data</b> — open the Delivery calendar, Blockers or Forecast tabs above to see a live demo. No login required.
+            &nbsp;<b style={{ color: "var(--amber)" }}>Connect your own data</b> by requesting a diagnostic.
           </span>
+          <button className="tf-btn tf-btn-primary" style={{ marginLeft: "auto" }} onClick={() => go("visibility")}>
+            Open the delivery calendar <ArrowRight size={15} />
+          </button>
+        </div>
+
+      </div>
+
+      {/* ---- FOOTER ---- */}
+      <div style={{ borderTop: "1px solid var(--line)", background: "var(--bg2)" }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "32px 22px", display: "flex", alignItems: "flex-start", gap: 40, flexWrap: "wrap" }}>
+          <div style={{ flex: "0 0 220px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center" }}>
+                <Workflow size={15} color="#0a0e15" strokeWidth={2.4} />
+              </div>
+              <span className="tf-disp" style={{ fontWeight: 800, fontSize: 17 }}>{BRAND}</span>
+            </div>
+            <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", lineHeight: 1.6 }}>
+              Manufacturing Delivery Control.<br />
+              Protect customer commitments<br />and revenue.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 40, flexWrap: "wrap", flex: 1 }}>
+            {[
+              { heading: "Product", links: [["Delivery Calendar", "visibility"], ["Blockers", "blockers"], ["Revenue Forecast", "finance"], ["Digital Thread", "thread"], ["Direct Spend", "directspend"], ["ROI Calculator", "roi"]] },
+              { heading: "Who we serve", links: [["Precision machining", null], ["Electronics / PCBA", null], ["Medical devices", null], ["Contract manufacturing", null], ["Multi-site industrials", null]] },
+              { heading: "Get started", links: [["Request a Diagnostic", null], ["Talk to us about Pro", null], ["Book a demo", null]] },
+            ].map((col) => (
+              <div key={col.heading}>
+                <div className="tf-eyebrow" style={{ marginBottom: 12 }}>{col.heading}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {col.links.map(([label, route]) => (
+                    <span key={label} onClick={route ? () => go(route) : undefined}
+                      style={{ fontSize: 13, color: "var(--muted)", cursor: route ? "pointer" : "default" }}
+                      className={route ? "tf-link" : ""}>{label}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 22px 20px", display: "flex", gap: 12, alignItems: "center", borderTop: "1px solid var(--line)", paddingTop: 16 }}>
+          <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>© 2026 Threadwire · threadwire.ai</span>
+          <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginLeft: "auto" }}>Prices shown are planning estimates — not audited forecasts</span>
         </div>
       </div>
     </div>
@@ -1220,8 +1398,8 @@ function ThreadPage({ tier, setTier }) {
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
-      <PageHead icon={GitBranch} eyebrow="Module · Digital Thread" title="The digital thread"
-        sub="Stitch work orders, BOMs, ECOs, part numbers and purchase orders into one connected thread — then ask the AI bot for material status and shortage forecasts."
+      <PageHead icon={GitBranch} eyebrow="Manufacturing Delivery Control · Digital thread" title="The digital thread"
+        sub="Work orders, BOMs, ECOs, part numbers and purchase orders — connected into one queryable thread. Upload CSVs from any ERP in under 48 hours to see parts, demand and blocker exposure in one view." 
         tier={tier} setTier={setTier} />
 
       {/* import strip */}
@@ -1490,8 +1668,8 @@ function computeROI(inp, scenario, ov) {
   const riskAdj = hard * HARD_CONF + soft * SOFT_CONF;
 
   const plants = Math.max(1, num(inp.plants));
-  const platform = has(inp.platformCostK) ? num(inp.platformCostK) * 1e3 : 60000 + plants * 30000;
-  const impl = has(inp.implCostK) ? num(inp.implCostK) * 1e3 : 80000 + plants * 20000;
+  const platform = has(inp.platformCostK) ? num(inp.platformCostK) * 1e3 : (plants <= 1 ? 24000 : plants <= 3 ? 48000 : 90000); // Core/Pro/Enterprise
+  const impl = has(inp.implCostK) ? num(inp.implCostK) * 1e3 : (plants <= 1 ? 7500 : 15000); // GTM onboarding fees
 
   const annual = riskAdj;
   const monthlyNet = annual / 12 - platform / 12;
@@ -1557,9 +1735,9 @@ function ROIPage() {
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
-      <PageHead icon={Calculator} eyebrow="Tool · ROI Calculator"
-        title="Build your AI business case"
-        sub="Pick your industry and the model adapts to how that sector creates value. Hard and soft savings are separated and risk-adjusted, then turned into payback, 3-year NPV and ROI." />
+      <PageHead icon={Calculator} eyebrow="Manufacturing Delivery Control · Business case"
+        title="Build your ROI case"
+        sub="Anchored to protected shipment value and planning time saved — the two levers Threadwire moves most directly. Hard and soft savings are separated and risk-adjusted, then turned into payback, 3-year NPV and ROI." />
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }} className="tf-cols">
         {/* ------------------------------- FORM ------------------------------ */}
@@ -1633,8 +1811,8 @@ function ROIPage() {
                 <div>
                   <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Investment</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-                    <ROIField label="Platform / yr" suffix="$k" placeholder={((60000 + Math.max(1, num(inp.plants)) * 30000) / 1e3).toFixed(0) + " (auto)"} value={inp.platformCostK} onChange={set("platformCostK")} />
-                    <ROIField label="Implementation" suffix="$k" placeholder={((80000 + Math.max(1, num(inp.plants)) * 20000) / 1e3).toFixed(0) + " (auto)"} value={inp.implCostK} onChange={set("implCostK")} />
+                    <ROIField label="Platform / yr" suffix="$k" placeholder={((Math.max(1, num(inp.plants)) <= 1 ? 24 : Math.max(1, num(inp.plants)) <= 3 ? 48 : 90)) + " (auto, Core/Pro/Ent)"} value={inp.platformCostK} onChange={set("platformCostK")} />
+                    <ROIField label="Onboarding fee" suffix="$k" placeholder={(Math.max(1, num(inp.plants)) <= 1 ? "7.5" : "15") + " (auto)"} value={inp.implCostK} onChange={set("implCostK")} />
                     <ROIField label="Discount rate" suffix="%" value={inp.discountPct} onChange={set("discountPct")} />
                   </div>
                 </div>
@@ -2889,8 +3067,8 @@ function BlockersPage() {
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "34px 22px 70px" }}>
-      <PageHead icon={ClipboardList} eyebrow="Module · Shop-floor blockers" title="Blockers"
-        sub="Shop-floor issues tied to the sales orders they put at risk. Each blocker links parts, a work order and an owner — and carries the $ revenue exposed across its orders." />
+      <PageHead icon={ClipboardList} eyebrow="Manufacturing Delivery Control · Blocker management" title="Blockers"
+        sub="Shop-floor issues tied to the sales orders they put at risk. Each blocker links parts, a work order and an owner — and carries the $ revenue exposed across its impacted orders. Clear a blocker; the delivery calendar and forecast update live." />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
         {[["Open / assigned", openCount, "var(--red)"], ["$ revenue at risk", fmtMoney(atRisk), "var(--amber)"], ["Total blockers", scoped.length, "var(--ink)"]].map(([l, v, c]) => (
@@ -3080,8 +3258,8 @@ function DeliveryPage() {
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
-      <PageHead icon={CalendarDays} eyebrow="Module · Point-in-time delivery" title="Delivery calendar"
-        sub="Every sales order on a calendar by promise date. Orders with an open blocker show a red band; create or open a blocker right from a card. Filter by site to see revenue and risk per location." />
+      <PageHead icon={CalendarDays} eyebrow="Manufacturing Delivery Control · Point-in-time delivery" title="Delivery calendar"
+        sub="Every sales order on a calendar by promise date. Orders with an open blocker show a red band with the revenue at risk. Create or open a blocker right from a card. Filter by site to see committed vs blocked revenue per location." />
 
       {/* controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
@@ -3169,8 +3347,8 @@ function FinancePage() {
 
   return (
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
-      <PageHead icon={TrendingUp} eyebrow="Module · Point-in-time finance" title="Revenue forecast"
-        sub="A blocker-aware forecast a GM can trust: committed (clear) revenue versus at-risk (blocked) revenue, by quarter and month — recomputed live as blockers open and close." />
+      <PageHead icon={TrendingUp} eyebrow="Manufacturing Delivery Control · Revenue assurance" title="Revenue forecast"
+        sub="A blocker-aware forecast a GM can trust: committed (clear) revenue versus at-risk (blocked) revenue, by quarter and month — recomputed live as blockers open and close. The formulas are transparent; the data is sourced." />
 
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16 }}>
         <Building2 size={15} color="var(--faint)" />
@@ -3379,8 +3557,8 @@ export default function App({ user }) {
       <div style={{ borderTop: "1px solid var(--line)", marginTop: 30, paddingBottom: 70 }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "22px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <Workflow size={15} color="var(--amber)" />
-          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>{BRAND} — digital thread for manufacturing · concept prototype</span>
-          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)", marginLeft: "auto" }}>Free sample data · Connected tier for live integrations</span>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>{BRAND} — Manufacturing Delivery Control · {TAGLINE}</span>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)", marginLeft: "auto" }}>Sample data · Connect your ERP to go live</span>
         </div>
       </div>
 
