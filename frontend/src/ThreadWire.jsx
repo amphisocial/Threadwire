@@ -27,41 +27,42 @@ const ONE_LINER = "Your ERP records the order. Threadwire protects the delivery.
 /* ----------------------------- styles ----------------------------------- */
 const Styles = () => (
   <style>{`
-    @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
     .tf {
-      --bg:#0a0e15; --bg2:#0d121c; --panel:#121a26; --panel2:#172132;
-      --line:#243245; --line2:#2f4259;
-      --ink:#e7eef6; --muted:#8d9fb5; --faint:#5d6f86;
-      --amber:#ff8a3d; --amber-d:#cc6a26;
-      --thread:#48d6c8; --thread-d:#2a8f86;
-      --green:#43c277; --red:#f0563a; --yellow:#e3b341; --blue:#5aa9ff;
+      --bg:#08090d; --bg2:#0e1117; --panel:#13181f; --panel2:#1a2030;
+      --line:#252d3d; --line2:#303d52;
+      --ink:#f0f4f8; --muted:#b8c5d6; --faint:#7a8fa8;
+      --amber:#ff9a4d; --amber-d:#cc7530;
+      --thread:#4dd8ca; --thread-d:#2a8f86;
+      --green:#4dcb80; --red:#f26249; --yellow:#e8bc50; --blue:#6ab4ff;
       --disp:'Bricolage Grotesque',sans-serif;
-      --body:'IBM Plex Sans',sans-serif;
+      --body:'Inter',sans-serif;
       --mono:'IBM Plex Mono',monospace;
       color:var(--ink); font-family:var(--body);
       background:
-        radial-gradient(900px 500px at 85% -10%, rgba(255,138,61,.10), transparent 60%),
-        radial-gradient(800px 600px at 0% 110%, rgba(72,214,200,.08), transparent 55%),
+        radial-gradient(900px 500px at 85% -10%, rgba(255,154,77,.09), transparent 60%),
+        radial-gradient(800px 600px at 0% 110%, rgba(77,216,202,.07), transparent 55%),
         var(--bg);
       min-height:100vh; letter-spacing:.1px;
     }
     .tf *{box-sizing:border-box}
     .tf-grid-bg{
-      background-image:linear-gradient(rgba(47,66,89,.18) 1px,transparent 1px),
-                       linear-gradient(90deg,rgba(47,66,89,.18) 1px,transparent 1px);
+      background-image:linear-gradient(rgba(48,61,82,.22) 1px,transparent 1px),
+                       linear-gradient(90deg,rgba(48,61,82,.22) 1px,transparent 1px);
       background-size:46px 46px;
     }
-    .tf-disp{font-family:var(--disp);letter-spacing:-.02em;line-height:1.02}
-    .tf-mono{font-family:var(--mono)}
+    .tf-disp{font-family:var(--disp);letter-spacing:-.02em;line-height:1.02;color:var(--ink)}
+    .tf-mono{font-family:var(--mono);color:var(--muted)}
     .tf-eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--amber)}
     .tf-panel{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:14px}
-    .tf-chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--muted)}
+    .tf-chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--muted);background:rgba(255,255,255,.03)}
     .tf-btn{font-family:var(--mono);font-size:13px;font-weight:600;border-radius:10px;padding:10px 16px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);cursor:pointer;transition:.16s;display:inline-flex;align-items:center;gap:8px}
     .tf-btn:hover{border-color:var(--amber);color:#fff;transform:translateY(-1px)}
-    .tf-btn-primary{background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:transparent;color:#1a0f06}
-    .tf-btn-primary:hover{filter:brightness(1.08);color:#1a0f06}
-    .tf-btn-ghost{background:transparent}
+    .tf-btn-primary{background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:transparent;color:#150b02;font-weight:700}
+    .tf-btn-primary:hover{filter:brightness(1.08);color:#150b02}
+    .tf-btn-ghost{background:transparent;border-color:var(--line2);color:var(--muted)}
+    .tf-btn-ghost:hover{color:var(--ink);border-color:var(--amber)}
     .tf-link{cursor:pointer;color:var(--muted);transition:.15s;font-family:var(--mono);font-size:13px}
     .tf-link:hover{color:var(--amber)}
     .tf-tile{position:relative;overflow:hidden;cursor:pointer;transition:.2s;background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:18px}
@@ -69,8 +70,9 @@ const Styles = () => (
     .tf-tile:hover .tf-tile-arrow{transform:translateX(4px);color:var(--amber)}
     .tf-tile-glow{position:absolute;inset:auto -40px -60px auto;width:200px;height:200px;border-radius:50%;filter:blur(40px);opacity:.18}
     .tf-row:hover{background:var(--panel2)}
-    .tf-input{font-family:var(--mono);font-size:13px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--ink);width:100%;outline:none}
-    .tf-input:focus{border-color:var(--amber)}
+    .tf-input{font-family:var(--mono);font-size:13px;background:rgba(255,255,255,.04);border:1px solid var(--line2);border-radius:10px;padding:11px 13px;color:var(--ink);width:100%;outline:none}
+    .tf-input:focus{border-color:var(--amber);background:rgba(255,255,255,.06)}
+    .tf-input::placeholder{color:var(--faint)}
     .tf-fade{animation:tfIn .5s ease both}
     .tf-stagger>*{animation:tfIn .5s ease both}
     .tf-stagger>*:nth-child(1){animation-delay:.03s}
@@ -87,6 +89,14 @@ const Styles = () => (
     .tf-thread-line{stroke:var(--thread);stroke-width:1.5;fill:none;stroke-dasharray:4 4;animation:tfDash 1.2s linear infinite}
     @keyframes tfDash{to{stroke-dashoffset:-16}}
     .tf-tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;padding:2px 8px;border-radius:6px;border:1px solid var(--line2)}
+
+    /* nav link override — must be visible at rest */
+    .tf-nav .tf-link{color:var(--muted);font-size:13.5px}
+    .tf-nav .tf-link:hover{color:var(--ink)}
+
+    /* body text defaults — ensure readability everywhere */
+    .tf p{color:var(--muted);line-height:1.65}
+    select.tf-input option{background:var(--panel2);color:var(--ink)}
   `}</style>
 );
 
