@@ -4,14 +4,23 @@ import base64
 import os
 from pathlib import Path
 
-# Explicitly load .env from the backend directory so vars are available
-# whether or not systemd's EnvironmentFile injection works.
-try:
-    from dotenv import load_dotenv
-    _env_path = Path(__file__).parent.parent / ".env"
-    load_dotenv(_env_path, override=False)  # override=False: real env vars win
-except ImportError:
-    pass  # dotenv not installed yet — systemd EnvironmentFile is the fallback
+
+def _load_env_file():
+    """Read .env file directly — no dependency on dotenv or systemd EnvironmentFile."""
+    env_path = Path(__file__).parent.parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.strip().strip('"').strip("'")  # strip any accidental quotes
+        if key and key not in os.environ:          # don't override real env vars
+            os.environ[key] = val
+
+_load_env_file()
 
 
 class Settings:
@@ -22,15 +31,12 @@ class Settings:
     anthropic_model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
     anthropic_max_tokens = int(os.environ.get("ANTHROPIC_MAX_TOKENS", "1024"))
 
-    # AI provider selection: "openai" | "gemini" | "anthropic" (default).
     ai_provider = os.environ.get("AI_MODEL", "anthropic").strip().lower()
     openai_api_key = os.environ.get("OPENAI_API_KEY", "")
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
     gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-    # Billing (Stripe). Card entry happens on Stripe's hosted Checkout — keys stay server-side.
-    # PAYMENT_MODE picks the key/price set: "test" (sandbox) or "prod"/"live" (real charges).
     payment_mode = os.environ.get("PAYMENT_MODE", "test").strip().lower()
     _payment_live = payment_mode in ("prod", "production", "live")
     stripe_secret_key = (
@@ -49,17 +55,14 @@ class Settings:
     cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
     session_days = int(os.environ.get("SESSION_DAYS", "14"))
 
-    # Public base URL used in invite links / emails
     app_base_url = os.environ.get("APP_BASE_URL", "https://threadwire.ai")
 
-    # SMTP — Gmail recommended: host=smtp.gmail.com, port=587, user=your@gmail.com, pass=app-password
     smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_user = os.environ.get("SMTP_USER", "")
     smtp_pass = os.environ.get("SMTP_PASS", "")
     smtp_from = os.environ.get("SMTP_FROM", "")
 
-    # Contact-form recipients (comma-separated)
     contact_recipients = os.environ.get("CONTACT_RECIPIENTS", "anu@threadwire.ai,maro@threadwire.ai")
 
     def secret_key(self) -> bytes:
