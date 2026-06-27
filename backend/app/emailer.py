@@ -97,7 +97,7 @@ def send_contact_email(company: str, name: str, email: str, phone: str,
             s.send_message(msg)
         return True
     except Exception as e:
-	print(f"SMTP error: {e}", flush=True)
+        print(f"SMTP error: {e}", flush=True)
         return False
 
 
