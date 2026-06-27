@@ -2,34 +2,41 @@ from __future__ import annotations
 
 import smtplib
 import ssl
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+from email.headerregistry import Address
+from email.message import EmailMessage
+import email.policy
 
 from .config import settings
 
 
-def _smtp_send(msg: MIMEMultipart) -> bool:
-    """Single shared send path — identical to what the working contact form uses."""
+def _configured() -> bool:
+    return bool(settings.smtp_host and settings.smtp_user and settings.smtp_pass)
+
+
+def _smtp_send(subject: str, from_addr: str, to_addrs: list[str],
+               body_text: str, body_html: str, reply_to: str = "") -> bool:
+    """Build and send a UTF-8 multipart email using EmailMessage with SMTP policy."""
     try:
+        msg = EmailMessage(policy=email.policy.SMTP)
+        msg["Subject"] = subject
+        msg["From"] = from_addr
+        msg["To"] = ", ".join(to_addrs)
+        if reply_to:
+            msg["Reply-To"] = reply_to
+        msg.set_content(body_text, charset="utf-8")
+        msg.add_alternative(body_html, subtype="html", charset="utf-8")
+
         ctx = ssl.create_default_context()
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as s:
             s.ehlo()
             s.starttls(context=ctx)
             s.ehlo()
             s.login(settings.smtp_user, settings.smtp_pass)
-            s.sendmail(
-                msg["From"],
-                [addr.strip() for addr in msg["To"].split(",")],
-                msg.as_bytes(),
-            )
+            s.send_message(msg)
         return True
     except Exception as e:
-        print(f"SMTP error ({msg['Subject']!r}): {e}", flush=True)
+        print(f"SMTP error ({subject!r}): {e}", flush=True)
         return False
-
-
-def _configured() -> bool:
-    return bool(settings.smtp_host and settings.smtp_user and settings.smtp_pass)
 
 
 def send_invite_email(to_email: str, org_name: str, inviter_name: str, accept_url: str) -> bool:
@@ -39,6 +46,7 @@ def send_invite_email(to_email: str, org_name: str, inviter_name: str, accept_ur
 
     org = org_name or "your team"
     inviter = inviter_name or "An admin"
+    from_addr = settings.smtp_from or settings.smtp_user
 
     body_text = (
         f"{inviter} has invited you to join {org} on Threadwire.\n\n"
@@ -71,13 +79,13 @@ def send_invite_email(to_email: str, org_name: str, inviter_name: str, accept_ur
   </div>
 </div>"""
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"You are invited to join {org} on Threadwire"
-    msg["From"] = settings.smtp_from or settings.smtp_user
-    msg["To"] = to_email
-    msg.attach(MIMEText(body_text, "plain", "utf-8"))
-    msg.attach(MIMEText(body_html, "html", "utf-8"))
-    return _smtp_send(msg)
+    return _smtp_send(
+        subject=f"You are invited to join {org} on Threadwire",
+        from_addr=from_addr,
+        to_addrs=[to_email],
+        body_text=body_text,
+        body_html=body_html,
+    )
 
 
 def send_contact_email(company: str, name: str, email: str, phone: str,
@@ -93,6 +101,7 @@ def send_contact_email(company: str, name: str, email: str, phone: str,
 
     phone_display = phone if phone else "Not provided"
     website_display = website if website else "Not provided"
+    from_addr = settings.smtp_from or settings.smtp_user
 
     body_text = (
         f"New contact form submission from threadwire.ai\n\n"
@@ -123,11 +132,11 @@ def send_contact_email(company: str, name: str, email: str, phone: str,
   </div>
 </div>"""
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Contact request from {name} at {company}"
-    msg["From"] = settings.smtp_from or settings.smtp_user
-    msg["To"] = ", ".join(recipients)
-    msg["Reply-To"] = email
-    msg.attach(MIMEText(body_text, "plain", "utf-8"))
-    msg.attach(MIMEText(body_html, "html", "utf-8"))
-    return _smtp_send(msg)
+    return _smtp_send(
+        subject=f"Contact request from {name} at {company}",
+        from_addr=from_addr,
+        to_addrs=recipients,
+        body_text=body_text,
+        body_html=body_html,
+        reply_to=email,
+    )
