@@ -6,9 +6,9 @@ from pathlib import Path
 
 
 def _load_env_file():
-    """Read .env file directly — no dependency on dotenv or systemd EnvironmentFile."""
+    """Read .env file directly, overwriting any empty values systemd may have injected."""
     env_path = Path(__file__).parent.parent / ".env"
-    print(f"ENV FILE: looking for {env_path} exists={env_path.exists()}", flush=True)
+    if not env_path.exists():
         return
     for line in env_path.read_text().splitlines():
         line = line.strip()
@@ -17,7 +17,7 @@ def _load_env_file():
         key, _, val = line.partition("=")
         key = key.strip()
         val = val.strip().strip('"').strip("'")
-        if key and val:                    # only set if file has a non-empty value
+        if key and val:
             os.environ[key] = val
 
 _load_env_file()
@@ -63,7 +63,7 @@ class Settings:
     smtp_pass = os.environ.get("SMTP_PASS", "")
     smtp_from = os.environ.get("SMTP_FROM", "")
 
-    contact_recipients = os.environ.get("CONTACT_RECIPIENTS", "anu@threadwire.ai,maro@threadwire.ai")
+    contact_recipients = os.environ.get("CONTACT_RECIPIENTS", "anu@threadwire.ai,marco@threadwire.ai")
 
     def secret_key(self) -> bytes:
         if not self.secret_key_b64:
