@@ -2,6 +2,16 @@ from __future__ import annotations
 
 import base64
 import os
+from pathlib import Path
+
+# Explicitly load .env from the backend directory so vars are available
+# whether or not systemd's EnvironmentFile injection works.
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).parent.parent / ".env"
+    load_dotenv(_env_path, override=False)  # override=False: real env vars win
+except ImportError:
+    pass  # dotenv not installed yet — systemd EnvironmentFile is the fallback
 
 
 class Settings:
