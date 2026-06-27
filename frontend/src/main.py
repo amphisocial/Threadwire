@@ -473,19 +473,132 @@ async def admin_usage(user: dict = Depends(current_user)):
         raise HTTPException(403, "Admins only")
     async with db.pool().acquire() as con:
         rows = await con.fetch(
-            "SELECT u.email, u.full_name, u.role, u.plan, COALESCE(d.tokens,0) AS tokens_today "
+            "SELECT u.id, u.email, u.full_name, u.role, u.plan, u.is_active, "
+            "COALESCE(d.tokens,0) AS tokens_today "
             "FROM users u LEFT JOIN usage_daily d ON d.user_id = u.id AND d.usage_date = CURRENT_DATE "
             "WHERE u.org_id = $1 ORDER BY u.full_name NULLS LAST, u.email", user["org_id"])
     ent = bool(user.get("enterprise"))
     members = []
     for r in rows:
         members.append({
-            "email": r["email"], "full_name": r["full_name"], "role": r["role"],
+            "id": str(r["id"]), "email": r["email"], "full_name": r["full_name"],
+            "role": r["role"], "is_active": r["is_active"] if r["is_active"] is not None else True,
             "plan": "enterprise" if ent else (r["plan"] or "free"),
             "tokens_today": r["tokens_today"],
             "unlimited": ent or r["plan"] == "pro",
         })
     return {"enterprise": ent, "free_limit": settings.free_daily_tokens, "members": members}
+
+
+@app.patch("/api/admin/members/{member_id}")
+async def update_member(member_id: str, body: dict, user: dict = Depends(current_user)):
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+    # Only allow toggling is_active for now
+    if "is_active" not in body:
+        raise HTTPException(400, "Nothing to update")
+    async with db.pool().acquire() as con:
+        row = await con.fetchrow(
+            "SELECT id FROM users WHERE id = $1 AND org_id = $2",
+            member_id, user["org_id"])
+        if not row:
+            raise HTTPException(404, "Member not found")
+        await con.execute(
+            "UPDATE users SET is_active = $1 WHERE id = $2",
+            bool(body["is_active"]), member_id)
+    return {"ok": True}
+
+
+class SourceImportIn(BaseModel):
+    source: str          # "odoo" | "mrpeasy"
+    entity: str          # "parts" | "vendors" | etc.
+    base_url: str = ""
+    api_key: str = ""
+    db_name: str = ""    # Odoo only
+    username: str = ""   # Odoo only
+
+
+@app.post("/api/import/source")
+async def import_from_source(body: SourceImportIn, user: dict = Depends(current_user)):
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+
+    rows = []
+    error = None
+
+    try:
+        if body.source == "odoo":
+            # Odoo JSON-RPC — publicly documented at https://www.odoo.com/documentation/17.0/developer/reference/external_api.html
+            import urllib.request, json as _json
+            base = body.base_url.rstrip("/")
+            db, user_od, key = body.db_name, body.username, body.api_key
+
+            # Authenticate
+            auth_payload = _json.dumps({"jsonrpc":"2.0","method":"call","params":{
+                "service":"common","method":"authenticate",
+                "args":[db, user_od, key, {}]}}).encode()
+            req = urllib.request.Request(f"{base}/jsonrpc", data=auth_payload,
+                                         headers={"Content-Type":"application/json"})
+            uid = _json.loads(urllib.request.urlopen(req, timeout=10).read())["result"]
+            if not uid:
+                raise ValueError("Odoo authentication failed — check URL, database, username and API key")
+
+            def odoo_search_read(model, domain, fields):
+                payload = _json.dumps({"jsonrpc":"2.0","method":"call","params":{
+                    "service":"object","method":"execute_kw",
+                    "args":[db, uid, key, model, "search_read", [domain], {"fields": fields, "limit": 2000}]
+                }}).encode()
+                r = urllib.request.Request(f"{base}/jsonrpc", data=payload,
+                                           headers={"Content-Type":"application/json"})
+                return _json.loads(urllib.request.urlopen(r, timeout=15).read())["result"]
+
+            entity_map = {
+                "parts":        ("product.template", [], ["default_code","name","type","list_price","standard_price","uom_id"]),
+                "vendors":      ("res.partner",       [["supplier_rank",">",0]], ["name","email","phone","website","street","city","country_id"]),
+                "vendor_parts": ("product.supplierinfo",[], ["product_tmpl_id","partner_id","price","delay","min_qty","product_code"]),
+                "work_orders":  ("mrp.production",    [], ["name","product_id","product_qty","date_planned_start","date_planned_finished","state"]),
+                "sales_orders": ("sale.order",        [["state","not in",["cancel","draft"]]], ["name","partner_id","date_order","commitment_date","amount_total","state"]),
+                "customers":    ("res.partner",       [["customer_rank",">",0]], ["name","email","phone","website","street","city","country_id"]),
+                "operators":    ("res.users",         [["active","=",True]], ["name","email","login","groups_id"]),
+            }
+            if body.entity not in entity_map:
+                raise ValueError(f"Unsupported entity: {body.entity}")
+            model, domain, fields = entity_map[body.entity]
+            rows = odoo_search_read(model, domain, fields)
+
+        elif body.source == "mrpeasy":
+            # MRPeasy REST API — documented at https://www.mrpeasy.com/help/api/
+            import urllib.request, json as _json
+            base = "https://app.mrpeasy.com/rest/v1"
+            headers = {"Authorization": f"Bearer {body.api_key}", "Content-Type": "application/json"}
+            entity_map = {
+                "parts":        "items",
+                "vendors":      "suppliers",
+                "vendor_parts": "supplier-items",
+                "work_orders":  "manufacturing-orders",
+                "sales_orders": "customer-orders",
+                "customers":    "customers",
+                "operators":    "users",
+            }
+            if body.entity not in entity_map:
+                raise ValueError(f"Unsupported entity: {body.entity}")
+            endpoint = entity_map[body.entity]
+            req = urllib.request.Request(f"{base}/{endpoint}?per_page=500", headers=headers)
+            resp = urllib.request.urlopen(req, timeout=15).read()
+            data = _json.loads(resp)
+            rows = data if isinstance(data, list) else data.get("data", data.get("items", []))
+
+        else:
+            raise ValueError(f"Unsupported source: {body.source}. Supported: odoo, mrpeasy")
+
+    except Exception as e:
+        error = str(e)
+
+    if error:
+        return {"ok": False, "error": error, "rows": [], "count": 0}
+    return {"ok": True, "rows": rows[:500], "count": len(rows), "error": None}
+
+
 
 
 async def _downgrade_subscription(con, sub_id):

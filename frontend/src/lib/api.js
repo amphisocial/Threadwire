@@ -46,3 +46,5 @@ export const billingCheckout = (plan) => fetch("/api/billing/checkout", opts("PO
 export const billingConfirm = (sid) => fetch("/api/billing/confirm?session_id=" + encodeURIComponent(sid), { credentials: "include" }).then(jsonOrThrow);
 export const billingPortal = () => fetch("/api/billing/portal", opts("POST")).then(jsonOrThrow);
 export const adminUsage = () => fetch("/api/admin/usage", { credentials: "include" }).then(jsonOrThrow);
+export const updateMember = (id, body) => fetch("/api/admin/members/" + id, opts("PATCH", body)).then(jsonOrThrow);
+export const importFromSource = (body) => fetch("/api/import/source", opts("POST", body)).then(jsonOrThrow);

@@ -1,154 +1,112 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
-  getCatalog, getConnectors, saveConnector, deleteConnector, testConnector,
   listInvites, createInvite, revokeInvite,
   importEntities, importData, listEvents, sampleUrl,
-  adminUsage, billingCheckout,
+  adminUsage, updateMember, billingCheckout, importFromSource,
 } from "../lib/api.js";
-import { PlanCompare } from "./Profile.jsx";
 
+/* ---- design tokens (must match ThreadWire.jsx) ---- */
 const C = {
-  bg: "#0a0e15", panel: "#121a26", panel2: "#172132", bg2: "#0d121c",
-  line: "#243245", line2: "#2f4259", ink: "#e7eef6", muted: "#8d9fb5", faint: "#5d6f86",
-  amber: "#ff8a3d", thread: "#48d6c8", green: "#43c277", red: "#f0563a", blue: "#5aa9ff",
+  bg: "#08090d", bg2: "#0e1117", panel: "#13181f", panel2: "#1a2030",
+  line: "#252d3d", line2: "#303d52",
+  ink: "#f0f4f8", muted: "#b8c5d6", faint: "#7a8fa8",
+  amber: "#ff9a4d", thread: "#4dd8ca", green: "#4dcb80",
+  red: "#f26249", blue: "#6ab4ff",
 };
 const mono = "'IBM Plex Mono',monospace";
-const input = { fontFamily: mono, fontSize: 13, background: C.bg2, border: `1px solid ${C.line}`, borderRadius: 9, padding: "10px 12px", color: C.ink, width: "100%", outline: "none", boxSizing: "border-box" };
-const btn = { fontFamily: mono, fontSize: 12.5, fontWeight: 600, borderRadius: 9, padding: "9px 14px", cursor: "pointer", border: `1px solid ${C.line2}`, background: C.panel2, color: C.ink };
-const btnP = { ...btn, background: `linear-gradient(180deg,${C.amber},#cc6a26)`, border: "none", color: "#1a0f06" };
+const disp = "'Bricolage Grotesque',sans-serif";
+
+const inp = {
+  fontFamily: mono, fontSize: 13, background: "rgba(255,255,255,.04)",
+  border: `1px solid ${C.line2}`, borderRadius: 9, padding: "10px 12px",
+  color: C.ink, width: "100%", outline: "none", boxSizing: "border-box",
+};
+const btn = {
+  fontFamily: mono, fontSize: 12.5, fontWeight: 600, borderRadius: 9,
+  padding: "9px 14px", cursor: "pointer", border: `1px solid ${C.line2}`,
+  background: C.panel2, color: C.ink, display: "inline-flex", alignItems: "center", gap: 6,
+};
+const btnP = { ...btn, background: `linear-gradient(180deg,${C.amber},#cc7530)`, border: "none", color: "#150b02" };
+const card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 20 };
+const eyebrow = { fontFamily: mono, fontSize: 10.5, letterSpacing: ".22em", textTransform: "uppercase", color: C.amber, marginBottom: 12 };
 
 function Tag({ tone, children }) {
-  const map = { green: C.green, red: C.red, blue: C.blue, amber: C.amber, muted: C.muted };
-  const c = map[tone] || C.muted;
-  return <span style={{ fontFamily: mono, fontSize: 10.5, padding: "2px 8px", borderRadius: 6, color: c, background: c + "22" }}>{children}</span>;
+  const cols = { green: C.green, red: C.red, blue: C.blue, amber: C.amber, muted: C.faint, thread: C.thread };
+  const c = cols[tone] || C.faint;
+  return <span style={{ fontFamily: mono, fontSize: 10.5, padding: "2px 8px", borderRadius: 6, color: c, background: c + "22", whiteSpace: "nowrap" }}>{children}</span>;
 }
 
-function ConnectorCard({ cat, conn, isAdmin, onChanged }) {
-  const [open, setOpen] = useState(false);
-  const [vals, setVals] = useState({});
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState(null);
-  const configured = !!conn;
-
-  const fields = Array.isArray(cat.fields) ? cat.fields : [];
-
-  if (!cat.enabled) {
-    return (
-      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, opacity: 0.6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>{cat.label}</span>
-          <span style={{ marginLeft: "auto" }}><Tag tone="muted">Coming soon</Tag></span>
-        </div>
-        <div style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginTop: 6 }}>{cat.category}</div>
-      </div>
-    );
-  }
-
-  const save = async () => {
-    setBusy(true); setResult(null);
-    try {
-      const secretField = fields.find((f) => f.secret);
-      const config = {};
-      fields.forEach((f) => { if (!f.secret && vals[f.key] != null) config[f.key] = vals[f.key]; });
-      await saveConnector(cat.type, { auth_method: cat.auth_method, config, secret: secretField ? (vals[secretField.key] || null) : null });
-      setResult({ ok: true, msg: "Saved" }); setOpen(false); onChanged();
-    } catch (e) { setResult({ ok: false, msg: e.message }); }
-    finally { setBusy(false); }
-  };
-  const test = async () => {
-    setBusy(true); setResult(null);
-    try { const r = await testConnector(cat.type); setResult({ ok: r.ok, msg: r.message }); }
-    catch (e) { setResult({ ok: false, msg: e.message }); }
-    finally { setBusy(false); }
-  };
-  const remove = async () => {
-    setBusy(true);
-    try { await deleteConnector(cat.type); onChanged(); }
-    finally { setBusy(false); }
-  };
-
+function TabBar({ tabs, active, setActive }) {
   return (
-    <div style={{ background: C.panel, border: `1px solid ${configured ? C.line2 : C.line}`, borderRadius: 12, padding: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontWeight: 700, fontSize: 15 }}>{cat.label}</span>
-        <span style={{ marginLeft: "auto" }}>{configured ? <Tag tone="green">Configured</Tag> : <Tag tone="muted">Not configured</Tag>}</span>
-      </div>
-      <div style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginTop: 6 }}>
-        {cat.category}{conn && conn.secret_last4 ? ` · secret ••••${conn.secret_last4}` : ""}{conn && conn.config && conn.config.base_url ? ` · ${conn.config.base_url}` : ""}
-      </div>
-
-      {isAdmin && (
-        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-          <button style={btn} onClick={() => { setOpen((o) => !o); setVals(conn?.config || {}); setResult(null); }}>
-            {configured ? "Edit" : "Configure"}
-          </button>
-          {configured && <button style={btn} onClick={test} disabled={busy}>Test connection</button>}
-          {configured && <button style={{ ...btn, color: C.red, borderColor: C.red }} onClick={remove} disabled={busy}>Remove</button>}
-          {cat.doc_url && <a href={cat.doc_url} target="_blank" rel="noreferrer" style={{ ...btn, textDecoration: "none", color: C.muted }}>Docs ↗</a>}
-        </div>
-      )}
-
-      {result && (
-        <div style={{ marginTop: 10, fontSize: 12.5, color: result.ok ? C.green : C.red }}>
-          {result.ok ? "✓ " : "✕ "}{result.msg}
-        </div>
-      )}
-
-      {isAdmin && open && (
-        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-          {fields.map((f) => (
-            <label key={f.key} style={{ display: "block" }}>
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>
-                {f.label}{f.optional ? " (optional)" : ""}{f.secret ? " 🔒" : ""}
-              </div>
-              <input style={input} type={f.secret ? "password" : "text"} placeholder={f.placeholder || ""}
-                value={vals[f.key] || ""} onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))} />
-            </label>
-          ))}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button style={btnP} onClick={save} disabled={busy}>{busy ? "Saving…" : "Save connection"}</button>
-            <button style={btn} onClick={() => setOpen(false)}>Cancel</button>
-          </div>
-          <div style={{ fontFamily: mono, fontSize: 10, color: C.faint }}>
-            Secrets are encrypted before storage and never shown back. Leave the secret blank when editing to keep the existing one.
-          </div>
-        </div>
-      )}
+    <div style={{ display: "flex", gap: 4, background: C.bg2, border: `1px solid ${C.line}`, borderRadius: 12, padding: 4, marginBottom: 28 }}>
+      {tabs.map(({ id, label, icon }) => (
+        <button key={id} onClick={() => setActive(id)} style={{
+          flex: 1, fontFamily: mono, fontSize: 13, fontWeight: 600, borderRadius: 9, padding: "10px 14px",
+          border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7,
+          background: active === id ? C.panel2 : "transparent",
+          color: active === id ? C.ink : C.faint,
+          borderBottom: active === id ? `2px solid ${C.amber}` : "2px solid transparent",
+          transition: ".15s",
+        }}>
+          <span>{icon}</span> {label}
+        </button>
+      ))}
     </div>
   );
 }
+
+function SubTabBar({ tabs, active, setActive }) {
+  return (
+    <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: `1px solid ${C.line}`, paddingBottom: 0 }}>
+      {tabs.map(({ id, label }) => (
+        <button key={id} onClick={() => setActive(id)} style={{
+          fontFamily: mono, fontSize: 12.5, fontWeight: 600, background: "transparent", border: "none",
+          cursor: "pointer", padding: "8px 2px", marginRight: 16,
+          color: active === id ? C.ink : C.faint,
+          borderBottom: active === id ? `2px solid ${C.amber}` : "2px solid transparent",
+          transition: ".15s",
+        }}>{label}</button>
+      ))}
+    </div>
+  );
+}
+
+/* =================== TAB 1: DATA IMPORT =================== */
 
 function FormatHelp({ ent, onClose }) {
   if (!ent) return null;
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(4,7,12,.74)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(4,7,12,.8)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 540, maxHeight: "86vh", overflowY: "auto", background: C.panel, border: `1px solid ${C.line2}`, borderRadius: 14, padding: 22 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <span style={{ fontWeight: 800, fontSize: 17, fontFamily: "'Bricolage Grotesque',sans-serif" }}>{ent.label} — CSV format</span>
-          <span onClick={onClose} style={{ marginLeft: "auto", cursor: "pointer", color: C.faint, fontSize: 18 }}>✕</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <span style={{ fontWeight: 800, fontSize: 17, fontFamily: disp }}>{ent.label} — CSV format</span>
+          <span onClick={onClose} style={{ marginLeft: "auto", cursor: "pointer", color: C.faint, fontSize: 20 }}>✕</span>
         </div>
         <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.55, marginBottom: 14 }}>{ent.note}</div>
-        <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: ".15em", textTransform: "uppercase", color: C.amber, marginBottom: 8 }}>Columns</div>
+        <div style={eyebrow}>Required columns</div>
         <div style={{ border: `1px solid ${C.line}`, borderRadius: 10, overflow: "hidden", marginBottom: 16 }}>
           {ent.columns.map((c, i) => (
             <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: i % 2 ? C.bg2 : "transparent" }}>
               <span style={{ fontFamily: mono, fontSize: 12.5, color: C.ink }}>{c.name}</span>
-              {c.required
-                ? <Tag tone="red">required</Tag>
-                : <span style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>optional</span>}
+              {c.required ? <Tag tone="red">required</Tag> : <span style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>optional</span>}
             </div>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <a href={sampleUrl(ent.entity)} style={{ ...btnP, textDecoration: "none", display: "inline-block" }}>⬇ Download sample CSV</a>
-          <span style={{ fontSize: 11.5, color: C.faint }}>Stage your file to match these headers, then import.</span>
-        </div>
+        <a href={sampleUrl(ent.entity)} style={{ ...btnP, textDecoration: "none" }}>Download sample CSV</a>
       </div>
     </div>
   );
 }
 
-function DataImport({ isAdmin }) {
+const ENTITIES = ["parts", "vendors", "vendor_parts", "work_orders", "sales_orders", "customers", "operators"];
+const ENTITY_LABELS = { parts: "Parts", vendors: "Vendors", vendor_parts: "Vendor Parts", work_orders: "Work Orders", sales_orders: "Sales Orders", customers: "Customers", operators: "Operators" };
+
+const SOURCES = [
+  { id: "odoo", label: "Odoo", note: "Uses Odoo JSON-RPC (v14+). Requires your Odoo URL, database name, username and an API key generated in Settings → Technical → API Keys.", fields: ["base_url", "db_name", "username", "api_key"] },
+  { id: "mrpeasy", label: "MRPeasy", note: "Uses MRPeasy REST API v1. Generate an API token in MRPeasy under Settings → Integrations → API.", fields: ["api_key"] },
+];
+
+function CsvImport({ isAdmin }) {
   const [entities, setEntities] = useState([]);
   const [entity, setEntity] = useState("");
   const [csv, setCsv] = useState("");
@@ -158,7 +116,7 @@ function DataImport({ isAdmin }) {
   const [help, setHelp] = useState(null);
   const [events, setEvents] = useState([]);
 
-  const loadEvents = () => listEvents(8).then(setEvents).catch(() => {});
+  const loadEvents = () => listEvents(10).then(setEvents).catch(() => {});
   useEffect(() => {
     importEntities().then((es) => { setEntities(es); if (es[0]) setEntity(es[0].entity); }).catch(() => {});
     loadEvents();
@@ -179,42 +137,38 @@ function DataImport({ isAdmin }) {
     finally { setBusy(false); }
   };
 
-  if (!isAdmin) return null;
+  if (!isAdmin) return <div style={{ color: C.faint, fontSize: 13 }}>Admin access required.</div>;
+
   return (
     <>
-      <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: ".22em", textTransform: "uppercase", color: C.amber, marginBottom: 14 }}>Data import</div>
-      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 }}>
-        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14, lineHeight: 1.55 }}>
-          Import your digital-thread data from CSV. <b style={{ color: C.ink }}>Load Parts first</b> — BOMs and vendor parts reference existing part numbers. Click the <b style={{ color: C.ink }}>?</b> for each file's exact format and a sample to stage locally.
+      <div style={card}>
+        <div style={eyebrow}>Import entity</div>
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 14, lineHeight: 1.55 }}>
+          Load a CSV file to import data. <b style={{ color: C.ink }}>Import Parts first</b> — BOMs, vendor parts and work orders reference existing part numbers.
+          Click <b style={{ color: C.ink }}>?</b> to see the exact column format and download a sample.
         </div>
-
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-          <select value={entity} onChange={(e) => { setEntity(e.target.value); setResult(null); }}
-            style={{ ...input, width: "auto", minWidth: 220 }}>
+          <select value={entity} onChange={(e) => { setEntity(e.target.value); setResult(null); }} style={{ ...inp, width: "auto", minWidth: 200 }}>
             {entities.map((e) => <option key={e.entity} value={e.entity}>{e.order}. {e.label}</option>)}
           </select>
-          <button title="Format & sample" onClick={() => setHelp(cur)}
-            style={{ ...btn, width: 38, height: 38, padding: 0, borderRadius: 999, fontWeight: 800 }}>?</button>
-          <a href={cur ? sampleUrl(cur.entity) : "#"} style={{ ...btn, textDecoration: "none" }}>⬇ Sample</a>
+          <button title="Format & sample" onClick={() => setHelp(cur)} style={{ ...btn, width: 36, height: 36, padding: 0, borderRadius: "50%", fontWeight: 800, justifyContent: "center" }}>?</button>
+          <a href={cur ? sampleUrl(cur.entity) : "#"} style={{ ...btn, textDecoration: "none" }}>Sample CSV</a>
         </div>
-
         <label style={{ ...btn, display: "inline-block", cursor: "pointer", marginBottom: 10 }}>
           {fileName ? "📄 " + fileName : "Choose CSV file…"}
           <input type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={(e) => onFile(e.target.files?.[0])} />
         </label>
         <textarea value={csv} onChange={(e) => { setCsv(e.target.value); setResult(null); }}
           placeholder="…or paste CSV here (first row = headers)"
-          style={{ ...input, minHeight: 96, fontFamily: mono, fontSize: 12, resize: "vertical", marginBottom: 12 }} />
-
+          style={{ ...inp, display: "block", minHeight: 96, fontFamily: mono, fontSize: 12, resize: "vertical", marginBottom: 12 }} />
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button style={btnP} onClick={run} disabled={busy || !csv.trim() || !entity}>{busy ? "Importing…" : "Import " + (cur ? cur.label : "")}</button>
-          {cur?.requires_parts && <span style={{ fontSize: 11.5, color: C.faint }}>↳ referenced parts must already exist</span>}
+          <button style={btnP} onClick={run} disabled={busy || !csv.trim() || !entity}>{busy ? "Importing…" : "Import " + (cur?.label || "")}</button>
+          {cur?.requires_parts && <span style={{ fontSize: 11.5, color: C.faint }}>Parts must already exist</span>}
         </div>
-
         {result && (result.error
           ? <div style={{ marginTop: 14, fontSize: 12.5, color: C.red }}>✕ {result.error}</div>
-          : <div style={{ marginTop: 14, fontSize: 12.5 }}>
-              <div style={{ color: C.green, fontWeight: 600 }}>✓ {result.inserted} added · {result.updated} updated{result.error_count ? <span style={{ color: C.red }}> · {result.error_count} error{result.error_count > 1 ? "s" : ""}</span> : ""} (of {result.total})</div>
+          : <div style={{ marginTop: 14, fontSize: 12.5, color: C.green }}>
+              ✓ {result.inserted} added · {result.updated} updated{result.error_count ? <span style={{ color: C.red }}> · {result.error_count} errors</span> : ""} (of {result.total})
               {result.errors?.length > 0 && (
                 <div style={{ marginTop: 8, border: `1px solid ${C.line}`, borderRadius: 9, overflow: "hidden" }}>
                   {result.errors.map((er, i) => (
@@ -229,205 +183,384 @@ function DataImport({ isAdmin }) {
       </div>
 
       {events.length > 0 && (
-        <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden", marginBottom: 36 }}>
-          <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>RECENT IMPORTS · also fed to the assistant</div>
+        <div style={{ ...card, padding: 0, overflow: "hidden", marginTop: 16 }}>
+          <div style={{ padding: "10px 16px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>RECENT IMPORTS</div>
           {events.map((ev, i) => (
             <div key={i} style={{ padding: "10px 16px", borderBottom: i < events.length - 1 ? `1px solid ${C.line}` : "none", display: "flex", alignItems: "center", gap: 10, fontSize: 12.5 }}>
-              <span style={{ fontWeight: 600 }}>{ev.entity}</span>
-              <span style={{ fontFamily: mono, fontSize: 11, color: C.muted }}>+{ev.inserted} · {ev.updated} upd{ev.errors ? " · " + ev.errors + " err" : ""}</span>
+              <span style={{ fontWeight: 600, color: C.ink }}>{ev.entity}</span>
+              <span style={{ fontFamily: mono, fontSize: 11, color: C.muted }}>+{ev.inserted} · {ev.updated} updated{ev.errors ? " · " + ev.errors + " errors" : ""}</span>
               <span style={{ marginLeft: "auto", fontFamily: mono, fontSize: 10.5, color: C.faint }}>{new Date(ev.created_at).toLocaleString()}</span>
             </div>
           ))}
         </div>
       )}
-
       <FormatHelp ent={help} onClose={() => setHelp(null)} />
     </>
   );
 }
 
-function MembershipUsage({ isAdmin }) {
-  const [data, setData] = useState(null);
-  const [busy, setBusy] = useState("");
-  const [compare, setCompare] = useState(false);
-  useEffect(() => { if (isAdmin) adminUsage().then(setData).catch(() => {}); }, []);
-  if (!isAdmin || !data) return null;
-  const planTone = (p) => (p === "enterprise" ? "blue" : p === "pro" ? "amber" : "muted");
-  const go = async (plan) => {
-    setBusy(plan);
-    try { const r = await billingCheckout(plan); if (r?.url) window.location.href = r.url; else setBusy(""); }
-    catch { setBusy(""); }
+function SourceImport({ isAdmin }) {
+  const [source, setSource] = useState("odoo");
+  const [entity, setEntity] = useState("parts");
+  const [creds, setCreds] = useState({ base_url: "", db_name: "", username: "", api_key: "" });
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [preview, setPreview] = useState(null);
+
+  const src = SOURCES.find((s) => s.id === source);
+  const set = (k) => (e) => setCreds((c) => ({ ...c, [k]: e.target.value }));
+
+  const run = async () => {
+    setBusy(true); setResult(null); setPreview(null);
+    try {
+      const r = await importFromSource({ source, entity, ...creds });
+      setResult(r);
+      if (r.ok && r.rows?.length) setPreview(r.rows.slice(0, 5));
+    } catch (e) { setResult({ ok: false, error: e.message }); }
+    finally { setBusy(false); }
   };
 
-  const card = (accent) => ({ flex: "1 1 280px", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, borderTop: `2px solid ${accent}` });
-  const feat = (txt) => (
-    <div style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12.5, color: C.muted, marginBottom: 5 }}>
-      <span style={{ color: C.green }}>✓</span><span>{txt}</span>
-    </div>
-  );
+  if (!isAdmin) return <div style={{ color: C.faint, fontSize: 13 }}>Admin access required.</div>;
+
+  const fieldLabels = { base_url: "Odoo URL", db_name: "Database name", username: "Username / login", api_key: "API key / password" };
 
   return (
     <>
-      <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: ".22em", textTransform: "uppercase", color: C.amber, marginBottom: 14 }}>Membership &amp; usage</div>
-
-      {data.enterprise ? (
-        <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 14, borderTop: `2px solid ${C.thread}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontWeight: 700, fontSize: 15, color: C.thread }}>★ Enterprise — active</span>
-            <Tag tone="blue">unlimited for everyone</Tag>
-          </div>
-          <div style={{ fontSize: 12.5, color: C.muted, marginTop: 8 }}>Everyone in your company has unlimited assistant access. Manage the subscription from your profile (bottom-left).</div>
+      <div style={card}>
+        <div style={eyebrow}>Source system</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          {SOURCES.map((s) => (
+            <button key={s.id} onClick={() => { setSource(s.id); setResult(null); setPreview(null); }} style={{
+              ...btn,
+              background: source === s.id ? C.panel2 : "transparent",
+              borderColor: source === s.id ? C.amber : C.line2,
+              color: source === s.id ? C.ink : C.faint,
+            }}>{s.label}</button>
+          ))}
+          <div style={{ width: "100%", fontSize: 12.5, color: C.muted, lineHeight: 1.55, marginTop: 4 }}>{src?.note}</div>
         </div>
-      ) : (
-        <>
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
-            {/* Pro — first upgrade */}
-            <div style={card(C.amber)}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontWeight: 800, fontSize: 16, color: C.amber }}>★ Pro</span>
-                <span style={{ fontFamily: mono, fontSize: 11.5, color: C.muted, marginLeft: "auto" }}>$4.99 / user · mo</span>
-              </div>
-              <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>Unlimited assistant for a single user — the first step up from Free.</div>
-              {feat("Unlimited assistant messages for you")}
-              {feat("Best for one heavy user")}
-              <button style={{ ...btnP, width: "100%", marginTop: 12 }} disabled={busy === "pro"} onClick={() => go("pro")}>
-                {busy === "pro" ? "Opening…" : "Upgrade to Pro"}
-              </button>
-            </div>
 
-            {/* Enterprise — the bigger jump */}
-            <div style={card(C.thread)}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontWeight: 800, fontSize: 16, color: C.thread }}>★ Enterprise</span>
-                <span style={{ fontFamily: mono, fontSize: 11.5, color: C.muted, marginLeft: "auto" }}>$29.99 / mo</span>
-              </div>
-              <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12 }}>Unlimited for your whole company — the bigger jump, paid once by you.</div>
-              {feat("Unlimited for everyone in the company")}
-              {feat("Covers future invited members automatically")}
-              <button style={{ ...btn, width: "100%", marginTop: 12, borderColor: C.thread, color: C.thread }} disabled={busy === "enterprise"} onClick={() => go("enterprise")}>
-                {busy === "enterprise" ? "Opening…" : "Upgrade company to Enterprise"}
-              </button>
-            </div>
-          </div>
-          <div style={{ marginBottom: 18 }}>
-            <button style={{ ...btn, background: "transparent", borderColor: C.line }} onClick={() => setCompare(true)}>Compare plans →</button>
-            <span style={{ fontSize: 11.5, color: C.faint, marginLeft: 10 }}>Free gives every member {data.free_limit} assistant messages/day.</span>
-          </div>
-        </>
-      )}
-
-      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden", marginBottom: 36 }}>
-        <div style={{ display: "flex", padding: "10px 16px", borderBottom: `1px solid ${C.line}`, fontFamily: mono, fontSize: 10.5, color: C.faint }}>
-          <span style={{ flex: 1 }}>MEMBER</span><span style={{ width: 110 }}>PLAN</span><span style={{ width: 120, textAlign: "right" }}>TOKENS TODAY</span>
+        <div style={eyebrow}>Entity to import</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+          {ENTITIES.map((e) => (
+            <button key={e} onClick={() => setEntity(e)} style={{
+              ...btn, fontSize: 12,
+              background: entity === e ? C.panel2 : "transparent",
+              borderColor: entity === e ? C.amber : C.line2,
+              color: entity === e ? C.ink : C.faint,
+            }}>{ENTITY_LABELS[e]}</button>
+          ))}
         </div>
-        {data.members.map((u, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", padding: "11px 16px", borderBottom: i < data.members.length - 1 ? `1px solid ${C.line}` : "none" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5 }}>{u.full_name || u.email}{u.role === "org_admin" && <span style={{ fontFamily: mono, fontSize: 10, color: C.amber }}> · admin</span>}</div>
-              <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{u.email}</div>
-            </div>
-            <span style={{ width: 110 }}><Tag tone={planTone(u.plan)}>{u.plan}</Tag></span>
-            <span style={{ width: 120, textAlign: "right", fontFamily: mono, fontSize: 13, color: u.unlimited ? C.green : (u.tokens_today >= data.free_limit ? C.red : C.ink) }}>
-              {u.unlimited ? "∞" : u.tokens_today + " / " + data.free_limit}
-            </span>
-          </div>
-        ))}
+
+        <div style={eyebrow}>Connection details</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12, marginBottom: 16 }}>
+          {src?.fields.map((f) => (
+            <label key={f} style={{ display: "block" }}>
+              <div style={{ fontSize: 12, color: C.muted, marginBottom: 4 }}>{fieldLabels[f]}</div>
+              <input style={inp} type={f === "api_key" ? "password" : "text"}
+                placeholder={f === "base_url" ? "https://your-odoo.com" : f === "db_name" ? "your_database" : ""}
+                value={creds[f] || ""} onChange={set(f)} />
+            </label>
+          ))}
+        </div>
+        <button style={btnP} onClick={run} disabled={busy}>{busy ? "Connecting…" : `Fetch ${ENTITY_LABELS[entity]} from ${src?.label}`}</button>
       </div>
 
-      {compare && <PlanCompare onClose={() => setCompare(false)} isAdmin={isAdmin} />}
+      {result && (
+        <div style={{ ...card, marginTop: 16 }}>
+          {result.ok ? (
+            <>
+              <div style={{ color: C.green, fontWeight: 600, fontSize: 13, marginBottom: 12 }}>
+                ✓ Fetched {result.count} {ENTITY_LABELS[entity]} from {src?.label}
+                {result.count > 500 && <span style={{ color: C.faint }}> (showing first 500)</span>}
+              </div>
+              {preview && preview.length > 0 && (
+                <>
+                  <div style={eyebrow}>Preview (first 5 rows)</div>
+                  <div style={{ overflowX: "auto", border: `1px solid ${C.line}`, borderRadius: 10 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: mono, fontSize: 11.5 }}>
+                      <thead>
+                        <tr style={{ background: C.bg2 }}>
+                          {Object.keys(preview[0]).slice(0, 8).map((k) => (
+                            <th key={k} style={{ padding: "7px 10px", textAlign: "left", color: C.faint, fontWeight: 500, borderBottom: `1px solid ${C.line}`, whiteSpace: "nowrap" }}>{k}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.map((row, i) => (
+                          <tr key={i} style={{ borderBottom: `1px solid ${C.line}` }}>
+                            {Object.values(row).slice(0, 8).map((v, j) => (
+                              <td key={j} style={{ padding: "7px 10px", color: C.muted, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v)}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ marginTop: 12, fontSize: 12, color: C.faint }}>
+                    To persist this data, export as CSV from {src?.label} and use the CSV Import tab, or contact support to enable live sync.
+                  </div>
+                </>
+              )}
+            </>
+          ) : (
+            <div style={{ color: C.red, fontSize: 13 }}>✕ {result.error}</div>
+          )}
+        </div>
+      )}
     </>
   );
 }
 
-export default function Admin({ user, onClose }) {
-  const isAdmin = user.role === "org_admin" || user.role === "superadmin";
-  const [catalog, setCatalog] = useState([]);
-  const [conns, setConns] = useState({});
+function DataImportTab({ isAdmin }) {
+  const [sub, setSub] = useState("csv");
+  return (
+    <div>
+      <SubTabBar
+        tabs={[{ id: "csv", label: "Import by CSV" }, { id: "source", label: "Import from Source System" }]}
+        active={sub} setActive={setSub}
+      />
+      {sub === "csv" ? <CsvImport isAdmin={isAdmin} /> : <SourceImport isAdmin={isAdmin} />}
+    </div>
+  );
+}
+
+/* =================== TAB 2: USER MANAGEMENT =================== */
+function UserManagementTab({ isAdmin }) {
+  const [data, setData] = useState(null);
   const [invites, setInvites] = useState([]);
   const [email, setEmail] = useState("");
   const [inviteMsg, setInviteMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [toggling, setToggling] = useState({});
 
-  const loadConns = () =>
-    Promise.all([getCatalog(), getConnectors()]).then(([cat, cs]) => {
-      setCatalog(cat);
-      const map = {}; cs.forEach((c) => { map[c.type] = c; }); setConns(map);
-    }).catch(() => {});
-  const loadInvites = () => { if (isAdmin) listInvites().then(setInvites).catch(() => {}); };
-
-  useEffect(() => { loadConns(); loadInvites(); }, []);
+  const load = useCallback(() => {
+    if (!isAdmin) return;
+    adminUsage().then(setData).catch(() => {});
+    listInvites().then(setInvites).catch(() => {});
+  }, [isAdmin]);
+  useEffect(() => { load(); }, [load]);
 
   const sendInvite = async () => {
     setBusy(true); setInviteMsg(null);
     try {
       const r = await createInvite(email);
       setInviteMsg({ ok: true, url: r.invite_url, emailed: r.emailed });
-      setEmail(""); loadInvites();
+      setEmail(""); load();
     } catch (e) { setInviteMsg({ ok: false, msg: e.message }); }
     finally { setBusy(false); }
   };
 
+  const toggleActive = async (member) => {
+    setToggling((t) => ({ ...t, [member.id]: true }));
+    try {
+      await updateMember(member.id, { is_active: !member.is_active });
+      load();
+    } catch (e) { alert(e.message); }
+    finally { setToggling((t) => ({ ...t, [member.id]: false })); }
+  };
+
+  if (!isAdmin) return <div style={{ color: C.faint, fontSize: 13 }}>Admin access required to manage users.</div>;
+
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.ink, fontFamily: "'IBM Plex Sans',sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');`}</style>
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: "28px 22px 80px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-          <span style={{ fontFamily: "'Bricolage Grotesque',sans-serif", fontWeight: 800, fontSize: 26 }}>Admin</span>
-          <Tag tone={isAdmin ? "amber" : "blue"}>{isAdmin ? "org admin" : "member · read-only"}</Tag>
-          <button style={{ ...btn, marginLeft: "auto" }} onClick={onClose}>← Back to app</button>
-        </div>
-        <div style={{ color: C.muted, fontSize: 13.5, marginBottom: 26 }}>
-          {user.org?.legal_name} · signed in as {user.full_name || user.email}
-        </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
-        {/* membership & usage (admin only) */}
-        <MembershipUsage isAdmin={isAdmin} />
+      {/* Invite */}
+      <div style={card}>
+        <div style={eyebrow}>Invite a team member</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: inviteMsg ? 0 : undefined }}>
+          <input style={{ ...inp, flex: 1, minWidth: 220 }} type="email" placeholder="colleague@company.com"
+            value={email} onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && email && sendInvite()} />
+          <button style={btnP} onClick={sendInvite} disabled={busy || !email}>{busy ? "Sending…" : "Send invite"}</button>
+        </div>
+        {inviteMsg && (inviteMsg.ok
+          ? <div style={{ marginTop: 12, fontSize: 12.5 }}>
+              <div style={{ color: C.green }}>✓ Invite created{inviteMsg.emailed ? " and emailed." : " — SMTP not configured, copy the link below:"}</div>
+              {!inviteMsg.emailed && (
+                <div style={{ fontFamily: mono, fontSize: 11.5, color: C.thread, marginTop: 8, wordBreak: "break-all", cursor: "pointer",
+                  background: C.bg2, padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.line}` }}
+                  onClick={() => navigator.clipboard?.writeText(inviteMsg.url)}>
+                  {inviteMsg.url}  ⧉ click to copy
+                </div>
+              )}
+            </div>
+          : <div style={{ marginTop: 12, fontSize: 12.5, color: C.red }}>✕ {inviteMsg.msg}</div>)}
+      </div>
 
-        {/* connectors */}
-        <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: ".22em", textTransform: "uppercase", color: C.amber, marginBottom: 14 }}>Connectors</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14, marginBottom: 36 }}>
-          {catalog.map((cat) => (
-            <ConnectorCard key={cat.type} cat={cat} conn={conns[cat.type]} isAdmin={isAdmin} onChanged={loadConns} />
+      {/* Team roster */}
+      <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={eyebrow}>Team members</span>
+          <span style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginLeft: "auto" }}>
+            {data ? `${data.members.filter(m => m.is_active !== false).length} active` : "Loading…"}
+          </span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 100px", padding: "8px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>
+          <span>MEMBER</span><span>ROLE</span><span>STATUS</span><span style={{ textAlign: "right" }}>ACTION</span>
+        </div>
+        {!data && <div style={{ padding: 18, color: C.faint, fontSize: 13 }}>Loading…</div>}
+        {data?.members.map((m, i) => {
+          const active = m.is_active !== false;
+          return (
+            <div key={m.id || i} style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 100px", alignItems: "center",
+              padding: "12px 18px", borderBottom: i < data.members.length - 1 ? `1px solid ${C.line}` : "none",
+              background: !active ? "rgba(242,98,73,.04)" : "transparent" }}>
+              <div>
+                <div style={{ fontSize: 13.5, color: active ? C.ink : C.faint }}>
+                  {m.full_name || m.email}
+                  {m.role === "org_admin" && <span style={{ fontFamily: mono, fontSize: 10, color: C.amber, marginLeft: 6 }}>admin</span>}
+                </div>
+                <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{m.email}</div>
+              </div>
+              <div><Tag tone={m.plan === "enterprise" ? "thread" : m.plan === "pro" ? "amber" : "muted"}>{m.plan || "free"}</Tag></div>
+              <div><Tag tone={active ? "green" : "red"}>{active ? "Active" : "Inactive"}</Tag></div>
+              <div style={{ textAlign: "right" }}>
+                {m.role !== "org_admin" && (
+                  <button style={{ ...btn, padding: "5px 10px", fontSize: 11.5, color: active ? C.red : C.green, borderColor: active ? C.red : C.green }}
+                    disabled={!!toggling[m.id]} onClick={() => toggleActive(m)}>
+                    {toggling[m.id] ? "…" : active ? "Deactivate" : "Activate"}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Pending invites */}
+      {invites.length > 0 && (
+        <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "12px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>PENDING INVITES</div>
+          {invites.map((iv, i) => (
+            <div key={iv.id} style={{ padding: "11px 18px", borderBottom: i < invites.length - 1 ? `1px solid ${C.line}` : "none", display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 13.5, color: C.ink }}>{iv.email}</span>
+              <Tag tone={iv.status === "accepted" ? "green" : iv.status === "revoked" ? "red" : "blue"}>{iv.status}</Tag>
+              <span style={{ marginLeft: "auto", fontFamily: mono, fontSize: 10.5, color: C.faint }}>{new Date(iv.created_at).toLocaleDateString()}</span>
+              {iv.status === "pending" && (
+                <button style={{ ...btn, padding: "5px 10px", fontSize: 11, color: C.red, borderColor: C.red }}
+                  onClick={() => revokeInvite(iv.id).then(load)}>Revoke</button>
+              )}
+            </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
 
-        {/* data import (admin only) */}
-        <DataImport isAdmin={isAdmin} />
+/* =================== TAB 3: LICENSE =================== */
+function LicenseTab({ isAdmin }) {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState("");
 
-        {/* invites (admin only) */}
-        {isAdmin && (
-          <>
-            <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: ".22em", textTransform: "uppercase", color: C.amber, marginBottom: 14 }}>Invite teammates</div>
-            <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 }}>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <input style={{ ...input, flex: 1, minWidth: 220 }} type="email" placeholder="teammate@company.com"
-                  value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && email && sendInvite()} />
-                <button style={btnP} onClick={sendInvite} disabled={busy || !email}>{busy ? "Sending…" : "Send invite"}</button>
+  useEffect(() => { if (isAdmin) adminUsage().then(setData).catch(() => {}); }, [isAdmin]);
+
+  const checkout = async (plan) => {
+    setBusy(plan);
+    try { const r = await billingCheckout(plan); if (r?.url) window.location.href = r.url; }
+    catch { /* ignore */ }
+    finally { setBusy(""); }
+  };
+
+  const TIERS = [
+    { key: "diagnostic", label: "Revenue at Risk Diagnostic", price: "$2,500", period: "one-time", color: C.thread, note: "Credited toward pilot. ERP/CSV extracts, exposure map, blocker list, pilot design session.", cta: null },
+    { key: "core", label: "Threadwire Core", price: "$24,000", period: "/ year", color: C.faint, note: "Single site. CSV / SFTP integration. Delivery calendar, blocker workspace, standard dashboards.", cta: null },
+    { key: "pro", label: "Threadwire Pro", price: "$48,000", period: "/ year", color: C.amber, note: "Multiple sites. API integration. AI assistant. Blocker-aware revenue forecast. Quarterly value review.", cta: "pro" },
+    { key: "enterprise", label: "Enterprise", price: "Custom", period: "", color: C.blue, note: "Multi-site, multi-ERP. SSO / SCIM / SLA. Data warehouse integration. Enterprise success plan.", cta: "enterprise" },
+  ];
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+      {/* Current status */}
+      <div style={card}>
+        <div style={eyebrow}>Current license</div>
+        {!data
+          ? <div style={{ color: C.faint, fontSize: 13 }}>Loading…</div>
+          : <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+              <div style={{ fontSize: 26, fontWeight: 800, fontFamily: disp, color: data.enterprise ? C.thread : C.amber }}>
+                {data.enterprise ? "Enterprise" : "Core / Trial"}
               </div>
-              {inviteMsg && (inviteMsg.ok
-                ? <div style={{ marginTop: 12, fontSize: 12.5 }}>
-                    <div style={{ color: C.green }}>✓ Invite created{inviteMsg.emailed ? " and emailed." : " — email not configured, copy the link:"}</div>
-                    {!inviteMsg.emailed && <div style={{ fontFamily: mono, fontSize: 11.5, color: C.thread, marginTop: 6, wordBreak: "break-all", cursor: "pointer" }}
-                      onClick={() => navigator.clipboard?.writeText(inviteMsg.url)}>{inviteMsg.url}  ⧉</div>}
-                  </div>
-                : <div style={{ marginTop: 12, fontSize: 12.5, color: C.red }}>✕ {inviteMsg.msg}</div>)}
+              <Tag tone={data.enterprise ? "thread" : "amber"}>{data.enterprise ? "Active" : "Active"}</Tag>
+              <div style={{ marginLeft: "auto", fontFamily: mono, fontSize: 12, color: C.faint }}>
+                {data.members.filter(m => m.is_active !== false).length} active users · {data.free_limit} AI messages / user / day
+              </div>
             </div>
+        }
+      </div>
 
-            <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
-              {invites.length === 0 && <div style={{ padding: 18, color: C.faint, fontSize: 13 }}>No invites yet.</div>}
-              {invites.map((iv) => (
-                <div key={iv.id} style={{ padding: "12px 16px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 13.5 }}>{iv.email}</span>
-                  <Tag tone={iv.status === "accepted" ? "green" : iv.status === "revoked" ? "red" : "blue"}>{iv.status}</Tag>
-                  <span style={{ marginLeft: "auto", fontFamily: mono, fontSize: 10.5, color: C.faint }}>
-                    {new Date(iv.created_at).toLocaleDateString()}
-                  </span>
-                  {iv.status === "pending" && <button style={{ ...btn, padding: "5px 10px", color: C.red, borderColor: C.line }} onClick={() => revokeInvite(iv.id).then(loadInvites)}>Revoke</button>}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+      {/* Tier cards */}
+      <div style={eyebrow}>Plans</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
+        {TIERS.map((t) => (
+          <div key={t.key} style={{ ...card, borderTop: `2px solid ${t.color}`, display: "flex", flexDirection: "column" }}>
+            <div style={{ fontWeight: 800, fontSize: 15, fontFamily: disp, marginBottom: 6 }}>{t.label}</div>
+            <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: t.color, marginBottom: 2 }}>{t.price}</div>
+            <div style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginBottom: 12 }}>{t.period}</div>
+            <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, flex: 1 }}>{t.note}</div>
+            {t.cta && isAdmin && (
+              <button style={{ ...btnP, marginTop: 16, justifyContent: "center", width: "100%", background: `linear-gradient(180deg,${t.color},${t.color}cc)` }}
+                disabled={busy === t.cta} onClick={() => checkout(t.cta)}>
+                {busy === t.cta ? "Opening…" : "Upgrade to " + t.label}
+              </button>
+            )}
+            {!t.cta && (
+              <div style={{ marginTop: 16, fontFamily: mono, fontSize: 11, color: C.faint }}>Contact us to get started</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 12, color: C.faint, marginTop: 4 }}>
+        Pricing is site-based — no per-seat friction. All plans require your data to deliver value. Manage billing via your account portal.
+      </div>
+    </div>
+  );
+}
+
+/* =================== MAIN ADMIN SHELL =================== */
+export default function Admin({ user, onClose }) {
+  const isAdmin = user.role === "org_admin" || user.role === "superadmin";
+  const [tab, setTab] = useState("import");
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.ink, fontFamily: "'Inter',sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+        * { box-sizing: border-box; }
+        select option { background: #13181f; color: #f0f4f8; }
+        input::placeholder, textarea::placeholder { color: #7a8fa8; }
+        input:focus, textarea:focus, select:focus { border-color: #ff9a4d !important; outline: none; }
+      `}</style>
+
+      <div style={{ maxWidth: 1020, margin: "0 auto", padding: "28px 22px 80px" }}>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+          <span style={{ fontFamily: disp, fontWeight: 800, fontSize: 26 }}>Admin</span>
+          <Tag tone={isAdmin ? "amber" : "blue"}>{isAdmin ? "org admin" : "read-only"}</Tag>
+          <button style={{ ...btn, marginLeft: "auto" }} onClick={onClose}>← Back to app</button>
+        </div>
+        <div style={{ color: C.faint, fontSize: 13, marginBottom: 28 }}>
+          {user.org?.legal_name} · {user.full_name || user.email}
+        </div>
+
+        {/* Main tab bar */}
+        <TabBar
+          tabs={[
+            { id: "import", label: "Data Import", icon: "⬆" },
+            { id: "users", label: "User Management", icon: "👥" },
+            { id: "license", label: "License", icon: "★" },
+          ]}
+          active={tab} setActive={setTab}
+        />
+
+        {tab === "import" && <DataImportTab isAdmin={isAdmin} />}
+        {tab === "users" && <UserManagementTab isAdmin={isAdmin} />}
+        {tab === "license" && <LicenseTab isAdmin={isAdmin} />}
       </div>
     </div>
   );
