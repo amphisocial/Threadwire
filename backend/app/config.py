@@ -8,7 +8,7 @@ from pathlib import Path
 def _load_env_file():
     """Read .env file directly — no dependency on dotenv or systemd EnvironmentFile."""
     env_path = Path(__file__).parent.parent / ".env"
-    if not env_path.exists():
+    print(f"ENV FILE: looking for {env_path} exists={env_path.exists()}", flush=True)
         return
     for line in env_path.read_text().splitlines():
         line = line.strip()
@@ -16,8 +16,8 @@ def _load_env_file():
             continue
         key, _, val = line.partition("=")
         key = key.strip()
-        val = val.strip().strip('"').strip("'")  # strip any accidental quotes
-        if key and key not in os.environ:          # don't override real env vars
+        val = val.strip().strip('"').strip("'")
+        if key and val:                    # only set if file has a non-empty value
             os.environ[key] = val
 
 _load_env_file()
