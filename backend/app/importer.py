@@ -142,6 +142,52 @@ ENTITIES = [
             ["OP-12", "A. Kidd", "Greenville, SC", "2nd", "Welding, Anodize"],
         ],
     },
+    {
+        "entity": "lots", "label": "Lots / batches", "order": 9,
+        "table": "lots",
+        "note": "Manufacturing lots/batches — the spine of a Device History Record (DHR). Export from IQMS. company_ref tags the acquired entity (e.g. NextPhase). status: released|hold|quarantine|shipped.",
+        "cols": [
+            ("lot_number", True, "text"), ("part_number", False, "text"),
+            ("work_order", False, "text"), ("quantity", False, "num"),
+            ("site", False, "text"), ("company_ref", False, "text"),
+            ("mfg_date", False, "date"), ("status", False, "text"), ("disposition", False, "text"),
+        ],
+        "conflict": ["lot_number"],
+        "sample": [
+            ["NX-9842", "PN-3320", "WO-7781", "40", "Lawrence, MA", "NextPhase", "2026-06-14", "released", "accepted"],
+            ["NX-9843", "PN-4501", "WO-7790", "200", "Greenville, SC", "NextPhase", "2026-06-18", "hold", "pending NCR"],
+        ],
+    },
+    {
+        "entity": "inspections", "label": "Inspections", "order": 10,
+        "table": "inspections",
+        "note": "Quality inspections per lot (incoming/in-process/final). Export from IQMS quality module. result: pass|fail|conditional. Link a failing inspection to an NCR via ncr_number.",
+        "cols": [
+            ("lot_number", True, "text"), ("inspection_type", False, "text"),
+            ("result", False, "text"), ("inspector", False, "text"),
+            ("inspected_at", False, "date"), ("ncr_number", False, "text"), ("notes", False, "text"),
+        ],
+        "conflict": [],
+        "sample": [
+            ["NX-9842", "final", "pass", "QA-03", "2026-06-15", "", "All dimensions in tolerance"],
+            ["NX-9843", "in-process", "fail", "QA-03", "2026-06-19", "NCR-5521", "Anodize coating thickness low"],
+        ],
+    },
+    {
+        "entity": "ncrs", "label": "NCRs / CAPA", "order": 11,
+        "table": "ncrs",
+        "note": "Non-conformance records and CAPA linkage. disposition: use-as-is|rework|scrap|RTV. status: open|closed.",
+        "cols": [
+            ("ncr_number", True, "text"), ("lot_number", False, "text"),
+            ("part_number", False, "text"), ("description", False, "text"),
+            ("disposition", False, "text"), ("capa_number", False, "text"),
+            ("status", False, "text"), ("opened_at", False, "date"), ("closed_at", False, "date"),
+        ],
+        "conflict": ["ncr_number"],
+        "sample": [
+            ["NCR-5521", "NX-9843", "PN-4501", "Anodize coating below spec thickness", "rework", "CAPA-118", "open", "2026-06-19", ""],
+        ],
+    },
 ]
 
 SPEC = {e["entity"]: e for e in ENTITIES}
@@ -210,6 +256,11 @@ async def _upsert(con, org_id, spec, row):
         vals["line_number"] = 10  # sales-order lines default to 10
     collist = ["org_id"] + cols
     placeholders = ["$1"] + ["$%d" % (i + 2) for i in range(len(cols))]
+    args = [org_id] + [vals[c] for c in cols]
+    if not spec["conflict"]:
+        sql = "INSERT INTO %s (%s) VALUES (%s)" % (spec["table"], ",".join(collist), ",".join(placeholders))
+        await con.execute(sql, *args)
+        return "inserted"
     updates = ["%s=EXCLUDED.%s" % (c, c) for c in cols if c not in spec["conflict"]]
     updates.append("updated_at=now()")
     sql = (

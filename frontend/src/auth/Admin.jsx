@@ -3,6 +3,8 @@ import {
   listInvites, createInvite, revokeInvite,
   importEntities, importData, listEvents, sampleUrl,
   adminUsage, updateMember, billingCheckout, importFromSource,
+  listDataSources, createDataSource, syncDataSource,
+  listDocuments, uploadDocument, loadSampleDocs, docDownloadUrl,
 } from "../lib/api.js";
 
 /* ---- design tokens (must match ThreadWire.jsx) ---- */
@@ -522,6 +524,104 @@ function LicenseTab({ isAdmin }) {
 }
 
 /* =================== MAIN ADMIN SHELL =================== */
+function DataSourcesDocs({ isAdmin }) {
+  const [sources, setSources] = useState([]);
+  const [docs, setDocs] = useState([]);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState("");
+  const [form, setForm] = useState({ name: "", prefix: "", company_ref: "", doc_type: "cert" });
+  const [up, setUp] = useState({ doc_type: "cert", company_ref: "", lot_number: "", part_number: "", file: null });
+  const reload = () => { listDataSources().then(setSources).catch(() => {}); listDocuments().then(setDocs).catch(() => {}); };
+  useEffect(() => { if (isAdmin) reload(); }, []);
+  if (!isAdmin) return <div style={{ color: C.faint, fontSize: 13, padding: 20 }}>Admins only.</div>;
+
+  const addSource = async () => {
+    if (!form.name.trim()) return; setBusy("src");
+    try { await createDataSource("s3", form.name.trim(), { prefix: form.prefix.trim(), company_ref: form.company_ref.trim(), doc_type: form.doc_type }); setForm({ name: "", prefix: "", company_ref: "", doc_type: "cert" }); reload(); }
+    catch (e) { setMsg(e.message); } finally { setBusy(""); }
+  };
+  const sync = async (id) => { setBusy(id); try { const r = await syncDataSource(id); setMsg("Indexed " + (r.indexed ?? 0) + " document(s)" + (r.note ? " — " + r.note : "")); reload(); } catch (e) { setMsg(e.message); } finally { setBusy(""); } };
+  const doUpload = async () => {
+    if (!up.file) { setMsg("Choose a file first"); return; } setBusy("up");
+    try { const fd = new FormData(); fd.append("file", up.file); fd.append("doc_type", up.doc_type); fd.append("company_ref", up.company_ref); fd.append("lot_number", up.lot_number); fd.append("part_number", up.part_number);
+      const r = await uploadDocument(fd); setMsg("Uploaded to " + r.storage + (r.indexed_text ? " (text indexed)" : "")); setUp({ ...up, file: null }); reload();
+    } catch (e) { setMsg(e.message); } finally { setBusy(""); }
+  };
+  const loadSamples = async () => { setBusy("samples"); try { const r = await loadSampleDocs(); setMsg("Loaded " + r.loaded + " sample doc(s) to " + r.storage); reload(); } catch (e) { setMsg(e.message); } finally { setBusy(""); } };
+
+  const inp = { fontFamily: mono, fontSize: 12, background: C.bg2, border: `1px solid ${C.line}`, borderRadius: 8, padding: "8px 10px", color: C.ink, outline: "none" };
+  const DT = ["cert", "coc", "coa", "sop", "inspection", "dhr", "other"];
+  return (
+    <div style={{ paddingTop: 8 }}>
+      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
+        Connect an S3 bucket of supplier certs/SOPs (read-only) or upload documents directly. Files are tagged by company and type so the AI can compile cited trace maps. CSV exports from IQMS/Salesforce go through the <b>Data Import</b> tab (Lots, Inspections, NCRs).
+      </div>
+      {msg && <div style={{ fontSize: 12.5, color: C.thread, marginBottom: 12 }}>{msg}</div>}
+
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
+        <div style={{ flex: "1 1 320px", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>Connect S3 bucket</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <input style={inp} placeholder="Name (e.g. NextPhase certs)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <input style={inp} placeholder="Prefix (e.g. nextphase/certs/)" value={form.prefix} onChange={(e) => setForm({ ...form, prefix: e.target.value })} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <input style={{ ...inp, flex: 1 }} placeholder="Company ref" value={form.company_ref} onChange={(e) => setForm({ ...form, company_ref: e.target.value })} />
+              <select style={{ ...inp, width: 120 }} value={form.doc_type} onChange={(e) => setForm({ ...form, doc_type: e.target.value })}>{DT.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+            </div>
+            <button style={btnP} disabled={busy === "src"} onClick={addSource}>{busy === "src" ? "Adding…" : "Add source"}</button>
+            <div style={{ fontSize: 11, color: C.faint }}>Sync indexes objects when the server has S3 configured; otherwise use Upload.</div>
+          </div>
+        </div>
+        <div style={{ flex: "1 1 320px", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>Upload document</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <input type="file" onChange={(e) => setUp({ ...up, file: e.target.files[0] || null })} style={{ ...inp, padding: 7 }} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <select style={{ ...inp, width: 120 }} value={up.doc_type} onChange={(e) => setUp({ ...up, doc_type: e.target.value })}>{DT.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+              <input style={{ ...inp, flex: 1 }} placeholder="Company ref" value={up.company_ref} onChange={(e) => setUp({ ...up, company_ref: e.target.value })} />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input style={{ ...inp, flex: 1 }} placeholder="Lot #" value={up.lot_number} onChange={(e) => setUp({ ...up, lot_number: e.target.value })} />
+              <input style={{ ...inp, flex: 1 }} placeholder="Part #" value={up.part_number} onChange={(e) => setUp({ ...up, part_number: e.target.value })} />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={{ ...btnP, flex: 1 }} disabled={busy === "up"} onClick={doUpload}>{busy === "up" ? "Uploading…" : "Upload"}</button>
+              <button style={btn} disabled={busy === "samples"} onClick={loadSamples}>{busy === "samples" ? "Loading…" : "Load sample certs"}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {sources.length > 0 && (
+        <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
+          {sources.map((s, i) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderBottom: i < sources.length - 1 ? `1px solid ${C.line}` : "none" }}>
+              <span style={{ fontFamily: mono, fontSize: 10.5, color: C.blue, textTransform: "uppercase" }}>{s.kind}</span>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 13 }}>{s.name}</div><div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{s.config?.prefix || "—"} · {s.last_result || "not synced"}</div></div>
+              <button style={btn} disabled={busy === s.id} onClick={() => sync(s.id)}>{busy === s.id ? "Syncing…" : "Sync"}</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ display: "flex", padding: "10px 14px", borderBottom: `1px solid ${C.line}`, fontFamily: mono, fontSize: 10.5, color: C.faint }}>
+          <span style={{ width: 70 }}>TYPE</span><span style={{ flex: 1 }}>DOCUMENT</span><span style={{ width: 110 }}>LOT / PART</span><span style={{ width: 90, textAlign: "right" }}>FILE</span>
+        </div>
+        {docs.length === 0 ? <div style={{ padding: 14, fontSize: 12.5, color: C.faint }}>No documents yet. Upload one or load the sample certs.</div>
+          : docs.map((d, i) => (
+            <div key={d.id} style={{ display: "flex", alignItems: "center", padding: "10px 14px", borderBottom: i < docs.length - 1 ? `1px solid ${C.line}` : "none" }}>
+              <span style={{ width: 70, fontFamily: mono, fontSize: 10.5, color: C.amber, textTransform: "uppercase" }}>{d.doc_type}</span>
+              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13 }}>{d.title || d.filename}</div><div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{d.company_ref || "—"} · {d.storage} · {d.uploaded_by}</div></div>
+              <span style={{ width: 110, fontFamily: mono, fontSize: 10.5, color: C.muted }}>{d.lot_number || "—"}{d.part_number ? " / " + d.part_number : ""}</span>
+              <a href={docDownloadUrl(d.id)} style={{ width: 90, textAlign: "right", fontFamily: mono, fontSize: 11.5, color: C.thread }}>download ↓</a>
+            </div>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Admin({ user, onClose }) {
   const isAdmin = user.role === "org_admin" || user.role === "superadmin";
   const [tab, setTab] = useState("import");
@@ -553,6 +653,7 @@ export default function Admin({ user, onClose }) {
           tabs={[
             { id: "import", label: "Data Import", icon: "⬆" },
             { id: "users", label: "User Management", icon: "👥" },
+            { id: "compliance", label: "Data Sources", icon: "🧬" },
             { id: "license", label: "License", icon: "★" },
           ]}
           active={tab} setActive={setTab}
@@ -560,6 +661,7 @@ export default function Admin({ user, onClose }) {
 
         {tab === "import" && <DataImportTab isAdmin={isAdmin} />}
         {tab === "users" && <UserManagementTab isAdmin={isAdmin} />}
+        {tab === "compliance" && <DataSourcesDocs isAdmin={isAdmin} />}
         {tab === "license" && <LicenseTab isAdmin={isAdmin} />}
       </div>
     </div>

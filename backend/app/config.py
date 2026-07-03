@@ -44,6 +44,20 @@ class Settings:
     smtp_pass = os.environ.get("SMTP_PASS", "")
     smtp_from = os.environ.get("SMTP_FROM", "")
 
+    # Document store. If an S3 bucket is configured, documents (supplier certs, SOPs,
+    # inspection PDFs) live in S3; otherwise they fall back to a local directory so the
+    # demo works without AWS. Keys are namespaced by org: org_{org_id}/{doc_type}/{file}.
+    s3_bucket = os.environ.get("THREADWIRE_S3_BUCKET", "")
+    s3_region = os.environ.get("THREADWIRE_S3_REGION", os.environ.get("AWS_REGION", "us-east-1"))
+    s3_prefix = os.environ.get("THREADWIRE_S3_PREFIX", "")
+    aws_access_key_id = os.environ.get("AWS_ACCESS_KEY_ID", "")
+    aws_secret_access_key = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+    local_upload_dir = os.environ.get("THREADWIRE_UPLOAD_DIR", "/opt/threadwire/backend/uploads")
+
+    @property
+    def s3_enabled(self) -> bool:
+        return bool(self.s3_bucket)
+
     contact_recipients = os.environ.get("CONTACT_RECIPIENTS", "anu@threadwire.ai,maro@threadwire.ai")
 
     def secret_key(self) -> bytes:

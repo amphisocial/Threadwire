@@ -48,3 +48,19 @@ export const billingPortal = () => fetch("/api/billing/portal", opts("POST")).th
 export const adminUsage = () => fetch("/api/admin/usage", { credentials: "include" }).then(jsonOrThrow);
 export const updateMember = (id, body) => fetch("/api/admin/members/" + id, opts("PATCH", body)).then(jsonOrThrow);
 export const importFromSource = (body) => fetch("/api/import/source", opts("POST", body)).then(jsonOrThrow);
+
+// data sources + document store + compliance / traceability
+export const listDataSources = () => fetch("/api/data_sources", { credentials: "include" }).then(jsonOrThrow);
+export const createDataSource = (kind, name, config) => fetch("/api/data_sources", opts("POST", { kind, name, config })).then(jsonOrThrow);
+export const syncDataSource = (id) => fetch("/api/data_sources/" + id + "/sync", opts("POST")).then(jsonOrThrow);
+export const listDocuments = (params = {}) => {
+  const q = new URLSearchParams(params).toString();
+  return fetch("/api/documents" + (q ? "?" + q : ""), { credentials: "include" }).then(jsonOrThrow);
+};
+export const searchDocuments = (q) => fetch("/api/documents/search?q=" + encodeURIComponent(q), { credentials: "include" }).then(jsonOrThrow);
+export const loadSampleDocs = () => fetch("/api/documents/load_samples", opts("POST")).then(jsonOrThrow);
+export const docDownloadUrl = (id) => "/api/documents/" + id + "/download";
+export const uploadDocument = (formData) => fetch("/api/documents/upload", { method: "POST", credentials: "include", body: formData }).then(jsonOrThrow);
+export const getLots = () => fetch("/api/lots", { credentials: "include" }).then(jsonOrThrow);
+export const traceLot = (lot) => fetch("/api/trace/lot/" + encodeURIComponent(lot), { credentials: "include" }).then(jsonOrThrow);
+export const aiTraceLot = (lot) => fetch("/api/ai/trace/" + encodeURIComponent(lot), opts("POST")).then(jsonOrThrow);

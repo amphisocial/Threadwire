@@ -5,11 +5,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.responses import StreamingResponse
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
-from . import billing, connectors_rest, db, emailer, importer, mfa
+from . import billing, connectors_rest, db, emailer, importer, mfa, storage
 from .ai import ai_complete
 from .config import settings
 from .crypto import decrypt_bytes, encrypt_str
@@ -761,6 +762,307 @@ async def get_part_detail(part: str, user: dict = Depends(current_user)):
                      "unit_cost": float(r["unit_cost"]) if r["unit_cost"] is not None else None,
                      "lead_time_days": r["lead_time_days"]} for r in vendors],
     }
+
+
+# --------------------------------------------------------------------------- #
+# data sources + document store (S3 or local) + compliance / traceability
+# --------------------------------------------------------------------------- #
+_DOC_TYPES = {"cert", "coc", "coa", "sop", "inspection", "dhr", "other"}
+
+
+def _extract_text(filename: str, data: bytes) -> str:
+    name = (filename or "").lower()
+    if name.endswith((".txt", ".md", ".csv", ".json")):
+        try:
+            return data.decode("utf-8", "ignore")
+        except Exception:
+            return ""
+    if name.endswith(".pdf"):
+        try:
+            import io as _io
+            from pypdf import PdfReader
+            r = PdfReader(_io.BytesIO(data))
+            return "\n".join((p.extract_text() or "") for p in r.pages)
+        except Exception:
+            return ""
+    return ""
+
+
+class DataSourceIn(BaseModel):
+    kind: str
+    name: str
+    config: dict = {}
+
+
+@app.get("/api/data_sources")
+async def list_data_sources(user: dict = Depends(current_user)):
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT id, kind, name, config, status, last_sync, last_result, created_at "
+            "FROM data_sources WHERE org_id = $1 ORDER BY created_at DESC", user["org_id"])
+    return [{"id": str(r["id"]), "kind": r["kind"], "name": r["name"], "config": r["config"],
+             "status": r["status"], "last_sync": r["last_sync"].isoformat() if r["last_sync"] else None,
+             "last_result": r["last_result"] or "",
+             "created_at": r["created_at"].isoformat()} for r in rows]
+
+
+@app.post("/api/data_sources")
+async def create_data_source(body: DataSourceIn, user: dict = Depends(current_user)):
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+    async with db.pool().acquire() as con:
+        row = await con.fetchrow(
+            "INSERT INTO data_sources (org_id, kind, name, config, created_by) "
+            "VALUES ($1,$2,$3,$4,$5) RETURNING id", user["org_id"], body.kind, body.name,
+            json.dumps(body.config or {}), user["full_name"] or user["email"])
+    return {"id": str(row["id"])}
+
+
+@app.post("/api/data_sources/{source_id}/sync")
+async def sync_data_source(source_id: str, user: dict = Depends(current_user)):
+    """For an S3 source, list objects under its prefix and register any not-yet-indexed
+    files as documents (metadata only; text extraction happens for text/PDF)."""
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+    async with db.pool().acquire() as con:
+        src = await con.fetchrow("SELECT id, kind, name, config FROM data_sources WHERE id=$1 AND org_id=$2",
+                                 source_id, user["org_id"])
+        if not src:
+            raise HTTPException(404, "Data source not found")
+        if src["kind"] != "s3" or not settings.s3_enabled:
+            await con.execute("UPDATE data_sources SET last_sync=now(), status='connected', last_result=$2 WHERE id=$1",
+                              src["id"], "Sync is only available for S3 sources on an S3-configured server")
+            return {"indexed": 0, "note": "S3 not configured on server; use Upload instead"}
+        cfg = src["config"] or {}
+        prefix = cfg.get("prefix", "org_%s/" % user["org_id"])
+        indexed = 0
+        for obj in storage.list_objects(prefix):
+            key = obj["key"]
+            exists = await con.fetchval("SELECT 1 FROM documents WHERE org_id=$1 AND storage_key=$2", user["org_id"], key)
+            if exists:
+                continue
+            data = storage.get_object(key)
+            fn = key.split("/")[-1]
+            text = _extract_text(fn, data) if data else ""
+            await con.execute(
+                "INSERT INTO documents (org_id, company_ref, doc_type, title, filename, storage_key, storage, "
+                "source_id, content_text, size_bytes, uploaded_by) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+                user["org_id"], cfg.get("company_ref", ""), cfg.get("doc_type", "cert"), fn, fn, key,
+                storage.backend_name(), src["id"], text, obj.get("size", 0), "s3-sync")
+            indexed += 1
+        await con.execute("UPDATE data_sources SET last_sync=now(), status='connected', last_result=$2 WHERE id=$1",
+                          src["id"], "Indexed %d new document(s)" % indexed)
+    return {"indexed": indexed}
+
+
+@app.post("/api/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    doc_type: str = Form("cert"),
+    company_ref: str = Form(""),
+    lot_number: str = Form(""),
+    part_number: str = Form(""),
+    vendor_code: str = Form(""),
+    title: str = Form(""),
+    user: dict = Depends(current_user),
+):
+    if doc_type not in _DOC_TYPES:
+        doc_type = "other"
+    data = await file.read()
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(413, "File too large (max 25 MB)")
+    safe = "".join(c for c in (file.filename or "upload") if c.isalnum() or c in "._- ").strip().replace(" ", "_")
+    key = "org_%s/%s/%s" % (user["org_id"], doc_type, safe)
+    locator = storage.put_object(key, data, file.content_type or "application/octet-stream")
+    text = _extract_text(file.filename or safe, data)
+    async with db.pool().acquire() as con:
+        row = await con.fetchrow(
+            "INSERT INTO documents (org_id, company_ref, doc_type, title, filename, storage_key, storage, "
+            "lot_number, part_number, vendor_code, content_text, size_bytes, uploaded_by) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id",
+            user["org_id"], company_ref, doc_type, title or (file.filename or safe), file.filename or safe,
+            key, storage.backend_name(), lot_number, part_number, vendor_code, text, len(data),
+            user["full_name"] or user["email"])
+    return {"id": str(row["id"]), "storage": storage.backend_name(), "locator": locator, "indexed_text": bool(text)}
+
+
+@app.get("/api/documents")
+async def list_documents(lot_number: str = "", part_number: str = "", doc_type: str = "",
+                         user: dict = Depends(current_user)):
+    q = "SELECT id, company_ref, doc_type, title, filename, storage, lot_number, part_number, vendor_code, " \
+        "size_bytes, uploaded_by, uploaded_at FROM documents WHERE org_id = $1"
+    args = [user["org_id"]]
+    if lot_number:
+        args.append(lot_number); q += " AND lot_number = $%d" % len(args)
+    if part_number:
+        args.append(part_number); q += " AND part_number = $%d" % len(args)
+    if doc_type:
+        args.append(doc_type); q += " AND doc_type = $%d" % len(args)
+    q += " ORDER BY uploaded_at DESC"
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(q, *args)
+    return [{"id": str(r["id"]), "company_ref": r["company_ref"], "doc_type": r["doc_type"],
+             "title": r["title"], "filename": r["filename"], "storage": r["storage"],
+             "lot_number": r["lot_number"], "part_number": r["part_number"], "vendor_code": r["vendor_code"],
+             "size_bytes": r["size_bytes"], "uploaded_by": r["uploaded_by"],
+             "uploaded_at": r["uploaded_at"].isoformat()} for r in rows]
+
+
+@app.get("/api/documents/search")
+async def search_documents(q: str, user: dict = Depends(current_user)):
+    if not q.strip():
+        return {"results": []}
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT id, title, filename, doc_type, company_ref, lot_number, part_number, "
+            "ts_headline('english', content_text, plainto_tsquery('english',$2), "
+            "'MaxFragments=2,MinWords=5,MaxWords=18') AS snippet, "
+            "ts_rank(content_tsv, plainto_tsquery('english',$2)) AS rank "
+            "FROM documents WHERE org_id=$1 AND content_tsv @@ plainto_tsquery('english',$2) "
+            "ORDER BY rank DESC LIMIT 12", user["org_id"], q)
+    return {"results": [{"id": str(r["id"]), "title": r["title"], "filename": r["filename"],
+                         "doc_type": r["doc_type"], "company_ref": r["company_ref"],
+                         "lot_number": r["lot_number"], "part_number": r["part_number"],
+                         "snippet": r["snippet"]} for r in rows]}
+
+
+@app.get("/api/documents/{doc_id}/download")
+async def download_document(doc_id: str, user: dict = Depends(current_user)):
+    async with db.pool().acquire() as con:
+        row = await con.fetchrow("SELECT filename, storage_key FROM documents WHERE id=$1 AND org_id=$2",
+                                 doc_id, user["org_id"])
+    if not row:
+        raise HTTPException(404, "Document not found")
+    data = storage.get_object(row["storage_key"])
+    if data is None:
+        raise HTTPException(404, "File not found in storage")
+    import io as _io
+    return StreamingResponse(_io.BytesIO(data), media_type="application/octet-stream",
+                             headers={"Content-Disposition": 'attachment; filename="%s"' % row["filename"]})
+
+
+@app.post("/api/documents/load_samples")
+async def load_sample_documents(user: dict = Depends(current_user)):
+    """Seed a handful of sample supplier certs/SOPs for the demo (idempotent by filename)."""
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+    sample_dir = Path(__file__).resolve().parent.parent / "sample_certs"
+    loaded = 0
+    if not sample_dir.exists():
+        return {"loaded": 0, "note": "no sample certs bundled"}
+    async with db.pool().acquire() as con:
+        for f in sorted(sample_dir.glob("*")):
+            if not f.is_file():
+                continue
+            meta = {"doc_type": "cert", "company_ref": "NextPhase", "lot": "", "part": "", "vendor": ""}
+            # filename convention: <doctype>__<company>__<lot>__<part>__<name>
+            parts = f.stem.split("__")
+            if len(parts) >= 2:
+                meta["doc_type"] = parts[0] if parts[0] in _DOC_TYPES else "cert"
+                meta["company_ref"] = parts[1]
+            if len(parts) >= 3:
+                meta["lot"] = parts[2]
+            if len(parts) >= 4:
+                meta["part"] = parts[3]
+            data = f.read_bytes()
+            key = "org_%s/%s/%s" % (user["org_id"], meta["doc_type"], f.name)
+            exists = await con.fetchval("SELECT 1 FROM documents WHERE org_id=$1 AND storage_key=$2",
+                                        user["org_id"], key)
+            if exists:
+                continue
+            storage.put_object(key, data, "text/plain")
+            text = _extract_text(f.name, data)
+            await con.execute(
+                "INSERT INTO documents (org_id, company_ref, doc_type, title, filename, storage_key, storage, "
+                "lot_number, part_number, content_text, size_bytes, uploaded_by) "
+                "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+                user["org_id"], meta["company_ref"], meta["doc_type"], f.stem.replace("__", " · "), f.name,
+                key, storage.backend_name(), meta["lot"], meta["part"], text, len(data), "sample-loader")
+            loaded += 1
+    return {"loaded": loaded, "storage": storage.backend_name()}
+
+
+@app.get("/api/lots")
+async def list_lots(user: dict = Depends(current_user)):
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT lot_number, part_number, work_order, quantity, site, company_ref, mfg_date, status, disposition "
+            "FROM lots WHERE org_id=$1 ORDER BY mfg_date DESC NULLS LAST, lot_number", user["org_id"])
+    return [{"lot_number": r["lot_number"], "part_number": r["part_number"] or "", "work_order": r["work_order"] or "",
+             "quantity": float(r["quantity"]) if r["quantity"] is not None else None, "site": r["site"] or "",
+             "company_ref": r["company_ref"] or "", "mfg_date": r["mfg_date"].isoformat() if r["mfg_date"] else None,
+             "status": r["status"] or "", "disposition": r["disposition"] or ""} for r in rows]
+
+
+@app.get("/api/trace/lot/{lot_number}")
+async def trace_lot(lot_number: str, user: dict = Depends(current_user)):
+    """Assemble a Device-History-Record style trace map for a lot: the lot, its part and
+    BOM components, work order, inspections, NCRs/CAPA, and linked supplier certs/docs."""
+    org = user["org_id"]
+    async with db.pool().acquire() as con:
+        lot = await con.fetchrow(
+            "SELECT lot_number, part_number, work_order, quantity, site, company_ref, mfg_date, status, disposition "
+            "FROM lots WHERE org_id=$1 AND lot_number=$2", org, lot_number)
+        insp = await con.fetch(
+            "SELECT inspection_type, result, inspector, inspected_at, ncr_number, notes "
+            "FROM inspections WHERE org_id=$1 AND lot_number=$2 ORDER BY inspected_at NULLS LAST", org, lot_number)
+        ncrs = await con.fetch(
+            "SELECT ncr_number, part_number, description, disposition, capa_number, status, opened_at, closed_at "
+            "FROM ncrs WHERE org_id=$1 AND lot_number=$2 ORDER BY opened_at NULLS LAST", org, lot_number)
+        part_number = lot["part_number"] if lot else ""
+        bom = []
+        if part_number:
+            bom = await con.fetch(
+                "SELECT b.child_part_number, b.quantity, b.find_number, b.ref_designators, p.description AS child_description "
+                "FROM boms b LEFT JOIN parts p ON p.org_id=b.org_id AND p.part_number=b.child_part_number "
+                "WHERE b.org_id=$1 AND b.parent_part_number=$2 ORDER BY b.child_part_number", org, part_number)
+        docs = await con.fetch(
+            "SELECT id, title, filename, doc_type, company_ref, vendor_code, part_number "
+            "FROM documents WHERE org_id=$1 AND (lot_number=$2 OR (part_number<>'' AND part_number=$3)) "
+            "ORDER BY doc_type, uploaded_at DESC", org, lot_number, part_number)
+    if not lot and not insp and not ncrs and not docs:
+        raise HTTPException(404, "No trace data found for lot %s" % lot_number)
+    return {
+        "lot": ({"lot_number": lot["lot_number"], "part_number": lot["part_number"] or "",
+                 "work_order": lot["work_order"] or "", "quantity": float(lot["quantity"]) if lot["quantity"] is not None else None,
+                 "site": lot["site"] or "", "company_ref": lot["company_ref"] or "",
+                 "mfg_date": lot["mfg_date"].isoformat() if lot["mfg_date"] else None,
+                 "status": lot["status"] or "", "disposition": lot["disposition"] or ""} if lot else
+                {"lot_number": lot_number, "part_number": "", "status": "unknown"}),
+        "bom": [{"child_part_number": r["child_part_number"], "child_description": r["child_description"] or "",
+                 "quantity": float(r["quantity"]) if r["quantity"] is not None else None,
+                 "find_number": r["find_number"] or "", "ref_designators": r["ref_designators"] or ""} for r in bom],
+        "inspections": [{"inspection_type": r["inspection_type"] or "", "result": r["result"] or "",
+                         "inspector": r["inspector"] or "", "inspected_at": r["inspected_at"].isoformat() if r["inspected_at"] else None,
+                         "ncr_number": r["ncr_number"] or "", "notes": r["notes"] or ""} for r in insp],
+        "ncrs": [{"ncr_number": r["ncr_number"], "part_number": r["part_number"] or "", "description": r["description"] or "",
+                  "disposition": r["disposition"] or "", "capa_number": r["capa_number"] or "", "status": r["status"] or "",
+                  "opened_at": r["opened_at"].isoformat() if r["opened_at"] else None,
+                  "closed_at": r["closed_at"].isoformat() if r["closed_at"] else None} for r in ncrs],
+        "documents": [{"id": str(r["id"]), "title": r["title"], "filename": r["filename"], "doc_type": r["doc_type"],
+                       "company_ref": r["company_ref"], "vendor_code": r["vendor_code"], "part_number": r["part_number"]} for r in docs],
+    }
+
+
+@app.post("/api/ai/trace/{lot_number}")
+async def ai_trace_lot(lot_number: str, user: dict = Depends(current_user)):
+    """Compile a cited audit narrative for a lot using the trace map + document snippets."""
+    trace = await trace_lot(lot_number, user)  # reuse assembly (raises 404 if empty)
+    async with db.pool().acquire() as con:
+        docs = await con.fetch(
+            "SELECT title, filename, doc_type, left(content_text, 800) AS excerpt "
+            "FROM documents WHERE org_id=$1 AND (lot_number=$2 OR part_number=$3) LIMIT 8",
+            user["org_id"], lot_number, trace["lot"].get("part_number", ""))
+    doc_ctx = "\n\n".join("DOCUMENT: %s (%s)\n%s" % (d["title"] or d["filename"], d["doc_type"], d["excerpt"] or "") for d in docs)
+    system = (
+        "You are a quality/regulatory audit assistant for a medical-device manufacturer under FDA 21 CFR Part 820 "
+        "and Part 11. Compile a concise, factual Device History Record trace summary for the given lot. "
+        "Cite documents by title in [brackets] when a statement is supported by one. Note any open NCR/CAPA or hold "
+        "as a compliance risk. Do not invent data not present in the trace.\n\n"
+        "TRACE_MAP = " + json.dumps(trace) + ("\n\nDOCUMENTS:\n" + doc_ctx if doc_ctx else ""))
+    text = await ai_complete(system, [{"role": "user", "content": "Compile the compliance trace map for lot %s." % lot_number}])
+    return {"lot_number": lot_number, "narrative": text, "trace": trace}
 
 
 @app.get("/api/work_orders")

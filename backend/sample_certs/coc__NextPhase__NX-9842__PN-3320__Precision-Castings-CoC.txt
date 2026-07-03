@@ -1,0 +1,19 @@
+CERTIFICATE OF CONFORMANCE (CoC)
+Supplier: Precision Castings Co (Vendor V-100)
+Customer: NextPhase (an Arterex company)
+Part Number: PN-3320  —  Spindle Housing, Rev C
+Lot / Batch: NX-9842
+Quantity: 40 ea
+PO Reference: PO-9920
+
+We hereby certify that the parts supplied under this lot were manufactured and
+inspected in accordance with the applicable drawings, specifications, and purchase
+order requirements, and conform in all respects. Material: 17-4PH stainless, heat
+lot HL-4471. Heat treatment per AMS 2759. Dimensional inspection performed per
+drawing 3320-C; all characteristics within tolerance.
+
+Regulatory: Manufactured under a quality system compliant with ISO 13485 and
+FDA 21 CFR Part 820. No deviations. No non-conforming material shipped.
+
+Authorized by: R. Alvarez, Quality Manager
+Date: 2026-06-14

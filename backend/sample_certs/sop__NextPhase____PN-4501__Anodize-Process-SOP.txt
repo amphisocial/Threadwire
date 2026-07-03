@@ -1,0 +1,8 @@
+STANDARD OPERATING PROCEDURE — Type II Anodize (SOP-ANO-014)
+Applies to: aluminum brackets incl. PN-4501. Company: NextPhase.
+
+Scope: hard-coat anodize per MIL-A-8625 Type II, Class 2. Target coating thickness
+0.0006–0.0010 in. Requires bath temperature 68–72°F, current density per spec, and
+seal step. In-process verification: coating thickness on 20% sample per lot with
+calibrated eddy-current gauge. Records retained per 21 CFR Part 11 (electronic
+records, audit trail, retention 7 years).

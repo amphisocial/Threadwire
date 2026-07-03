@@ -1,0 +1,11 @@
+CERTIFICATE OF ANALYSIS (CoA)
+Material: 17-4PH Stainless Steel Bar
+Heat Lot: HL-4471   Supplier: Helix Alloys (V-330)
+Used in Part: PN-3320   Manufacturing Lot: NX-9842
+
+Chemical composition (wt%): C 0.05, Cr 15.8, Ni 4.2, Cu 3.4, Mn 0.7, Si 0.6.
+Mechanical: UTS 1310 MPa, YS 1170 MPa, Elongation 12%, Hardness 42 HRC.
+Tests per ASTM A564. All results within specification. RoHS compliant.
+
+QA Release: conforms. Reviewed by: J. Okafor, Metallurgical Lab.
+Date: 2026-06-10
