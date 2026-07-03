@@ -1,0 +1,10 @@
+FINAL INSPECTION REPORT
+Lot: NX-9843   Part: PN-4501 (Servo Bracket, Rev A)   Company: NextPhase
+Work Order: WO-7790   Quantity: 200 ea   Inspector: QA-03   Date: 2026-06-19
+
+Result: FAIL — CONDITIONAL. Anodize coating thickness measured 0.0004 in vs.
+specification 0.0006–0.0010 in on 6 of 20 sampled units. Non-conformance raised:
+NCR-5521. Disposition pending Material Review Board. CAPA-118 opened to qualify a
+second anodize vendor and add incoming coating-thickness verification.
+
+Lot placed on HOLD pending rework and re-inspection. Not released for shipment.

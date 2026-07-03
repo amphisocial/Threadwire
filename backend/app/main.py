@@ -367,6 +367,54 @@ async def delete_connector(ctype: str, user: dict = Depends(current_user)):
 # --------------------------------------------------------------------------- #
 # AI proxy — requires a valid (MFA-passed) session
 # --------------------------------------------------------------------------- #
+async def _compliance_context(con, org_id, user_text: str) -> str:
+    """Summary of compliance data for the assistant, plus the full trace of any lot
+    the user mentions — so 'compile the trace map for lot X' works in chat."""
+    lot_count = await con.fetchval("SELECT count(*) FROM lots WHERE org_id=$1", org_id)
+    if not lot_count:
+        return ""
+    open_ncrs = await con.fetchval("SELECT count(*) FROM ncrs WHERE org_id=$1 AND status='open'", org_id)
+    doc_count = await con.fetchval("SELECT count(*) FROM documents WHERE org_id=$1", org_id)
+    parts = ["COMPLIANCE DATA: %d lots, %d open NCR/CAPA, %d documents on file. "
+             "A Device History Record (DHR) trace map can be compiled per lot." % (lot_count, open_ncrs, doc_count)]
+    rows = await con.fetch("SELECT lot_number FROM lots WHERE org_id=$1", org_id)
+    text_up = (user_text or "").upper()
+    matched = [r["lot_number"] for r in rows if r["lot_number"] and r["lot_number"].upper() in text_up][:2]
+    if matched:
+        parts.insert(0, "The user references specific lot(s). Compile a concise DHR trace summary; cite "
+                        "documents by title in [brackets]; flag any open NCR/CAPA or hold as a compliance "
+                        "risk; do not invent data beyond what is provided.")
+    for lot in matched:
+        lr = await con.fetchrow(
+            "SELECT part_number, work_order, quantity, site, company_ref, mfg_date, status, disposition "
+            "FROM lots WHERE org_id=$1 AND lot_number=$2", org_id, lot)
+        insp = await con.fetch(
+            "SELECT inspection_type, result, inspector, inspected_at, ncr_number, notes "
+            "FROM inspections WHERE org_id=$1 AND lot_number=$2 ORDER BY inspected_at NULLS LAST", org_id, lot)
+        ncrs = await con.fetch(
+            "SELECT ncr_number, description, disposition, capa_number, status FROM ncrs "
+            "WHERE org_id=$1 AND lot_number=$2", org_id, lot)
+        docs = await con.fetch(
+            "SELECT title, doc_type, left(content_text, 500) AS excerpt FROM documents "
+            "WHERE org_id=$1 AND (lot_number=$2 OR (part_number<>'' AND part_number=$3)) LIMIT 6",
+            org_id, lot, (lr["part_number"] if lr else ""))
+        b = ["\nTRACE for lot %s:" % lot]
+        if lr:
+            b.append("  part=%s wo=%s qty=%s site=%s company=%s mfg=%s status=%s disposition=%s" % (
+                lr["part_number"], lr["work_order"], lr["quantity"], lr["site"], lr["company_ref"],
+                lr["mfg_date"], lr["status"], lr["disposition"]))
+        for i in insp:
+            b.append("  inspection %s %s result=%s by %s ncr=%s note=%s" % (
+                i["inspected_at"], i["inspection_type"], i["result"], i["inspector"], i["ncr_number"], i["notes"]))
+        for n in ncrs:
+            b.append("  NCR %s [%s] %s disp=%s capa=%s" % (
+                n["ncr_number"], n["status"], n["description"], n["disposition"], n["capa_number"]))
+        for d in docs:
+            b.append("  DOC [%s] %s :: %s" % (d["doc_type"], d["title"], (d["excerpt"] or "").replace("\n", " ")))
+        parts.append("\n".join(b))
+    return "\n".join(parts)
+
+
 @app.post("/api/ai/chat")
 async def ai_chat(body: ChatIn, user: dict = Depends(current_user)):
     messages = [{"role": ("assistant" if m.role == "assistant" else "user"), "content": m.content}
@@ -386,6 +434,12 @@ async def ai_chat(body: ChatIn, user: dict = Depends(current_user)):
             summary = await importer.org_data_summary(con, user["org_id"])
             if summary:
                 system = (system + "\n\n" + summary) if system else summary
+        except Exception:
+            pass
+        try:
+            csum = await _compliance_context(con, user["org_id"], messages[-1]["content"] if messages else "")
+            if csum:
+                system = (system + "\n\n" + csum) if system else csum
         except Exception:
             pass
         await bump_usage(con, user["user_id"], user["org_id"])
@@ -947,7 +1001,7 @@ async def load_sample_documents(user: dict = Depends(current_user)):
     """Seed a handful of sample supplier certs/SOPs for the demo (idempotent by filename)."""
     if user["role"] not in ("org_admin", "superadmin"):
         raise HTTPException(403, "Admins only")
-    sample_dir = Path(__file__).resolve().parent.parent / "sample_certs"
+    sample_dir = Path(__file__).resolve().parent / "sample_certs"
     loaded = 0
     if not sample_dir.exists():
         return {"loaded": 0, "note": "no sample certs bundled"}

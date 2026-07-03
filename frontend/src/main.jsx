@@ -57,7 +57,7 @@ function Root() {
             {state.user.role === "org_admin" || state.user.role === "superadmin" ? "⚙ Admin" : "⚙ Connections"}
           </button>
           <button onClick={() => setComplianceOpen(true)} title="Compliance & traceability"
-            style={{ ...pill, right: 16, color: "#e7eef6", background: "rgba(13,18,28,.85)", border: "1px solid #243245", fontWeight: 600 }}>
+            style={{ ...pill, left: 16, bottom: 56, color: "#e7eef6", background: "rgba(13,18,28,.85)", border: "1px solid #243245", fontWeight: 600 }}>
             🧬 Compliance
           </button>
           <button onClick={() => logout().then(refresh)} title={`Signed in as ${state.user.email}`}
