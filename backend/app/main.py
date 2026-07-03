@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
-from . import billing, connectors_rest, db, emailer, importer, mfa, storage
+from . import billing, case_studies, connectors_rest, db, emailer, importer, mfa, storage
 from .ai import ai_complete
 from .config import settings
 from .crypto import decrypt_bytes, encrypt_str
@@ -34,6 +34,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="ThreadWire API", lifespan=lifespan)
+app.include_router(case_studies.router)  # /api/case-studies (public read, site-admin write)
 
 
 # --------------------------------------------------------------------------- #

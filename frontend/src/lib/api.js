@@ -61,6 +61,14 @@ export const searchDocuments = (q) => fetch("/api/documents/search?q=" + encodeU
 export const loadSampleDocs = () => fetch("/api/documents/load_samples", opts("POST")).then(jsonOrThrow);
 export const docDownloadUrl = (id) => "/api/documents/" + id + "/download";
 export const uploadDocument = (formData) => fetch("/api/documents/upload", { method: "POST", credentials: "include", body: formData }).then(jsonOrThrow);
+// case studies / whitepapers (public read; site-admin write)
+export const listCaseStudies = () => fetch("/api/case-studies", { credentials: "include" }).then(jsonOrThrow);
+export const getCaseStudy = (id) => fetch("/api/case-studies/" + id, { credentials: "include" }).then(jsonOrThrow);
+export const caseStudyFileUrl = (id, download = false) => "/api/case-studies/" + id + "/file" + (download ? "?download=1" : "");
+export const uploadCaseStudy = (formData) => fetch("/api/case-studies", { method: "POST", credentials: "include", body: formData }).then(jsonOrThrow);
+export const updateCaseStudy = (id, body) => fetch("/api/case-studies/" + id, opts("PATCH", body)).then(jsonOrThrow);
+export const deleteCaseStudy = (id) => fetch("/api/case-studies/" + id, opts("DELETE")).then(jsonOrThrow);
+
 export const getLots = () => fetch("/api/lots", { credentials: "include" }).then(jsonOrThrow);
 export const traceLot = (lot) => fetch("/api/trace/lot/" + encodeURIComponent(lot), { credentials: "include" }).then(jsonOrThrow);
 export const aiTraceLot = (lot) => fetch("/api/ai/trace/" + encodeURIComponent(lot), opts("POST")).then(jsonOrThrow);

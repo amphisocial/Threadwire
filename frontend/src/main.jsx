@@ -6,6 +6,7 @@ import Admin from "./auth/Admin.jsx";
 import InviteAccept from "./auth/InviteAccept.jsx";
 import Profile, { PlanBadge } from "./auth/Profile.jsx";
 import Compliance from "./compliance/Compliance.jsx";
+import CaseStudies from "./pages/CaseStudies.jsx";
 import { getMe, logout, billingConfirm } from "./lib/api.js";
 
 const center = { minHeight: "100vh", display: "grid", placeItems: "center", background: "#0a0e15", color: "#8d9fb5", fontFamily: "'IBM Plex Mono',monospace" };
@@ -39,6 +40,13 @@ function Root() {
 
   // Invite link always wins — public accept flow.
   if (inviteToken) return <InviteAccept token={inviteToken} />;
+
+  // Public case-studies / whitepapers library. The signed-in site admin
+  // (role 'superadmin') sees upload + edit controls on the same page.
+  if (window.location.pathname === "/case-studies") {
+    if (state.loading) return <div style={center}>Loading…</div>;
+    return <CaseStudies user={state.user} />;
+  }
 
   if (state.loading) return <div style={center}>Loading…</div>;
   if (showAuth && !state.user) return <Login onAuthed={() => { setShowAuth(false); refresh(); }} onCancel={() => setShowAuth(false)} />;
