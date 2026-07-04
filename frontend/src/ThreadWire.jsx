@@ -267,10 +267,6 @@ function TopNav({ route, go, tier, onContact }) {
               {l}
             </span>
           ))}
-          <span className="tf-link" onClick={() => { window.location.href = "/case-studies"; }}
-            style={{ borderBottom: "2px solid transparent", paddingBottom: 3 }}>
-            Case Studies
-          </span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           <span className="tf-chip" style={{ color: tier === "paid" ? "var(--amber)" : "var(--muted)" }}>
@@ -928,7 +924,6 @@ function Home({ go, onContact }) {
           <div style={{ display: "flex", gap: 40, flexWrap: "wrap", flex: 1 }}>
             {[
               { heading: "Product", links: [["Delivery Calendar", "visibility"], ["Blockers", "blockers"], ["Revenue Forecast", "finance"], ["Digital Thread", "thread"], ["ROI Calculator", "roi"]] },
-              { heading: "Resources", links: [["Case studies", "@case-studies"]] },
               { heading: "Industries", links: [["Precision machining", null], ["Electronics / PCBA", null], ["Medical devices", null], ["Contract manufacturing", null]] },
               { heading: "Contact", links: [["Get in touch", null]] },
             ].map((col) => (
@@ -937,8 +932,7 @@ function Home({ go, onContact }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {col.links.map(([label, route]) => (
                     <span key={label}
-                      onClick={route && route.startsWith("@") ? () => { window.location.href = "/" + route.slice(1); }
-                        : route ? () => go(route) : label === "Get in touch" ? onContact : undefined}
+                      onClick={route ? () => go(route) : label === "Get in touch" ? onContact : undefined}
                       style={{ fontSize: 13, color: "var(--muted)", cursor: (route || label === "Get in touch") ? "pointer" : "default" }}
                       className={(route || label === "Get in touch") ? "tf-link" : ""}>{label}</span>
                   ))}

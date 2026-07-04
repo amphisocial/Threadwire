@@ -44,9 +44,8 @@ class Settings:
     smtp_pass = os.environ.get("SMTP_PASS", "")
     smtp_from = os.environ.get("SMTP_FROM", "")
 
-    # Document store. If an S3 bucket is configured, documents (supplier certs, SOPs,
-    # inspection PDFs) live in S3; otherwise they fall back to a local directory so the
-    # demo works without AWS. Keys are namespaced by org: org_{org_id}/{doc_type}/{file}.
+    # Document store. If an S3 bucket is configured, documents live in S3; otherwise
+    # they fall back to a local directory so the demo works without AWS.
     s3_bucket = os.environ.get("THREADWIRE_S3_BUCKET", "")
     s3_region = os.environ.get("THREADWIRE_S3_REGION", os.environ.get("AWS_REGION", "us-east-1"))
     s3_prefix = os.environ.get("THREADWIRE_S3_PREFIX", "")

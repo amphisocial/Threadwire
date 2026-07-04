@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
-from . import billing, case_studies, connectors_rest, db, emailer, importer, mfa, storage
+from . import billing, connectors_rest, db, emailer, importer, mfa, storage
 from .ai import ai_complete
 from .config import settings
 from .crypto import decrypt_bytes, encrypt_str
@@ -34,7 +34,6 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="ThreadWire API", lifespan=lifespan)
-app.include_router(case_studies.router)  # /api/case-studies (public read, site-admin write)
 
 
 # --------------------------------------------------------------------------- #
@@ -1118,6 +1117,65 @@ async def ai_trace_lot(lot_number: str, user: dict = Depends(current_user)):
         "TRACE_MAP = " + json.dumps(trace) + ("\n\nDOCUMENTS:\n" + doc_ctx if doc_ctx else ""))
     text = await ai_complete(system, [{"role": "user", "content": "Compile the compliance trace map for lot %s." % lot_number}])
     return {"lot_number": lot_number, "narrative": text, "trace": trace}
+
+
+@app.get("/api/quotes")
+async def list_quotes(user: dict = Depends(current_user)):
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT quote_number, customer, product_family, custom_attributes, quantity, value, "
+            "required_date, promised_date, expected_ship_date, owner, status, blocker, blocker_category, "
+            "next_action, site, company_ref, notes, converted_so "
+            "FROM quotes WHERE org_id=$1 ORDER BY "
+            "CASE status WHEN 'open' THEN 0 WHEN 'quoted' THEN 1 WHEN 'won' THEN 2 "
+            "WHEN 'converted' THEN 3 ELSE 4 END, required_date NULLS LAST, quote_number", user["org_id"])
+
+    def d(v):
+        return v.isoformat() if v else None
+    return [{
+        "quote_number": r["quote_number"], "customer": r["customer"] or "",
+        "product_family": r["product_family"] or "", "custom_attributes": r["custom_attributes"] or "",
+        "quantity": float(r["quantity"]) if r["quantity"] is not None else None,
+        "value": float(r["value"]) if r["value"] is not None else None,
+        "required_date": d(r["required_date"]), "promised_date": d(r["promised_date"]),
+        "expected_ship_date": d(r["expected_ship_date"]), "owner": r["owner"] or "",
+        "status": r["status"] or "open", "blocker": r["blocker"] or "",
+        "blocker_category": r["blocker_category"] or "", "next_action": r["next_action"] or "",
+        "site": r["site"] or "", "company_ref": r["company_ref"] or "", "notes": r["notes"] or "",
+        "converted_so": r["converted_so"] or "",
+    } for r in rows]
+
+
+@app.post("/api/quotes/{quote_number}/convert")
+async def convert_quote(quote_number: str, user: dict = Depends(current_user)):
+    """Turn a quote into a sales order (single line, line 10). The product family becomes
+    the order's end item so it shows on the delivery board. Idempotent per quote."""
+    org = user["org_id"]
+    async with db.pool().acquire() as con:
+        q = await con.fetchrow(
+            "SELECT quote_number, customer, product_family, quantity, value, required_date, promised_date, "
+            "site, status, converted_so FROM quotes WHERE org_id=$1 AND quote_number=$2", org, quote_number)
+        if not q:
+            raise HTTPException(404, "Quote not found")
+        if q["converted_so"]:
+            return {"so_number": q["converted_so"], "already": True}
+        base = "".join(c for c in quote_number if c.isalnum() or c in "-_") or "Q"
+        so_number = "SO-" + base
+        # avoid collision with an existing SO number
+        exists = await con.fetchval("SELECT 1 FROM sales_orders WHERE org_id=$1 AND so_number=$2", org, so_number)
+        if exists:
+            so_number = so_number + "-C"
+        promise = q["promised_date"] or q["required_date"]
+        await con.execute(
+            "INSERT INTO sales_orders (org_id, so_number, line_number, customer, site, promise_date, "
+            "part_number, quantity, value, status) VALUES ($1,$2,10,$3,$4,$5,$6,$7,$8,'open') "
+            "ON CONFLICT (org_id, so_number, line_number) DO NOTHING",
+            org, so_number, q["customer"] or "", q["site"] or "", promise,
+            q["product_family"] or "", q["quantity"], q["value"])
+        await con.execute(
+            "UPDATE quotes SET status='converted', converted_so=$3, updated_at=now() "
+            "WHERE org_id=$1 AND quote_number=$2", org, quote_number, so_number)
+    return {"so_number": so_number, "already": False}
 
 
 @app.get("/api/work_orders")

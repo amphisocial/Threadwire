@@ -188,6 +188,32 @@ ENTITIES = [
             ["NCR-5521", "NX-9843", "PN-4501", "Anodize coating below spec thickness", "rework", "CAPA-118", "open", "2026-06-19", ""],
         ],
     },
+    {
+        "entity": "quotes", "label": "Quotes", "order": 12,
+        "table": "quotes",
+        "note": "Delivery Desk quote-to-order tracker. status: open|quoted|won|lost|converted. "
+                "blocker_category: material|qa|engineering|customer|supplier_docs|none. A quote can be "
+                "converted to a sales order from the app or via /api/quotes/{id}/convert.",
+        "cols": [
+            ("quote_number", True, "text"), ("customer", False, "text"),
+            ("product_family", False, "text"), ("custom_attributes", False, "text"),
+            ("quantity", False, "num"), ("value", False, "num"),
+            ("required_date", False, "date"), ("promised_date", False, "date"),
+            ("expected_ship_date", False, "date"), ("owner", False, "text"),
+            ("status", False, "text"), ("blocker", False, "text"),
+            ("blocker_category", False, "text"), ("next_action", False, "text"),
+            ("site", False, "text"), ("company_ref", False, "text"), ("notes", False, "text"),
+        ],
+        "conflict": ["quote_number"],
+        "sample": [
+            ["Q-1001", "Vertex Aerospace", "Lace-up grips", "cable dia 12mm", "40", "128000",
+             "2026-07-10", "2026-07-08", "", "A. Mishra", "quoted", "", "none", "Follow up with customer",
+             "Lawrence, MA", "AMTEC", "Repeat of Q-0921 geometry"],
+            ["Q-1002", "Helios Robotics", "Custom light guide", "NA 0.22, 850nm", "120", "54000",
+             "2026-07-14", "", "", "R. Alvarez", "open", "Awaiting engineering feasibility", "engineering",
+             "Confirm fiber type", "Greenville, SC", "FTI", "Non-telecom, regulated customer"],
+        ],
+    },
 ]
 
 SPEC = {e["entity"]: e for e in ENTITIES}

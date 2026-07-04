@@ -11,5 +11,4 @@ eval-type-backport>=0.2
 python-dotenv>=1.0
 boto3>=1.34
 pypdf>=4.2
-mammoth>=1.6
 python-multipart>=0.0.9
