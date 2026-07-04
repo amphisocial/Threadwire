@@ -1,0 +1,17 @@
+This is a human-readable summary. Use apply_threadwire_fix.py for the actual patch.
+
+backend/app/main.py
+- Replace edit_sales_order_line() so SET placeholders start at $4 while WHERE remains $1/$2/$3.
+- Select ship_date too, avoid unnecessary ship_date writes, and preserve promise/status audit logging.
+
+frontend/src/ThreadWire.jsx
+- Add date input color-scheme styling.
+- In SalesOrderModal, initialize the editable promise field with revisedPromise || promise.
+- Treat selecting the original promise date as clearing revised_promise_date.
+- Show revised promise audit as changed by <user> · <localized datetime>.
+- Add setDelivWeek to SalesOrderModal and jump the Delivery page to the new effective promise week after save.
+- In DeliveryPage Card, use o.revisedPromise || blocker revised date as the effective revised date.
+- Strike through original promise and show revised promise in amber on the card.
+
+db/migrations/999_so_edit_audit_idempotent.sql
+- Ensure revised_promise_date, ship_date, qty_shipped, promise/status audit fields, and so_shipments exist.
