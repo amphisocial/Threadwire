@@ -3087,13 +3087,14 @@ function PartModal({ pn }) {
 }
 
 function SalesOrderModal({ id }) {
-  const { blockers, openBlocker, openForm, closeSO, openSOLines, editSOLine, recordShipment } = useData();
+  const { blockers, openBlocker, openForm, closeSO, openSOLines, editSOLine, recordShipment, setBlockerStatus } = useData();
   const o = soById(id);
   const [edit, setEdit] = useState(false);
   const [ef, setEf] = useState({ promise: "", status: "", shipDate: "" });
   const [ship, setShip] = useState({ qty: "", date: new Date().toISOString().slice(0, 10) });
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
+  const [pendingShared, setPendingShared] = useState([]);
   useEffect(() => { if (o) { setEf({ promise: o.revisedPromise || "", status: o.status || "", shipDate: o.shipDate || "" }); setEdit(false); setNote(""); } }, [o && o.id]);
   if (!o) return null;
   const blk = openBlockerForSO(blockers, id);
@@ -3106,7 +3107,7 @@ function SalesOrderModal({ id }) {
     <div onClick={closeSO} style={{ position: "fixed", inset: 0, zIndex: 206, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 540, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <Tag tone={blk ? "red" : "green"}>{blk ? "at risk" : "on track"}</Tag>
+          {(() => { const done = isClosedLine(o); return <Tag tone={done ? "green" : blk ? "red" : "green"}>{done ? "closed" : blk ? "at risk" : "on track"}</Tag>; })()}
           <span onClick={() => openSOLines(o.so)} className="tf-mono" style={{ fontSize: 12, color: "var(--amber)", cursor: "pointer", textDecoration: "underline dotted" }} title={`View all lines of ${o.so}`}>{o.so}</span>
           <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>· Line {o.line}{siblings.length > 1 ? ` of ${siblings.length}` : ""}</span>
           <span onClick={closeSO} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
@@ -3129,8 +3130,19 @@ function SalesOrderModal({ id }) {
           const done = o.shipDate || ["shipped", "closed", "complete", "completed", "delivered"].includes((o.status || "").toLowerCase());
           const inp = { fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 9px", color: "var(--ink)", outline: "none" };
           const okDate = (s) => s === "" || /^\d{4}-\d{2}-\d{2}$/.test(s);
-          const save = async () => { if (!okDate(ef.promise) || !okDate(ef.shipDate)) { setNote("Dates must be YYYY-MM-DD."); return; } setBusy("save"); setNote(""); const patch = {}; if (ef.promise !== (o.revisedPromise || "")) patch.revised_promise_date = ef.promise; if (ef.status !== (o.status || "")) patch.status = ef.status; if (ef.shipDate !== (o.shipDate || "")) patch.ship_date = ef.shipDate; if (!Object.keys(patch).length) { setEdit(false); setBusy(""); return; } const r = await editSOLine(o.so, o.line, patch); setBusy(""); if (r && r.offline) setNote("Editing works on live data only."); else setEdit(false); };
-          const doShip = async () => { const q = parseFloat(ship.qty); if (!q || q <= 0) { setNote("Enter a quantity to ship."); return; } if (q > remaining + 1e-9) { setNote(`Only ${remaining} remaining.`); return; } if (!okDate(ship.date) || ship.date === "") { setNote("Ship date must be YYYY-MM-DD."); return; } setBusy("ship"); const r = await recordShipment(o.so, o.line, q, ship.date); setBusy(""); if (r && r.offline) setNote("Shipping works on live data only."); else { setShip({ qty: "", date: ship.date }); setNote(r.closed ? "Fully shipped — order auto-closed." : `Shipped ${q}. $${(r.recognized || 0).toLocaleString()} recognized.`); } };
+          const CLOSED_STATUSES = ["shipped", "closed", "complete", "completed", "delivered"];
+          const closeAttached = () => {
+            const relatedOpen = blockers.filter((b) => b.status !== "closed" && b.sos.includes(o.id));
+            if (!relatedOpen.length) return;
+            const otherOpen = (b) => b.sos.filter((sid) => sid !== o.id).filter((sid) => { const oo = soById(sid); return oo && !isClosedLine(oo); });
+            const sole = relatedOpen.filter((b) => otherOpen(b).length === 0);
+            const shared = relatedOpen.filter((b) => otherOpen(b).length > 0);
+            sole.forEach((b) => setBlockerStatus(b.id, "closed"));
+            if (sole.length) setNote((n) => (n ? n + " " : "") + `${sole.length} attached blocker${sole.length > 1 ? "s" : ""} auto-closed.`);
+            if (shared.length) setPendingShared(shared.map((b) => ({ id: b.id, title: b.title, others: otherOpen(b) })));
+          };
+          const save = async () => { if (!okDate(ef.promise) || !okDate(ef.shipDate)) { setNote("Dates must be YYYY-MM-DD."); return; } setBusy("save"); setNote(""); const patch = {}; if (ef.promise !== (o.revisedPromise || "")) patch.revised_promise_date = ef.promise; if (ef.status !== (o.status || "")) patch.status = ef.status; if (ef.shipDate !== (o.shipDate || "")) patch.ship_date = ef.shipDate; if (!Object.keys(patch).length) { setEdit(false); setBusy(""); return; } const r = await editSOLine(o.so, o.line, patch); setBusy(""); if (r && r.offline) { setNote("Editing works on live data only."); return; } setEdit(false); if (patch.status && CLOSED_STATUSES.includes(patch.status.toLowerCase())) closeAttached(); };
+          const doShip = async () => { const q = parseFloat(ship.qty); if (!q || q <= 0) { setNote("Enter a quantity to ship."); return; } if (q > remaining + 1e-9) { setNote(`Only ${remaining} remaining.`); return; } if (!okDate(ship.date) || ship.date === "") { setNote("Ship date must be YYYY-MM-DD."); return; } setBusy("ship"); const r = await recordShipment(o.so, o.line, q, ship.date); setBusy(""); if (r && r.offline) { setNote("Shipping works on live data only."); return; } setShip({ qty: "", date: ship.date }); if (r.closed) { setNote("Fully shipped — order auto-closed."); closeAttached(); } else setNote(`Shipped ${q}. $${(r.recognized || 0).toLocaleString()} recognized.`); };
           return (
             <div style={{ marginBottom: 16, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -3156,7 +3168,7 @@ function SalesOrderModal({ id }) {
                 <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 12, display: "grid", gap: 9 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 92 }}>Revised promise</span>
-                    <input type="text" inputMode="numeric" placeholder="YYYY-MM-DD" style={{ ...inp, flex: 1 }} value={ef.promise || ""} onChange={(e) => setEf({ ...ef, promise: e.target.value })} />
+                    <input type="date" style={{ ...inp, flex: 1 }} value={ef.promise || ""} onChange={(e) => setEf({ ...ef, promise: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 92 }}>Status</span>
@@ -3166,7 +3178,7 @@ function SalesOrderModal({ id }) {
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 92 }}>Ship date</span>
-                    <input type="text" inputMode="numeric" placeholder="YYYY-MM-DD" style={{ ...inp, flex: 1 }} value={ef.shipDate || ""} onChange={(e) => setEf({ ...ef, shipDate: e.target.value })} />
+                    <input type="date" style={{ ...inp, flex: 1 }} value={ef.shipDate || ""} onChange={(e) => setEf({ ...ef, shipDate: e.target.value })} />
                   </div>
                   <button className="tf-btn tf-btn-primary" style={{ justifySelf: "start", padding: "7px 14px" }} disabled={busy === "save"} onClick={save}>{busy === "save" ? "Saving…" : "Save changes"}</button>
                 </div>
@@ -3177,7 +3189,7 @@ function SalesOrderModal({ id }) {
                   <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginBottom: 7 }}>RECORD SHIPMENT</div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <input type="number" min="0" step="any" placeholder={`qty (≤ ${remaining})`} style={{ ...inp, width: 120 }} value={ship.qty} onChange={(e) => setShip({ ...ship, qty: e.target.value })} />
-                    <input type="text" inputMode="numeric" placeholder="YYYY-MM-DD" style={{ ...inp, width: 130 }} value={ship.date} onChange={(e) => setShip({ ...ship, date: e.target.value })} />
+                    <input type="date" style={{ ...inp, width: 150 }} value={ship.date} onChange={(e) => setShip({ ...ship, date: e.target.value })} />
                     <button className="tf-btn tf-btn-primary" style={{ padding: "7px 14px" }} disabled={busy === "ship"} onClick={doShip}>{busy === "ship" ? "…" : "Ship"}</button>
                   </div>
                 </div>
@@ -3186,6 +3198,23 @@ function SalesOrderModal({ id }) {
             </div>
           );
         })()}
+
+        {pendingShared.length > 0 && (
+          <div style={{ marginBottom: 16, background: "rgba(255,138,61,.08)", border: "1px solid var(--amber)", borderRadius: 12, padding: 14 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 8 }}>⚠ Shared blockers — confirm before closing</div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>This order closed, but {pendingShared.length === 1 ? "this blocker also holds up" : "these blockers also hold up"} other open orders. Closing {pendingShared.length === 1 ? "it" : "them"} here clears {pendingShared.length === 1 ? "it" : "them"} on those orders too.</div>
+            {pendingShared.map((b) => (
+              <div key={b.id} style={{ padding: "8px 0", borderTop: "1px solid var(--line)" }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{b.title}</div>
+                <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--amber)" }}>also affects: {b.others.map((sid) => { const oo = soById(sid); return oo ? oo.so + " L" + oo.line : sid; }).join(", ")}</div>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button className="tf-btn tf-btn-primary" onClick={() => { pendingShared.forEach((b) => setBlockerStatus(b.id, "closed")); setNote((n) => (n ? n + " " : "") + `${pendingShared.length} shared blocker${pendingShared.length > 1 ? "s" : ""} closed on all referenced orders.`); setPendingShared([]); }}>Close on all referenced orders</button>
+              <button className="tf-btn" onClick={() => setPendingShared([])}>Keep open</button>
+            </div>
+          </div>
+        )}
 
         <div style={{ marginBottom: 14 }}>
           <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Parts</div>
