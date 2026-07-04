@@ -2698,7 +2698,7 @@ const normalizeSos = (arr) => [...new Set((arr || []).flatMap((e) => {
   const ls = linesOfSO(e).map((l) => l.id);
   return ls.length ? ls : [e + "-L10"];
 }))];
-const mapBlk = (r) => ({ id: r.id, title: r.title, status: r.status, assignee: r.assignee || null, openedBy: r.opened_by || null, created: r.created_at, closedAt: r.closed_at || null, closedBy: r.closed_by || null, newPromise: r.new_promise || null, action: r.action || "", wo: r.wo || null, sos: normalizeSos(r.sos), parts: r.parts || [], comments: r.comments || [] });
+const mapBlk = (r) => ({ id: r.id, title: r.title, status: r.status, reviewStatus: r.review_status || "confirmed", assignee: r.assignee || null, openedBy: r.opened_by || null, created: r.created_at, closedAt: r.closed_at || null, closedBy: r.closed_by || null, newPromise: r.new_promise || null, action: r.action || "", wo: r.wo || null, sos: normalizeSos(r.sos), parts: r.parts || [], comments: r.comments || [] });
 // effective promise = revised date from an open blocker (if any), else the original committed date
 const revisedForSO = (blockers, soId) => { const b = blockers.find((x) => x.status !== "closed" && x.newPromise && x.sos.includes(soId)); return b ? b.newPromise : null; };
 const effPromise = (blockers, o) => revisedForSO(blockers, o.id) || o.promise;
@@ -3158,14 +3158,24 @@ function SalesOrderModal({ id }) {
 
 /* ---------- blockers list page ---------- */
 function BlockersPage() {
-  const { blockers, openBlocker, openForm } = useData();
+  const { blockers, openBlocker, openForm, confirmBlocker, dismissBlocker, runDeliveryAgent } = useData();
   const [filter, setFilter] = useState("all");
   const [site, setSite] = useState("All");
+  const [agentMsg, setAgentMsg] = useState("");
+  const [scanning, setScanning] = useState(false);
   const atSite = (b) => site === "All" || b.sos.some((id) => soById(id)?.site === site);
   const scoped = blockers.filter(atSite);
-  const list = scoped.filter((b) => filter === "all" || b.status === filter);
+  const list = scoped.filter((b) => filter === "all" || (filter === "review" ? b.reviewStatus === "under_review" && b.status !== "closed" : b.status === filter));
   const openCount = scoped.filter((b) => b.status !== "closed").length;
+  const reviewCount = scoped.filter((b) => b.reviewStatus === "under_review" && b.status !== "closed").length;
   const atRisk = scoped.filter((b) => b.status !== "closed").reduce((a, b) => a + blockerValue(b), 0);
+
+  const runAgent = async () => {
+    setScanning(true); setAgentMsg("");
+    try { const r = await runDeliveryAgent(); setAgentMsg(r.offline ? "Agent runs against live data only." : r.created > 0 ? `Agent flagged ${r.created} past-due order${r.created > 1 ? "s" : ""} for review.` : "Agent found no new past-due orders."); }
+    catch { setAgentMsg("Could not run the agent (admins only)."); }
+    finally { setScanning(false); }
+  };
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "34px 22px 70px" }}>
@@ -3173,7 +3183,7 @@ function BlockersPage() {
         sub="Shop-floor issues tied to the sales orders they put at risk. Each blocker links parts, a work order and an owner — and carries the $ revenue exposed across its impacted orders. Clear a blocker; the delivery calendar and forecast update live." />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
-        {[["Open / assigned", openCount, "var(--red)"], ["$ revenue at risk", fmtMoney(atRisk), "var(--amber)"], ["Total blockers", scoped.length, "var(--ink)"]].map(([l, v, c]) => (
+        {[["Open / assigned", openCount, "var(--red)"], ["Awaiting review", reviewCount, "var(--amber)"], ["$ revenue at risk", fmtMoney(atRisk), "var(--amber)"], ["Total blockers", scoped.length, "var(--ink)"]].map(([l, v, c]) => (
           <div key={l} className="tf-panel" style={{ padding: 16 }}>
             <div className="tf-disp" style={{ fontSize: 24, fontWeight: 800, color: c }}>{v}</div>
             <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 3 }}>{l}</div>
@@ -3183,11 +3193,14 @@ function BlockersPage() {
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 4 }}>
-          {["all", "open", "assigned", "closed"].map((s) => (
-            <button key={s} onClick={() => setFilter(s)} className="tf-mono" style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, textTransform: "capitalize", border: `1px solid ${filter === s ? "var(--amber)" : "var(--line)"}`, background: filter === s ? "var(--panel2)" : "transparent", color: filter === s ? "var(--ink)" : "var(--muted)" }}>{s}</button>
+          {["all", "review", "open", "assigned", "closed"].map((s) => (
+            <button key={s} onClick={() => setFilter(s)} className="tf-mono" style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, textTransform: "capitalize", border: `1px solid ${filter === s ? "var(--amber)" : "var(--line)"}`, background: filter === s ? "var(--panel2)" : "transparent", color: filter === s ? "var(--ink)" : "var(--muted)" }}>{s === "review" ? "Under review" : s}</button>
           ))}
         </div>
-        <button className="tf-btn tf-btn-primary" style={{ marginLeft: "auto" }} onClick={() => openForm([])}><Plus size={15} /> New blocker</button>
+        <button className="tf-btn" style={{ marginLeft: "auto" }} onClick={runAgent} disabled={scanning} title="Scan open orders whose promise date has passed">
+          <Bot size={15} /> {scanning ? "Scanning…" : "Run delivery check"}
+        </button>
+        <button className="tf-btn tf-btn-primary" onClick={() => openForm([])}><Plus size={15} /> New blocker</button>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <Building2 size={15} color="var(--faint)" />
           <select value={site} onChange={(e) => setSite(e.target.value)} style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
@@ -3196,19 +3209,32 @@ function BlockersPage() {
           </select>
         </div>
       </div>
+      {agentMsg && <div className="tf-mono" style={{ fontSize: 12, color: "var(--thread)", marginBottom: 12 }}>{agentMsg}</div>}
 
       <div className="tf-panel" style={{ overflow: "hidden" }}>
         {list.length === 0 && <div style={{ padding: 20, color: "var(--faint)", fontSize: 13 }}>No blockers in this view.</div>}
-        {list.map((b) => (
-          <div key={b.id} onClick={() => openBlocker(b.id)} className="tf-row" style={{ padding: "13px 16px", borderBottom: "1px solid var(--line)", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <Tag tone={BLK_TONE[b.status]}>{b.status}</Tag>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{b.title}</div>
-              <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{b.id} · {b.sos.length} order{b.sos.length > 1 ? "s" : ""} · {b.wo || "no WO"} · {b.assignee || "unassigned"}</div>
+        {list.map((b) => {
+          const review = b.reviewStatus === "under_review" && b.status !== "closed";
+          const accent = b.status === "closed" ? "var(--faint)" : review ? "var(--amber)" : "var(--red)";
+          return (
+            <div key={b.id} onClick={() => openBlocker(b.id)} className="tf-row" style={{ padding: "13px 16px", borderBottom: "1px solid var(--line)", borderLeft: `3px solid ${accent}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: review ? "rgba(255,138,61,.06)" : undefined }}>
+              {review
+                ? <Tag tone="yellow"><Bot size={11} style={{ verticalAlign: "-1px", marginRight: 3 }} />Under review</Tag>
+                : <Tag tone={BLK_TONE[b.status]}>{b.status}</Tag>}
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{b.title}</div>
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{b.id} · {b.sos.length} order{b.sos.length > 1 ? "s" : ""} · {b.wo || "no WO"} · {review ? <span style={{ color: "var(--amber)" }}>flagged by {b.openedBy || "Agent"}</span> : (b.assignee || "unassigned")}</div>
+              </div>
+              {review && (
+                <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                  <button className="tf-btn" style={{ padding: "6px 11px", borderColor: "var(--red)", color: "var(--red)" }} onClick={() => confirmBlocker(b.id)}>Confirm</button>
+                  <button className="tf-btn" style={{ padding: "6px 11px" }} onClick={() => dismissBlocker(b.id)}>Dismiss</button>
+                </div>
+              )}
+              <span className="tf-disp" style={{ fontSize: 17, fontWeight: 800, color: accent }}>{fmtMoney(blockerValue(b))}</span>
             </div>
-            <span className="tf-disp" style={{ fontSize: 17, fontWeight: 800, color: "var(--red)" }}>{fmtMoney(blockerValue(b))}</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -3585,6 +3611,9 @@ export default function App({ user }) {
     setBlockerStatus: (id, status) => { setBlockers((b) => b.map((x) => { if (x.id !== id) return x; if (status === "closed") return { ...x, status, closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || ACTIVE_USER }; return { ...x, status, closedAt: null, closedBy: null }; })); logEvent("blocker.status", id + " → " + status); if (backend) apiSend("/api/blockers/" + id, "PATCH", { status }); },
     setNewPromise: (id, date) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, newPromise: date || null } : x))); logEvent("blocker.revisedPromise", id + " → " + (date || "cleared")); if (backend) apiSend("/api/blockers/" + id, "PATCH", { new_promise: date || "" }); },
     addComment: (id, text) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, comments: [...(x.comments || []), { ts: new Date().toISOString(), who: ACTIVE_USER, text }] } : x))); logEvent("blocker.update", id + ": " + text.slice(0, 70)); if (backend) apiSend("/api/blockers/" + id + "/comments", "POST", { text }); },
+    confirmBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, reviewStatus: "confirmed" } : x))); logEvent("blocker.confirmed", id); if (backend) apiSend("/api/blockers/" + id + "/confirm", "POST"); },
+    dismissBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed", reviewStatus: "confirmed", closedAt: new Date().toISOString(), closedBy: ACTIVE_USER } : x))); logEvent("blocker.dismissed", id); if (backend) apiSend("/api/blockers/" + id + "/dismiss", "POST"); },
+    runDeliveryAgent: async () => { if (!backend) return { created: 0, offline: true }; const r = await apiSend("/api/agent/scan_delivery_risk", "POST"); const rows = await apiGet("/api/blockers"); if (rows) setBlockers(rows.map(mapBlk)); return r || { created: 0 }; },
     openBlocker: (id) => setBView(id), closeView: () => setBView(null),
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
     openSO: (id) => setSoView(id), closeSO: () => setSoView(null),

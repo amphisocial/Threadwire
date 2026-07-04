@@ -81,3 +81,8 @@ export const caseStudyFileUrl = (id, download = false) => "/api/case-studies/" +
 export const uploadCaseStudy = (formData) => fetch("/api/case-studies", { method: "POST", credentials: "include", body: formData }).then(jsonOrThrow);
 export const updateCaseStudy = (id, body) => fetch("/api/case-studies/" + id, opts("PATCH", body)).then(jsonOrThrow);
 export const deleteCaseStudy = (id) => fetch("/api/case-studies/" + id, opts("DELETE")).then(jsonOrThrow);
+
+// Delivery-Risk Agent
+export const runDeliveryAgent = () => fetch("/api/agent/scan_delivery_risk", opts("POST")).then(jsonOrThrow);
+export const confirmBlocker = (id) => fetch("/api/blockers/" + id + "/confirm", opts("POST")).then(jsonOrThrow);
+export const dismissBlocker = (id) => fetch("/api/blockers/" + id + "/dismiss", opts("POST")).then(jsonOrThrow);

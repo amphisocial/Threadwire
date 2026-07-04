@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
-from . import billing, case_studies, connectors_rest, db, emailer, importer, mfa, storage
+from . import agent, billing, case_studies, connectors_rest, db, emailer, importer, mfa, storage
 from .ai import ai_complete
 from .config import settings
 from .crypto import decrypt_bytes, encrypt_str
@@ -1296,6 +1296,7 @@ class CommentIn(BaseModel):
 def _blocker_out(r) -> dict:
     return {
         "id": r["id"], "title": r["title"], "status": r["status"], "assignee": r["assignee"],
+        "review_status": (r["review_status"] if "review_status" in r else "confirmed"),
         "opened_by": r["opened_by"], "action": r["action"] or "", "wo": r["wo"],
         "sos": r["sos"] or [], "parts": r["parts"] or [], "comments": r["comments"] or [],
         "new_promise": r["new_promise"].isoformat() if r["new_promise"] else None,
@@ -1390,6 +1391,48 @@ async def add_blocker_comment(bid: str, body: CommentIn, user: dict = Depends(cu
         if not row:
             raise HTTPException(404, "Blocker not found")
         await _log_activity(con, user["org_id"], who, "blocker.comment", bid + ": " + body.text[:70])
+    return _blocker_out(row)
+
+
+# --------------------------------------------------------------------------- #
+# Delivery-Risk Agent: flag past-due orders; humans confirm/dismiss
+# --------------------------------------------------------------------------- #
+@app.post("/api/agent/scan_delivery_risk")
+async def scan_delivery_risk(user: dict = Depends(current_user)):
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+    async with db.pool().acquire() as con:
+        res = await agent.scan_org(con, user["org_id"])
+    return res
+
+
+@app.post("/api/blockers/{bid}/confirm")
+async def confirm_blocker(bid: str, user: dict = Depends(current_user)):
+    """Human confirms an agent-flagged blocker — it becomes a real (red) blocker."""
+    who = user.get("full_name") or user["email"]
+    async with db.pool().acquire() as con:
+        row = await con.fetchrow(
+            "UPDATE blockers SET review_status='confirmed' WHERE org_id=$1 AND id=$2 RETURNING *",
+            user["org_id"], bid)
+        if not row:
+            raise HTTPException(404, "Blocker not found")
+        await _log_activity(con, user["org_id"], who, "blocker.confirmed", bid + " confirmed from agent review")
+    return _blocker_out(row)
+
+
+@app.post("/api/blockers/{bid}/dismiss")
+async def dismiss_blocker(bid: str, user: dict = Depends(current_user)):
+    """Human dismisses an agent-flagged blocker as a false alarm — closes it."""
+    who = user.get("full_name") or user["email"]
+    entry = {"ts": datetime.now(timezone.utc).isoformat(), "who": who, "text": "Dismissed agent finding (not a blocker)."}
+    async with db.pool().acquire() as con:
+        row = await con.fetchrow(
+            "UPDATE blockers SET status='closed', review_status='confirmed', closed_at=now(), "
+            "closed_by=$3, comments = comments || $4::jsonb WHERE org_id=$1 AND id=$2 RETURNING *",
+            user["org_id"], bid, who, [entry])
+        if not row:
+            raise HTTPException(404, "Blocker not found")
+        await _log_activity(con, user["org_id"], who, "blocker.dismissed", bid + " dismissed (agent false alarm)")
     return _blocker_out(row)
 
 
