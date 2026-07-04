@@ -3621,6 +3621,7 @@ function FinancePage() {
 
   const totGreen = rows.filter((r) => !r.blk).reduce((a, r) => a + r.value, 0);
   const totBlocked = rows.filter((r) => r.blk).reduce((a, r) => a + r.value, 0);
+  const totRecognized = filtered.reduce((a, o) => a + (o.qty > 0 ? o.value * ((o.qtyShipped || 0) / o.qty) : 0), 0);
   const tot = totGreen + totBlocked;
   const pct = (n) => (tot ? Math.round((n / tot) * 100) : 0);
 
@@ -3650,7 +3651,7 @@ function FinancePage() {
       {/* top summary */}
       <div className="tf-panel tf-fade" style={{ padding: 20, marginBottom: 22 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 18, marginBottom: 16 }}>
-          {[["Total pipeline", fmtMoney(tot), "var(--ink)"], ["Committed (clear)", fmtMoney(totGreen), "var(--green)"], ["At risk (blocked)", fmtMoney(totBlocked), "var(--red)"], ["At-risk share", pct(totBlocked) + "%", "var(--amber)"]].map(([l, v, c]) => (
+          {[["Total pipeline", fmtMoney(tot), "var(--ink)"], ["Committed (clear)", fmtMoney(totGreen), "var(--green)"], ["At risk (blocked)", fmtMoney(totBlocked), "var(--red)"], ["Revenue recognized", fmtMoney(totRecognized), "var(--thread)"], ["At-risk share", pct(totBlocked) + "%", "var(--amber)"]].map(([l, v, c]) => (
             <div key={l}>
               <div className="tf-disp" style={{ fontSize: 26, fontWeight: 800, color: c }}>{v}</div>
               <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 3 }}>{l}</div>
