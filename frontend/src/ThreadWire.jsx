@@ -268,6 +268,12 @@ function TopNav({ route, go, tier, onContact, loggedIn }) {
               {l}
             </span>
           ))}
+          {!loggedIn && (
+            <span className="tf-link" onClick={() => { window.location.href = "/case-studies"; }}
+              style={{ borderBottom: "2px solid transparent", paddingBottom: 3 }}>
+              Case Studies
+            </span>
+          )}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           <span className="tf-chip" style={{ color: tier === "paid" ? "var(--amber)" : "var(--muted)" }}>
