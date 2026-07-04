@@ -20,10 +20,12 @@ async def scan_org(con, org_id, who="Agent") -> dict:
     """Create under-review blockers for past-due, still-open SO lines. Idempotent:
     skips any line already covered by an active (non-closed) blocker."""
     rows = await con.fetch(
-        "SELECT so_number, line_number, part_number, customer, promise_date, value "
+        "SELECT so_number, line_number, part_number, customer, promise_date, value, quantity, qty_shipped "
         "FROM sales_orders WHERE org_id=$1 AND promise_date IS NOT NULL "
         "AND promise_date < CURRENT_DATE "
-        "AND lower(coalesce(status,'')) <> ALL($2::text[])",
+        "AND lower(coalesce(status,'')) <> ALL($2::text[]) "
+        "AND coalesce(qty_shipped,0) < coalesce(quantity,0) "
+        "AND ship_date IS NULL",
         org_id, list(_CLOSED_SO))
     created = []
     for r in rows:

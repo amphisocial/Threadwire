@@ -2688,7 +2688,7 @@ const BLK_TONE = { open: "red", assigned: "yellow", closed: "green" };
 const CURRENT_USER = "Anu Mishra";
 let ACTIVE_USER = CURRENT_USER;
 // backend → app shape mappers (members)
-const mapSO = (r) => ({ id: r.so_number + "-L" + (r.line_number || 10), so: r.so_number, line: r.line_number || 10, customer: r.customer, site: r.site || "", promise: r.promise_date, part: r.part_number || "", parts: r.part_number ? [r.part_number] : [], qty: Number(r.quantity) || 0, value: Number(r.value) || 0 });
+const mapSO = (r) => ({ id: r.so_number + "-L" + (r.line_number || 10), so: r.so_number, line: r.line_number || 10, customer: r.customer, site: r.site || "", promise: r.promise_date, part: r.part_number || "", parts: r.part_number ? [r.part_number] : [], qty: Number(r.quantity) || 0, value: Number(r.value) || 0, status: r.status || "", shipDate: r.ship_date || null, qtyShipped: Number(r.qty_shipped) || 0, promiseChangedBy: r.promise_changed_by || null, promiseChangedAt: r.promise_changed_at || null, statusChangedBy: r.status_changed_by || null, statusChangedAt: r.status_changed_at || null });
 const mapWO = (r) => ({ id: r.wo_number, part: r.part_number || "", desc: r.description || "" });
 // Legacy blockers referenced bare SO numbers; expand them to line ids so older
 // blockers keep their relationship to (now line-level) sales orders.
@@ -3086,8 +3086,14 @@ function PartModal({ pn }) {
 }
 
 function SalesOrderModal({ id }) {
-  const { blockers, openBlocker, openForm, closeSO, openSOLines } = useData();
+  const { blockers, openBlocker, openForm, closeSO, openSOLines, editSOLine, recordShipment } = useData();
   const o = soById(id);
+  const [edit, setEdit] = useState(false);
+  const [ef, setEf] = useState({ promise: "", status: "", shipDate: "" });
+  const [ship, setShip] = useState({ qty: "", date: new Date().toISOString().slice(0, 10) });
+  const [busy, setBusy] = useState("");
+  const [note, setNote] = useState("");
+  useEffect(() => { if (o) { setEf({ promise: o.promise || "", status: o.status || "", shipDate: o.shipDate || "" }); setEdit(false); setNote(""); } }, [o && o.id]);
   if (!o) return null;
   const blk = openBlockerForSO(blockers, id);
   const related = blockers.filter((b) => b.sos.includes(id)).sort((a, b) => (a.status === "closed") - (b.status === "closed") || blockerValue(b) - blockerValue(a));
@@ -3114,6 +3120,69 @@ function SalesOrderModal({ id }) {
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Quantity</span><span style={{ fontSize: 13 }}>{o.qty}</span>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Total value</span><span className="tf-disp" style={{ fontSize: 16, fontWeight: 800 }}>{fmtMoney(o.value)}</span>
         </div>
+
+        {(() => {
+          const remaining = Math.max(0, o.qty - (o.qtyShipped || 0));
+          const recognized = o.qty > 0 ? o.value * ((o.qtyShipped || 0) / o.qty) : 0;
+          const done = o.shipDate || ["shipped", "closed", "complete", "completed", "delivered"].includes((o.status || "").toLowerCase());
+          const inp = { fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 9px", color: "var(--ink)", outline: "none" };
+          const save = async () => { setBusy("save"); setNote(""); const patch = {}; if (ef.promise !== (o.promise || "")) patch.promise_date = ef.promise; if (ef.status !== (o.status || "")) patch.status = ef.status; if (ef.shipDate !== (o.shipDate || "")) patch.ship_date = ef.shipDate; if (!Object.keys(patch).length) { setEdit(false); setBusy(""); return; } const r = await editSOLine(o.so, o.line, patch); setBusy(""); if (r && r.offline) setNote("Editing works on live data only."); else setEdit(false); };
+          const doShip = async () => { const q = parseFloat(ship.qty); if (!q || q <= 0) { setNote("Enter a quantity to ship."); return; } if (q > remaining + 1e-9) { setNote(`Only ${remaining} remaining.`); return; } setBusy("ship"); const r = await recordShipment(o.so, o.line, q, ship.date); setBusy(""); if (r && r.offline) setNote("Shipping works on live data only."); else { setShip({ qty: "", date: ship.date }); setNote(r.closed ? "Fully shipped — order auto-closed." : `Shipped ${q}. $${(r.recognized || 0).toLocaleString()} recognized.`); } };
+          return (
+            <div style={{ marginBottom: 16, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div className="tf-eyebrow">Fulfillment</div>
+                <Tag tone={done ? "green" : "yellow"}>{o.status || (done ? "shipped" : "open")}</Tag>
+                <button className="tf-btn" style={{ marginLeft: "auto", padding: "5px 10px" }} onClick={() => setEdit((e) => !e)}>{edit ? "Cancel" : "Edit"}</button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: edit ? 12 : 0 }}>
+                <div><div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>SHIPPED</div><div style={{ fontSize: 14, fontWeight: 700 }}>{o.qtyShipped || 0}<span style={{ color: "var(--faint)", fontWeight: 400 }}> / {o.qty}</span></div></div>
+                <div><div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>REMAINING</div><div style={{ fontSize: 14, fontWeight: 700, color: remaining > 0 ? "var(--amber)" : "var(--green)" }}>{remaining}</div></div>
+                <div><div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>REVENUE RECOGNIZED</div><div className="tf-disp" style={{ fontSize: 14, fontWeight: 800, color: "var(--green)" }}>{fmtMoney(recognized)}</div></div>
+              </div>
+              {o.shipDate && <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 6 }}>Last ship date: {o.shipDate}</div>}
+              {(o.promiseChangedBy || o.statusChangedBy) && (
+                <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginTop: 6, lineHeight: 1.6 }}>
+                  {o.promiseChangedBy && <div>Promise last changed by {o.promiseChangedBy}{o.promiseChangedAt ? " · " + o.promiseChangedAt.slice(0, 10) : ""}</div>}
+                  {o.statusChangedBy && <div>Status last changed by {o.statusChangedBy}{o.statusChangedAt ? " · " + o.statusChangedAt.slice(0, 10) : ""}</div>}
+                </div>
+              )}
+
+              {edit && (
+                <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 12, display: "grid", gap: 9 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 74 }}>Promise</span>
+                    <input type="date" style={{ ...inp, flex: 1 }} value={ef.promise || ""} onChange={(e) => setEf({ ...ef, promise: e.target.value })} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 74 }}>Status</span>
+                    <select style={{ ...inp, flex: 1 }} value={ef.status || ""} onChange={(e) => setEf({ ...ef, status: e.target.value })}>
+                      {["", "open", "in_production", "shipped", "closed", "on_hold", "cancelled"].map((s) => <option key={s} value={s}>{s || "—"}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 74 }}>Ship date</span>
+                    <input type="date" style={{ ...inp, flex: 1 }} value={ef.shipDate || ""} onChange={(e) => setEf({ ...ef, shipDate: e.target.value })} />
+                  </div>
+                  <button className="tf-btn tf-btn-primary" style={{ justifySelf: "start", padding: "7px 14px" }} disabled={busy === "save"} onClick={save}>{busy === "save" ? "Saving…" : "Save changes"}</button>
+                </div>
+              )}
+
+              {remaining > 0 && (
+                <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 12 }}>
+                  <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginBottom: 7 }}>RECORD SHIPMENT</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <input type="number" min="0" step="any" placeholder={`qty (≤ ${remaining})`} style={{ ...inp, width: 120 }} value={ship.qty} onChange={(e) => setShip({ ...ship, qty: e.target.value })} />
+                    <input type="date" style={inp} value={ship.date} onChange={(e) => setShip({ ...ship, date: e.target.value })} />
+                    <button className="tf-btn tf-btn-primary" style={{ padding: "7px 14px" }} disabled={busy === "ship"} onClick={doShip}>{busy === "ship" ? "…" : "Ship"}</button>
+                  </div>
+                </div>
+              )}
+              {note && <div className="tf-mono" style={{ fontSize: 11, color: "var(--thread)", marginTop: 9 }}>{note}</div>}
+            </div>
+          );
+        })()}
 
         <div style={{ marginBottom: 14 }}>
           <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Parts</div>
@@ -3444,6 +3513,62 @@ function DeliveryPage() {
 }
 
 /* ---------- point-in-time revenue forecast (finance / GM view) ---------- */
+function RevenueRecognized() {
+  const { backendOn } = useData();
+  const [period, setPeriod] = useState("month");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!backendOn) { setData(null); return; }
+    let alive = true; setLoading(true);
+    fetch("/api/revenue/recognized?period=" + period, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive) setData(d); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [period, backendOn]);
+
+  if (!backendOn) return null;
+  const buckets = (data && data.buckets) || [];
+  const total = (data && data.total) || 0;
+  const max = Math.max(1, ...buckets.map((b) => b.recognized));
+  const label = (iso) => {
+    const d = new Date(iso + "T00:00:00");
+    if (period === "quarter") return "Q" + (Math.floor(d.getMonth() / 3) + 1) + " '" + String(d.getFullYear()).slice(2);
+    if (period === "week") return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+  };
+  return (
+    <div className="tf-panel tf-fade" style={{ padding: 20, marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <div>
+          <div className="tf-eyebrow">Revenue recognized · shipped</div>
+          <div className="tf-disp" style={{ fontSize: 26, fontWeight: 800, color: "var(--green)" }}>{fmtMoney(total)}</div>
+        </div>
+        <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+          {[["week", "Weekly"], ["month", "Monthly"], ["quarter", "Quarterly"]].map(([k, l]) => (
+            <button key={k} onClick={() => setPeriod(k)} className="tf-mono" style={{ padding: "6px 11px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${period === k ? "var(--amber)" : "var(--line)"}`, background: period === k ? "var(--panel2)" : "transparent", color: period === k ? "var(--ink)" : "var(--muted)" }}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {loading ? <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>Loading…</div>
+        : buckets.length === 0 ? <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>No shipments recognized yet. Record a shipment on a sales order to recognize revenue.</div>
+        : (
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 150, paddingTop: 8 }}>
+            {buckets.map((b) => (
+              <div key={b.bucket} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 0 }} title={`${fmtMoney(b.recognized)} · ${b.qty} units · ${b.shipments} shipment${b.shipments === 1 ? "" : "s"}`}>
+                <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--muted)" }}>{fmtMoney(b.recognized)}</div>
+                <div style={{ width: "100%", maxWidth: 46, height: (b.recognized / max) * 100 + "%", minHeight: 3, background: "linear-gradient(180deg,var(--green),#2a8f5a)", borderRadius: "5px 5px 0 0" }} />
+                <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", whiteSpace: "nowrap" }}>{label(b.bucket)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+    </div>
+  );
+}
+
 function FinancePage() {
   const { sos, blockers } = useData();
   const [site, setSite] = useState("All");
@@ -3477,6 +3602,8 @@ function FinancePage() {
     <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
       <PageHead icon={TrendingUp} eyebrow="Manufacturing Delivery Control · Revenue assurance" title="Revenue forecast"
         sub="A blocker-aware forecast a GM can trust: committed (clear) revenue versus at-risk (blocked) revenue, by quarter and month — recomputed live as blockers open and close. The formulas are transparent; the data is sourced." />
+
+      <RevenueRecognized />
 
       <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16 }}>
         <Building2 size={15} color="var(--faint)" />
@@ -3595,7 +3722,7 @@ export default function App({ user }) {
   }, [backend]);
 
   const dataVal = {
-    sos, blockers, people: PEOPLE, sites: SITES, events, logEvent,
+    sos, blockers, people: PEOPLE, sites: SITES, events, logEvent, backendOn: backend,
     delivSite, setDelivSite, delivWeek, setDelivWeek,
     addBlocker: async (p) => {
       if (backend) {
@@ -3614,6 +3741,19 @@ export default function App({ user }) {
     confirmBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, reviewStatus: "confirmed" } : x))); logEvent("blocker.confirmed", id); if (backend) apiSend("/api/blockers/" + id + "/confirm", "POST"); },
     dismissBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed", reviewStatus: "confirmed", closedAt: new Date().toISOString(), closedBy: ACTIVE_USER } : x))); logEvent("blocker.dismissed", id); if (backend) apiSend("/api/blockers/" + id + "/dismiss", "POST"); },
     runDeliveryAgent: async () => { if (!backend) return { created: 0, offline: true }; const r = await apiSend("/api/agent/scan_delivery_risk", "POST"); const rows = await apiGet("/api/blockers"); if (rows) setBlockers(rows.map(mapBlk)); return r || { created: 0 }; },
+    reloadOrders: async () => { if (!backend) return; const so = await apiGet("/api/sales_orders"); if (Array.isArray(so)) { const m = so.map(mapSO); ACTIVE_ORDERS = m; setSos(m); } },
+    editSOLine: async (so, line, patch) => {
+      if (!backend) return { offline: true };
+      const r = await apiSend("/api/sales_orders/" + encodeURIComponent(so) + "/" + line, "PATCH", patch);
+      const rows = await apiGet("/api/sales_orders"); if (Array.isArray(rows)) { const m = rows.map(mapSO); ACTIVE_ORDERS = m; setSos(m); }
+      logEvent("order.edited", so + " L" + line); return r || {};
+    },
+    recordShipment: async (so, line, qty, shipDate) => {
+      if (!backend) return { offline: true };
+      const r = await apiSend("/api/sales_orders/" + encodeURIComponent(so) + "/" + line + "/ship", "POST", { qty, ship_date: shipDate });
+      const rows = await apiGet("/api/sales_orders"); if (Array.isArray(rows)) { const m = rows.map(mapSO); ACTIVE_ORDERS = m; setSos(m); }
+      logEvent("order.shipped", so + " L" + line + " ×" + qty); return r || {};
+    },
     openBlocker: (id) => setBView(id), closeView: () => setBView(null),
     openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
     openSO: (id) => setSoView(id), closeSO: () => setSoView(null),

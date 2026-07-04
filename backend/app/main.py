@@ -777,7 +777,8 @@ async def list_events(limit: int = 20, user: dict = Depends(current_user)):
 async def get_sales_orders(user: dict = Depends(current_user)):
     async with db.pool().acquire() as con:
         rows = await con.fetch(
-            "SELECT so_number, line_number, customer, site, promise_date, part_number, quantity, value, status "
+            "SELECT so_number, line_number, customer, site, promise_date, part_number, quantity, value, status, "
+            "ship_date, qty_shipped, promise_changed_by, promise_changed_at, status_changed_by, status_changed_at "
             "FROM sales_orders WHERE org_id = $1 ORDER BY promise_date NULLS LAST, so_number, line_number", user["org_id"])
     out = []
     for r in rows:
@@ -789,8 +790,131 @@ async def get_sales_orders(user: dict = Depends(current_user)):
             "quantity": float(r["quantity"]) if r["quantity"] is not None else 0,
             "value": float(r["value"]) if r["value"] is not None else 0,
             "status": r["status"] or "",
+            "ship_date": r["ship_date"].isoformat() if r["ship_date"] else None,
+            "qty_shipped": float(r["qty_shipped"]) if r["qty_shipped"] is not None else 0,
+            "promise_changed_by": r["promise_changed_by"], "status_changed_by": r["status_changed_by"],
+            "promise_changed_at": r["promise_changed_at"].isoformat() if r["promise_changed_at"] else None,
+            "status_changed_at": r["status_changed_at"].isoformat() if r["status_changed_at"] else None,
         })
     return out
+
+
+class SOLineEdit(BaseModel):
+    promise_date: Optional[str] = None   # YYYY-MM-DD, or "" to clear
+    status: Optional[str] = None
+    ship_date: Optional[str] = None
+
+
+def _parse_date(s):
+    if s is None or s == "":
+        return None
+    return datetime.strptime(s, "%Y-%m-%d").date()
+
+
+@app.patch("/api/sales_orders/{so_number}/{line_number}")
+async def edit_sales_order_line(so_number: str, line_number: int, body: SOLineEdit,
+                                user: dict = Depends(current_user)):
+    who = user.get("full_name") or user["email"]
+    now = datetime.now(timezone.utc)
+    async with db.pool().acquire() as con:
+        cur = await con.fetchrow(
+            "SELECT promise_date, status FROM sales_orders WHERE org_id=$1 AND so_number=$2 AND line_number=$3",
+            user["org_id"], so_number, line_number)
+        if not cur:
+            raise HTTPException(404, "Order line not found")
+        sets, args, changed = [], [], []
+        if body.promise_date is not None:
+            newd = _parse_date(body.promise_date)
+            if newd != cur["promise_date"]:
+                args.append(newd); sets.append("promise_date=$%d" % (len(args)))
+                args.append(who); sets.append("promise_changed_by=$%d" % (len(args)))
+                sets.append("promise_changed_at=now()")
+                changed.append("promise %s→%s" % (cur["promise_date"] or "—", newd or "—"))
+        if body.status is not None and body.status != (cur["status"] or ""):
+            args.append(body.status); sets.append("status=$%d" % (len(args)))
+            args.append(who); sets.append("status_changed_by=$%d" % (len(args)))
+            sets.append("status_changed_at=now()")
+            changed.append("status %s→%s" % (cur["status"] or "—", body.status or "—"))
+        if body.ship_date is not None:
+            args.append(_parse_date(body.ship_date)); sets.append("ship_date=$%d" % (len(args)))
+        if not sets:
+            return {"changed": False}
+        sets.append("updated_at=now()")
+        args = [user["org_id"], so_number, line_number] + args
+        await con.execute(
+            "UPDATE sales_orders SET %s WHERE org_id=$1 AND so_number=$2 AND line_number=$3" % ",".join(sets), *args)
+        if changed:
+            await _log_activity(con, user["org_id"], who, "order.edited",
+                                "%s L%s · %s" % (so_number, line_number, "; ".join(changed)))
+    return {"changed": True}
+
+
+class ShipmentIn(BaseModel):
+    qty: float = Field(gt=0)
+    ship_date: str  # YYYY-MM-DD
+
+
+@app.post("/api/sales_orders/{so_number}/{line_number}/ship")
+async def record_shipment(so_number: str, line_number: int, body: ShipmentIn,
+                          user: dict = Depends(current_user)):
+    """Record a (partial) shipment: recognizes revenue proportionally on the ship date,
+    increments qty_shipped, and auto-closes the line once fully shipped."""
+    who = user.get("full_name") or user["email"]
+    sd = _parse_date(body.ship_date)
+    if sd is None:
+        raise HTTPException(400, "ship_date required (YYYY-MM-DD)")
+    async with db.pool().acquire() as con:
+        row = await con.fetchrow(
+            "SELECT quantity, qty_shipped, value, status FROM sales_orders "
+            "WHERE org_id=$1 AND so_number=$2 AND line_number=$3", user["org_id"], so_number, line_number)
+        if not row:
+            raise HTTPException(404, "Order line not found")
+        ordered = float(row["quantity"] or 0)
+        shipped = float(row["qty_shipped"] or 0)
+        remaining = ordered - shipped
+        if body.qty > remaining + 1e-9:
+            raise HTTPException(400, "Cannot ship %g; only %g remaining of %g" % (body.qty, remaining, ordered))
+        line_value = float(row["value"] or 0)
+        recognized = round(line_value * (body.qty / ordered), 2) if ordered > 0 else 0.0
+        new_shipped = shipped + body.qty
+        fully = new_shipped >= ordered - 1e-9
+        await con.execute(
+            "INSERT INTO so_shipments (org_id, so_number, line_number, qty, ship_date, value_recognized, created_by) "
+            "VALUES ($1,$2,$3,$4,$5,$6,$7)",
+            user["org_id"], so_number, line_number, body.qty, sd, recognized, who)
+        if fully:
+            await con.execute(
+                "UPDATE sales_orders SET qty_shipped=$4, ship_date=$5, status='closed', "
+                "status_changed_by=$6, status_changed_at=now(), updated_at=now() "
+                "WHERE org_id=$1 AND so_number=$2 AND line_number=$3",
+                user["org_id"], so_number, line_number, new_shipped, sd, who)
+        else:
+            await con.execute(
+                "UPDATE sales_orders SET qty_shipped=$4, ship_date=$5, updated_at=now() "
+                "WHERE org_id=$1 AND so_number=$2 AND line_number=$3",
+                user["org_id"], so_number, line_number, new_shipped, sd)
+        await _log_activity(con, user["org_id"], who, "order.shipped",
+                            "%s L%s · %g of %g shipped %s · $%s recognized%s"
+                            % (so_number, line_number, body.qty, ordered, sd, recognized,
+                               " · auto-closed" if fully else ""))
+    return {"qty_shipped": new_shipped, "remaining": max(0.0, ordered - new_shipped),
+            "recognized": recognized, "closed": fully}
+
+
+@app.get("/api/revenue/recognized")
+async def revenue_recognized(period: str = "month", user: dict = Depends(current_user)):
+    trunc = {"week": "week", "month": "month", "quarter": "quarter"}.get(period, "month")
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT date_trunc($2, ship_date)::date AS bucket, sum(value_recognized) AS recognized, "
+            "sum(qty) AS qty, count(*) AS shipments FROM so_shipments WHERE org_id=$1 "
+            "GROUP BY 1 ORDER BY 1", user["org_id"], trunc)
+        total = await con.fetchval("SELECT coalesce(sum(value_recognized),0) FROM so_shipments WHERE org_id=$1", user["org_id"])
+    return {
+        "period": trunc, "total": float(total or 0),
+        "buckets": [{"bucket": r["bucket"].isoformat(), "recognized": float(r["recognized"] or 0),
+                     "qty": float(r["qty"] or 0), "shipments": r["shipments"]} for r in rows],
+    }
 
 
 @app.get("/api/part_detail")
