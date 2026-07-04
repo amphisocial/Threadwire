@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useContext } from "react";
 import Compliance from "./compliance/Compliance.jsx";
+import { PeggingExplorerPro, EcoImpactAnalyzerPro } from "./thread/DigitalThreadPro.jsx";
 import {
   LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip,
   AreaChart, Area, BarChart, Bar, CartesianGrid,
@@ -423,7 +424,7 @@ const ASSISTANT = {
   thread: {
     subject: "Material & Thread", accent: "var(--green)",
     intro: "Ask for material status or shortage forecasts across the thread.",
-    suggestions: ["Which parts are short?", "Will WO-7781 finish on time?", "Impact of ECO-220?"],
+    suggestions: ["What slips if MAX14001AAP+ is delayed 4 weeks?", "Which soft pegs should be hardened?", "Summarize ECO-2026-0418 impact"],
     system: "You are a supply-chain / material planning assistant over a manufacturing digital thread. Answer ONLY from this data, be quantitative, flag shortages. Reference IDs.\n\n" + CTX.thread,
     fallback: (q) =>
       /short|material/i.test(q) ? "Against 65-unit demand: PN-3322 short 43 (22 on-hand), PN-3323 short 53 (12 on-hand) with PO-9920 DELAYED to 06-25. PN-3321 bearings fine (140 vs 130)."
@@ -566,7 +567,8 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot 
     setInput("");
     update(route, (c) => ({ ...c, msgs: [...c.msgs, { role: "user", text: q }] }));
     setBusy(true);
-    const sys = cfg.system + (snapshot ? "\n\n" + snapshot : "");
+    const screenCtx = (route === "thread" && typeof window !== "undefined" && window.__twDigitalThreadCtx && window.__twDigitalThreadCtx.combined) ? "\n\n" + window.__twDigitalThreadCtx.combined : "";
+    const sys = cfg.system + (snapshot ? "\n\n" + snapshot : "") + screenCtx;
     const reply = await askClaude(sys, q, hist);
     const out = reply || cfg.fallback(q, botCtx);
     update(route, (c) => ({
@@ -1374,222 +1376,30 @@ function RequirementsPage({ tier, setTier }) {
 }
 
 /* --------------------------- DIGITAL THREAD ----------------------------- */
+/* Two sub-tabs (Supply Chain Pegging Explorer + ECO Impact Analyzer) live in
+   src/thread/DigitalThreadPro.jsx. Both start from a search, try the live
+   /api/thread endpoints and fall back to rich Falcon-LRU demo data. The
+   docked page assistant (bottom-right) reads the on-screen analysis via
+   window.__twDigitalThreadCtx, so ECO / supply-chain questions are answered
+   in context — no separate copilot pane needed. */
 function ThreadPage({ tier, setTier }) {
-  const api = async (url, opts = {}) => {
-    const res = await fetch(url, { credentials: "include", ...opts, headers: { "Content-Type": "application/json", ...(opts.headers || {}) } });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
-  };
-
-  const samplePegging = {
-    part: { part_number: "MAX14001AAP+", description: "Motorized Actuator Assembly", revision: "B" },
-    root_demand: 48,
-    selected_part: "PN-3322",
-    bom_tree: [
-      { part_number: "PN-3320", description: "Spindle Assembly", revision: "C", qty_per: 1, required_qty: 48, on_hand: 18, available: 16, allocated: 2, inbound: 20, gap: 12, tone: "red" },
-      { part_number: "PN-3322", description: "Precision Bearing", revision: "A", qty_per: 2, required_qty: 96, on_hand: 40, available: 34, allocated: 6, inbound: 30, gap: 32, tone: "red" },
-      { part_number: "PN-3323", description: "Sensor Harness", revision: "D", qty_per: 1, required_qty: 48, on_hand: 12, available: 10, allocated: 2, inbound: 42, gap: 0, tone: "amber" },
-      { part_number: "PN-3324", description: "Machined Bracket", revision: "B", qty_per: 4, required_qty: 192, on_hand: 210, available: 190, allocated: 20, inbound: 0, gap: 2, tone: "amber" },
-    ],
-    inventory: {
-      "PN-3322": { on_hand: 40, available: 34, allocated: 6, safety_stock: 10, inspection_hold: 0, sites: [{ site: "BOS", location: "A-12", on_hand: 40, available: 34 }] },
-    },
-    hard_pegs: [
-      { part_number: "PN-3322", source: "Inventory BOS/A-12", pegged_qty: 34, demand: "SO-1042-L10", confidence: "hard", date: "2026-07-12" },
-      { part_number: "PN-3320", source: "Inventory BOS/A-04", pegged_qty: 16, demand: "SO-1041-L20", confidence: "hard", date: "2026-07-10" },
-    ],
-    soft_pegs: [
-      { part_number: "PN-3322", source: "PO-77819", supplier: "Acme Bearings", pegged_qty: 30, confidence: "soft", date: "2026-07-18", status: "Open" },
-      { part_number: "PN-3323", source: "PO-77821", supplier: "WireTech", pegged_qty: 42, confidence: "soft", date: "2026-07-20", status: "Delayed" },
-    ],
-    gaps: [
-      { part_number: "PN-3322", short_qty: 32, risk: "high", recommendation: "Expedite PO-77819 or split shipment for SO-1042" },
-      { part_number: "PN-3320", short_qty: 12, risk: "high", recommendation: "Check substitute spindle rev C/D compatibility" },
-    ],
-    demand_supply_buckets: [
-      { date: "2026-07-10", type: "demand", ref: "SO-1041-L20", part_number: "PN-3322", qty: 46, customer: "Aerospace OEM" },
-      { date: "2026-07-18", type: "supply", ref: "PO-77819-L10", part_number: "PN-3322", qty: 30, supplier: "Acme Bearings" },
-      { date: "2026-07-24", type: "demand", ref: "SO-1042-L10", part_number: "PN-3322", qty: 50, customer: "MedTech Systems" },
-    ],
-    risk_triage: [
-      { part_number: "PN-3322", issue: "coverage gap", severity: "high", exposure_qty: 32, next_action: "buyer expedite + customer re-promise" },
-      { part_number: "PN-3323", issue: "delayed inbound", severity: "medium", exposure_qty: 0, next_action: "watch supplier date" },
-    ],
-  };
-  const sampleEco = {
-    eco: { eco_number: "ECO-2026-0418", title: "Bearing stack revision for actuator assembly", status: "In Review", owner: "Engineering", effective_date: "2026-07-25" },
-    affected_items: [
-      { part_number: "PN-3322", old_revision: "A", new_revision: "B", disposition: "Use as is until 07/25", impact: "SO demand and open WIP" },
-      { part_number: "PN-3320", old_revision: "C", new_revision: "D", disposition: "Rework", impact: "subassembly build plan" },
-      { part_number: "MAX14001AAP+", old_revision: "B", new_revision: "C", disposition: "roll to next build", impact: "customer promise dates" },
-    ],
-    affected_drawings: [
-      { drawing_number: "DWG-3322", old_revision: "A", new_revision: "B", status: "released pending" },
-      { drawing_number: "DWG-3320", old_revision: "C", new_revision: "D", status: "checker review" },
-    ],
-    ims_tasks: [
-      { task_number: "IMS-901", task_name: "Release revised drawing package", owner: "Design Eng", due_date: "2026-07-11", status: "Open", blocker: "checker capacity" },
-      { task_number: "IMS-902", task_name: "Disposition old rev inventory", owner: "Quality", due_date: "2026-07-15", status: "Open", blocker: "MRB decision" },
-      { task_number: "IMS-903", task_name: "Supplier PO revision", owner: "Supply Chain", due_date: "2026-07-18", status: "Not started", blocker: "supplier acknowledgement" },
-    ],
-    orphan_inventory: [
-      { part_number: "PN-3322", quantity: 40, exposure_value: 18400, recommended_action: "Use before cutoff or convert via rework" },
-      { part_number: "PN-3320", quantity: 18, exposure_value: 12600, recommended_action: "MRB disposition" },
-    ],
-    schedule_slip_risks: [
-      { so_number: "SO-1042", line_number: 10, customer: "MedTech Systems", part_number: "MAX14001AAP+", quantity: 24, promise_date: "2026-07-24", value: 186000, status: "At risk" },
-    ],
-    program_rollup: [
-      { metric: "Affected parts", value: 3, tone: "blue" },
-      { metric: "Open IMS tasks", value: 3, tone: "amber" },
-      { metric: "Orphan inventory exposure", value: 31000, tone: "red" },
-      { metric: "Open order exposure", value: 186000, tone: "amber" },
-    ],
-  };
-
   const [tab, setTab] = useState("supply");
-  const [bomQ, setBomQ] = useState("MAX14001AAP+");
-  const [bomResults, setBomResults] = useState([]);
-  const [pegging, setPegging] = useState(samplePegging);
-  const [selPart, setSelPart] = useState(samplePegging.selected_part);
-  const [ecoQ, setEcoQ] = useState("ECO-2026-0418");
-  const [ecoResults, setEcoResults] = useState([]);
-  const [ecoImpact, setEcoImpact] = useState(sampleEco);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState("Demo data shown until matching live rows are imported.");
-  const [copilotQ, setCopilotQ] = useState("");
-  const [copilotA, setCopilotA] = useState("");
-
-  const money = (n) => "$" + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-  const qty = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
-  const toneColor = (t) => t === "red" || t === "high" ? "var(--red)" : t === "green" || t === "low" ? "var(--green)" : t === "blue" ? "var(--blue)" : "var(--amber)";
-  const rows = pegging?.bom_tree?.length ? pegging.bom_tree : samplePegging.bom_tree;
-  const selectedInv = (pegging.inventory || {})[selPart] || samplePegging.inventory[selPart] || {};
-  const hard = (pegging.hard_pegs || []).filter((p) => !selPart || p.part_number === selPart);
-  const soft = (pegging.soft_pegs || []).filter((p) => !selPart || p.part_number === selPart);
-
-  async function searchBom(q = bomQ) {
-    setBusy(true); setNote("");
-    try {
-      const data = await api(`/api/thread/bom/search?q=${encodeURIComponent(q)}`);
-      setBomResults(data.items || []);
-      const first = (data.items || [])[0];
-      if (first?.part_number) await loadPegging(first.part_number);
-      else { setPegging(samplePegging); setSelPart(samplePegging.selected_part); setNote("No live BOM match yet — showing demo pegging analysis."); }
-    } catch (e) {
-      setPegging(samplePegging); setSelPart(samplePegging.selected_part); setNote("API unavailable or no session — showing demo pegging analysis.");
-    } finally { setBusy(false); }
-  }
-  async function loadPegging(pn) {
-    const data = await api(`/api/thread/bom/${encodeURIComponent(pn)}/pegging`);
-    if (!data.bom_tree?.length) { setPegging(samplePegging); setSelPart(samplePegging.selected_part); setNote("Part found, but no BOM rows yet — showing demo pegging analysis."); return; }
-    setPegging(data); setSelPart(data.selected_part || data.bom_tree[0]?.part_number); setNote("Live pegging data loaded from backend APIs.");
-  }
-  async function searchEco(q = ecoQ) {
-    setBusy(true); setNote("");
-    try {
-      const data = await api(`/api/thread/eco/search?q=${encodeURIComponent(q)}`);
-      setEcoResults(data.items || []);
-      const first = (data.items || [])[0];
-      if (first?.eco_number) await loadEco(first.eco_number);
-      else { setEcoImpact(sampleEco); setNote("No live ECO match yet — showing demo ECO impact analysis."); }
-    } catch (e) { setEcoImpact(sampleEco); setNote("API unavailable or no session — showing demo ECO impact analysis."); }
-    finally { setBusy(false); }
-  }
-  async function loadEco(id) {
-    const data = await api(`/api/thread/eco/${encodeURIComponent(id)}/impact`);
-    if (!data.affected_items?.length) { setEcoImpact(sampleEco); setNote("ECO found, but no impact rows yet — showing demo ECO impact analysis."); return; }
-    setEcoImpact(data); setNote("Live ECO impact data loaded from backend APIs.");
-  }
-  async function askCopilot() {
-    const q = copilotQ || (tab === "supply" ? "What is the biggest ship risk and what should I do next?" : "Summarize the ECO impact and mitigation plan.");
-    setCopilotQ(q); setCopilotA("Thinking…");
-    try {
-      const data = await api("/api/thread/copilot", { method: "POST", body: JSON.stringify({ analysis_type: tab === "supply" ? "bom" : "eco", entity_id: tab === "supply" ? pegging.part?.part_number : ecoImpact.eco?.eco_number, question: q, context: tab === "supply" ? pegging : ecoImpact }) });
-      setCopilotA(data.text || "No response.");
-    } catch (e) {
-      setCopilotA(tab === "supply" ? "Biggest risk: parts with uncovered gaps or delayed soft pegs. Prioritize hard allocation, expedite open POs, and re-promise exposed SO lines before the customer misses their date." : "Biggest risk: old-revision inventory and open IMS tasks. Decide use-as-is vs rework/scrap, lock the effective date, and push supplier/customer communication from the ECO owner.");
-    }
-  }
-
-  useEffect(() => { searchBom(bomQ); }, []);
-
-  const Cell = ({ label, value, tone }) => <div className="tf-panel" style={{ padding: 14 }}><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", textTransform: "uppercase" }}>{label}</div><div style={{ marginTop: 6, fontSize: 22, fontWeight: 800, color: toneColor(tone) }}>{value}</div></div>;
-  const SearchBox = ({ value, onChange, onRun, placeholder }) => <div style={{ display: "flex", gap: 10 }}><input className="tf-input" value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRun()} placeholder={placeholder} /><button className="tf-btn tf-btn-primary" onClick={onRun} disabled={busy}><PackageSearch size={15} />{busy ? "Searching…" : "Analyze"}</button></div>;
-
   return (
-    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "34px 22px 70px" }}>
+    <div style={{ maxWidth: 1440, margin: "0 auto", padding: "34px 22px 70px" }}>
       <PageHead icon={GitBranch} eyebrow="Manufacturing Delivery Control · Digital thread" title="Supply chain + ECO impact intelligence"
-        sub="Search a BOM for live pegging, hard/soft allocation, inventory exposure and shortage gaps — or search an ECO to see affected parts, drawings, IMS tasks, orphan inventory and schedule risk."
+        sub="Search a BOM / part for the multi-level pegging explorer — weekly demand, supply, hard/soft pegs and gaps down the tree — or search an ECO for affected items, orphan-inventory exposure and schedule-slip risk. Ask the page assistant about whatever is on screen."
         tier={tier} setTier={setTier} />
 
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <button className={`tf-btn ${tab === "supply" ? "tf-btn-primary" : "tf-btn-ghost"}`} onClick={() => setTab("supply")}><Layers size={15} /> Supply Chain Pegging</button>
         <button className={`tf-btn ${tab === "eco" ? "tf-btn-primary" : "tf-btn-ghost"}`} onClick={() => setTab("eco")}><GitBranch size={15} /> ECO Impact Analysis</button>
-        <span className="tf-chip" style={{ marginLeft: "auto" }}>{note}</span>
       </div>
 
-      {tab === "supply" ? (
-        <div className="tf-fade">
-          <div className="tf-panel" style={{ padding: 16, marginBottom: 16 }}>
-            <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Start with BOM / top assembly search</div>
-            <SearchBox value={bomQ} onChange={setBomQ} onRun={() => searchBom()} placeholder="Search BOM or part, e.g. MAX14001AAP+" />
-            {!!bomResults.length && <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>{bomResults.slice(0, 8).map((p) => <button key={p.part_number} className="tf-chip" onClick={() => loadPegging(p.part_number)}>{p.part_number}</button>)}</div>}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, marginBottom: 16 }}>
-            <Cell label="Root demand" value={qty(pegging.root_demand)} tone="blue" />
-            <Cell label="BOM lines" value={rows.length} tone="green" />
-            <Cell label="Shortage gaps" value={(pegging.gaps || []).length} tone={(pegging.gaps || []).length ? "red" : "green"} />
-            <Cell label="Soft pegs" value={(pegging.soft_pegs || []).length} tone="amber" />
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1.3fr .9fr", gap: 16 }} className="tf-cols">
-            <div className="tf-panel" style={{ overflow: "hidden" }}>
-              <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 8 }}><Boxes size={16} color="var(--thread)" /><b>BOM structure + material coverage</b><span className="tf-chip" style={{ marginLeft: "auto" }}>{pegging.part?.part_number}</span></div>
-              {rows.map((r) => <div key={r.part_number} className="tf-row" onClick={() => setSelPart(r.part_number)} style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", cursor: "pointer", background: selPart === r.part_number ? "var(--panel2)" : "transparent" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}><StatusDot tone={r.tone === "red" ? "red" : r.tone === "green" ? "green" : "yellow"} /><span className="tf-mono" style={{ color: "var(--thread)", fontSize: 12.5 }}>{r.part_number}</span><span style={{ color: "var(--muted)", fontSize: 13 }}>{r.description}</span><Tag tone={r.tone === "red" ? "red" : r.tone === "green" ? "green" : "yellow"}>{r.gap ? `short ${qty(r.gap)}` : "covered"}</Tag></div>
-                <div className="tf-mono" style={{ marginTop: 7, fontSize: 11, color: "var(--faint)" }}>qty/assy {qty(r.qty_per)} · required {qty(r.required_qty)} · available {qty(r.available)} · inbound {qty(r.inbound)} · allocated {qty(r.allocated)}</div>
-              </div>)}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div className="tf-panel" style={{ padding: 16 }}><div className="tf-eyebrow" style={{ marginBottom: 10 }}>Inventory · {selPart}</div><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}><Cell label="On hand" value={qty(selectedInv.on_hand)} tone="blue" /><Cell label="Available" value={qty(selectedInv.available)} tone="green" /><Cell label="Allocated" value={qty(selectedInv.allocated)} tone="amber" /><Cell label="Inspection hold" value={qty(selectedInv.inspection_hold)} tone={selectedInv.inspection_hold ? "red" : "green"} /></div></div>
-              <div className="tf-panel" style={{ padding: 16 }}><div className="tf-eyebrow" style={{ marginBottom: 10 }}>Risk triage</div>{(pegging.risk_triage || []).slice(0, 5).map((x) => <div key={x.part_number} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)", fontSize: 13 }}><span className="tf-mono" style={{ color: toneColor(x.severity) }}>{x.part_number}</span> · {x.issue}<div className="tf-mono" style={{ color: "var(--faint)", fontSize: 11 }}>{x.next_action}</div></div>)}</div>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginTop: 16 }} className="tf-cols">
-            <PegPanel title="Hard pegs" rows={hard} empty="No hard pegs for selected part" />
-            <PegPanel title="Soft pegs" rows={soft} empty="No soft pegs for selected part" />
-            <div className="tf-panel" style={{ padding: 16 }}><div className="tf-eyebrow" style={{ marginBottom: 10 }}>Demand / supply timeline</div>{(pegging.demand_supply_buckets || []).slice(0, 6).map((x, i) => <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 0", borderBottom: "1px solid var(--line)" }}><Tag tone={x.type === "demand" ? "red" : "green"}>{x.type}</Tag><span className="tf-mono" style={{ fontSize: 11 }}>{x.date || "no date"}</span><span style={{ marginLeft: "auto", fontSize: 12 }}>{x.ref} · {qty(x.qty)}</span></div>)}</div>
-          </div>
-        </div>
-      ) : (
-        <div className="tf-fade">
-          <div className="tf-panel" style={{ padding: 16, marginBottom: 16 }}><div className="tf-eyebrow" style={{ marginBottom: 10 }}>Start with ECO search</div><SearchBox value={ecoQ} onChange={setEcoQ} onRun={() => searchEco()} placeholder="Search ECO, e.g. ECO-2026-0418" />{!!ecoResults.length && <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>{ecoResults.slice(0, 8).map((e) => <button key={e.eco_number} className="tf-chip" onClick={() => loadEco(e.eco_number)}>{e.eco_number}</button>)}</div>}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, marginBottom: 16 }}>{(ecoImpact.program_rollup || []).map((m) => <Cell key={m.metric} label={m.metric} value={typeof m.value === "number" && m.metric.toLowerCase().includes("exposure") ? money(m.value) : m.value} tone={m.tone} />)}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1.15fr .85fr", gap: 16 }} className="tf-cols">
-            <div className="tf-panel" style={{ overflow: "hidden" }}><div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", gap: 8, alignItems: "center" }}><GitBranch size={16} color="var(--blue)" /><b>{ecoImpact.eco?.eco_number}</b><span style={{ color: "var(--muted)" }}>{ecoImpact.eco?.title}</span><Tag tone="yellow">{ecoImpact.eco?.status || "review"}</Tag></div>{(ecoImpact.affected_items || []).map((x) => <div key={x.part_number} style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)" }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><span className="tf-mono" style={{ color: "var(--thread)" }}>{x.part_number}</span><Tag tone="blue">{x.old_revision || "-"} → {x.new_revision || "-"}</Tag><span style={{ marginLeft: "auto", color: "var(--muted)", fontSize: 12 }}>{x.disposition}</span></div><div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>{x.impact}</div></div>)}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}><MiniList title="Affected drawings" rows={ecoImpact.affected_drawings || []} main="drawing_number" sub={(x) => `${x.old_revision || "-"} → ${x.new_revision || "-"} · ${x.status || ""}`} /><MiniList title="IMS / execution tasks" rows={ecoImpact.ims_tasks || []} main="task_number" sub={(x) => `${x.task_name || ""} · ${x.owner || ""} · due ${x.due_date || "—"}`} /></div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }} className="tf-cols"><MiniList title="Orphan inventory exposure" rows={ecoImpact.orphan_inventory || []} main="part_number" sub={(x) => `qty ${qty(x.quantity)} · ${money(x.exposure_value)} · ${x.recommended_action || "review disposition"}`} /><MiniList title="Schedule-slip risk" rows={ecoImpact.schedule_slip_risks || []} main={(x) => `${x.so_number || "SO"}-L${x.line_number || 10}`} sub={(x) => `${x.customer || "customer"} · ${x.part_number || ""} · ${qty(x.quantity)} due ${x.promise_date || "—"} · ${money(x.value)}`} /></div>
-        </div>
-      )}
-
-      <div className="tf-panel" style={{ padding: 16, marginTop: 16 }}><div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><Sparkles size={16} color="var(--amber)" /><b>{tab === "supply" ? "Pegging copilot" : "ECO impact copilot"}</b></div><div style={{ display: "flex", gap: 10 }}><input className="tf-input" value={copilotQ} onChange={(e) => setCopilotQ(e.target.value)} placeholder={tab === "supply" ? "Ask: which orders are at risk and what can we ship?" : "Ask: what inventory becomes orphaned and what tasks block release?"} /><button className="tf-btn tf-btn-primary" onClick={askCopilot}><Sparkles size={15} />Ask</button></div>{copilotA && <div style={{ marginTop: 12, color: "var(--muted)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{copilotA}</div>}</div>
+      {tab === "supply" ? <PeggingExplorerPro /> : <EcoImpactAnalyzerPro />}
 
       {tier === "paid" && <div style={{ marginTop: 22 }}><ConnectGate title="Wire up live BOM, inventory, PO and ECO data" lines={["Pull BOMs and ECOs from PLM; inventory, SO and PO supply from ERP/MRP.", "Expose hard allocations vs soft planned supply, then let AI explain delivery exposure.", "Use the sample fallback for demos while customers import real CSV/API data."]} connectors={[{ name: "SAP / ERP", desc: "SO, PO, inventory", icon: Database }, { name: "PLM", desc: "BOM, ECO, drawings", icon: Layers }, { name: "MES / IMS", desc: "tasks + WIP", icon: Workflow }]} /></div>}
     </div>
   );
-}
-
-function PegPanel({ title, rows, empty }) {
-  return <div className="tf-panel" style={{ padding: 16 }}><div className="tf-eyebrow" style={{ marginBottom: 10 }}>{title}</div>{rows.length ? rows.map((x, i) => <div key={i} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}><div style={{ display: "flex", gap: 8 }}><span className="tf-mono" style={{ color: "var(--thread)", fontSize: 12 }}>{x.part_number}</span><Tag tone={x.confidence === "hard" ? "green" : "yellow"}>{x.confidence}</Tag><span style={{ marginLeft: "auto", fontSize: 12 }}>{x.source}</span></div><div className="tf-mono" style={{ color: "var(--faint)", fontSize: 11, marginTop: 4 }}>qty {Number(x.pegged_qty || 0).toLocaleString()} · {x.date || x.demand || x.supplier || ""}</div></div>) : <div style={{ color: "var(--faint)", fontSize: 13 }}>{empty}</div>}</div>;
-}
-function MiniList({ title, rows, main, sub }) {
-  const m = (x) => typeof main === "function" ? main(x) : x[main];
-  const s = (x) => typeof sub === "function" ? sub(x) : x[sub];
-  return <div className="tf-panel" style={{ padding: 16 }}><div className="tf-eyebrow" style={{ marginBottom: 10 }}>{title}</div>{rows.length ? rows.map((x, i) => <div key={i} style={{ padding: "8px 0", borderBottom: "1px solid var(--line)" }}><div className="tf-mono" style={{ color: "var(--thread)", fontSize: 12 }}>{m(x)}</div><div style={{ color: "var(--muted)", fontSize: 12, marginTop: 4 }}>{s(x)}</div></div>) : <div style={{ color: "var(--faint)", fontSize: 13 }}>No rows yet.</div>}</div>;
 }
 
 /* ============================ ROI CALCULATOR ============================= */
