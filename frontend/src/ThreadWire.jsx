@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useContext } from "react";
+import Compliance from "./compliance/Compliance.jsx";
 import {
   LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip,
   AreaChart, Area, BarChart, Bar, CartesianGrid,
@@ -246,7 +247,7 @@ function genSPC(n = 28, target = 50, sigma = 1.1, seed = 7) {
 /* ----------------------------- shared UI -------------------------------- */
 function TopNav({ route, go, tier, onContact, loggedIn }) {
   const links = loggedIn
-    ? [["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"]]
+    ? [["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"], ["compliance", "Compliance"]]
     : [["home", "Home"], ["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"], ["roi", "ROI Calculator"]];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(10,14,21,.72)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
@@ -924,6 +925,7 @@ function Home({ go, onContact }) {
           <div style={{ display: "flex", gap: 40, flexWrap: "wrap", flex: 1 }}>
             {[
               { heading: "Product", links: [["Delivery Calendar", "visibility"], ["Blockers", "blockers"], ["Revenue Forecast", "finance"], ["Digital Thread", "thread"], ["ROI Calculator", "roi"]] },
+              { heading: "Resources", links: [["Case studies", "@case-studies"]] },
               { heading: "Industries", links: [["Precision machining", null], ["Electronics / PCBA", null], ["Medical devices", null], ["Contract manufacturing", null]] },
               { heading: "Contact", links: [["Get in touch", null]] },
             ].map((col) => (
@@ -932,7 +934,8 @@ function Home({ go, onContact }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {col.links.map(([label, route]) => (
                     <span key={label}
-                      onClick={route ? () => go(route) : label === "Get in touch" ? onContact : undefined}
+                      onClick={route && route.startsWith("@") ? () => { window.location.href = "/" + route.slice(1); }
+                        : route ? () => go(route) : label === "Get in touch" ? onContact : undefined}
                       style={{ fontSize: 13, color: "var(--muted)", cursor: (route || label === "Get in touch") ? "pointer" : "default" }}
                       className={(route || label === "Get in touch") ? "tf-link" : ""}>{label}</span>
                   ))}
@@ -3642,6 +3645,7 @@ export default function App({ user }) {
       {route === "contracts" && <ContractsPage tier={tier.contracts} setTier={setT("contracts")} />}
       {route === "requirements" && <RequirementsPage tier={tier.requirements} setTier={setT("requirements")} />}
       {route === "thread" && <ThreadPage tier={tier.thread} setTier={setT("thread")} />}
+      {route === "compliance" && user && <Compliance user={user} embedded />}
       {route === "roi" && <ROIPage />}
 
       {route === "blockers" && <BlockersPage />}

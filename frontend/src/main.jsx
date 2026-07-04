@@ -5,7 +5,7 @@ import Login from "./auth/Login.jsx";
 import Admin from "./auth/Admin.jsx";
 import InviteAccept from "./auth/InviteAccept.jsx";
 import Profile, { PlanBadge } from "./auth/Profile.jsx";
-import Compliance from "./compliance/Compliance.jsx";
+import CaseStudies from "./pages/CaseStudies.jsx";
 import { getMe, logout, billingConfirm } from "./lib/api.js";
 
 const center = { minHeight: "100vh", display: "grid", placeItems: "center", background: "#0a0e15", color: "#8d9fb5", fontFamily: "'IBM Plex Mono',monospace" };
@@ -17,7 +17,6 @@ function Root() {
   const [state, setState] = useState({ loading: true, user: null });
   const [showAuth, setShowAuth] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
-  const [complianceOpen, setComplianceOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
   const refresh = () =>
@@ -41,9 +40,10 @@ function Root() {
   if (inviteToken) return <InviteAccept token={inviteToken} />;
 
   if (state.loading) return <div style={center}>Loading…</div>;
+  // Public case-studies / whitepapers library (also usable by the signed-in site admin CMS).
+  if (window.location.pathname === "/case-studies") return <CaseStudies user={state.user} />;
   if (showAuth && !state.user) return <Login onAuthed={() => { setShowAuth(false); refresh(); }} onCancel={() => setShowAuth(false)} />;
   if (adminOpen && state.user) return <Admin user={state.user} onClose={() => setAdminOpen(false)} />;
-  if (complianceOpen && state.user) return <Compliance user={state.user} onClose={() => setComplianceOpen(false)} />;
 
   const pill = { position: "fixed", bottom: 16, zIndex: 70, fontFamily: "'IBM Plex Mono',monospace", fontSize: 12, borderRadius: 999, padding: "8px 14px", cursor: "pointer", backdropFilter: "blur(8px)" };
 
@@ -56,10 +56,7 @@ function Root() {
             style={{ ...pill, left: 16, color: "#1a0f06", background: "linear-gradient(180deg,#48d6c8,#2a8f86)", border: "none", fontWeight: 600 }}>
             {state.user.role === "org_admin" || state.user.role === "superadmin" ? "⚙ Admin" : "⚙ Connections"}
           </button>
-          <button onClick={() => setComplianceOpen(true)} title="Compliance & traceability"
-            style={{ ...pill, left: 16, bottom: 56, color: "#e7eef6", background: "rgba(13,18,28,.85)", border: "1px solid #243245", fontWeight: 600 }}>
-            🧬 Compliance
-          </button>
+
           <button onClick={() => logout().then(refresh)} title={`Signed in as ${state.user.email}`}
             style={{ ...pill, left: 132, color: "#8d9fb5", background: "rgba(13,18,28,.85)", border: "1px solid #243245" }}>
             Sign out

@@ -73,3 +73,11 @@ export const convertQuote = (quoteNumber) => fetch("/api/quotes/" + encodeURICom
 export const updateSettings = (settings) => fetch("/api/admin/settings", { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) }).then(jsonOrThrow);
 export const loadSampleDataset = (industry) => fetch("/api/admin/load_sample_dataset", opts("POST", { industry })).then(jsonOrThrow);
 export const sampleCsvUrl = (industry, entity) => "/api/admin/sample_dataset/" + industry + "/" + entity + ".csv";
+
+// Case Studies (public read; site-admin CMS write)
+export const listCaseStudies = () => fetch("/api/case-studies", { credentials: "include" }).then(jsonOrThrow);
+export const getCaseStudy = (id) => fetch("/api/case-studies/" + id, { credentials: "include" }).then(jsonOrThrow);
+export const caseStudyFileUrl = (id, download = false) => "/api/case-studies/" + id + "/file" + (download ? "?download=1" : "");
+export const uploadCaseStudy = (formData) => fetch("/api/case-studies", { method: "POST", credentials: "include", body: formData }).then(jsonOrThrow);
+export const updateCaseStudy = (id, body) => fetch("/api/case-studies/" + id, opts("PATCH", body)).then(jsonOrThrow);
+export const deleteCaseStudy = (id) => fetch("/api/case-studies/" + id, opts("DELETE")).then(jsonOrThrow);

@@ -22,7 +22,7 @@ function Section({ title, count, children }) {
   );
 }
 
-export default function Compliance({ user, onClose }) {
+export default function Compliance({ user, onClose, embedded }) {
   const [lots, setLots] = useState(null);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState("");
@@ -73,11 +73,11 @@ export default function Compliance({ user, onClose }) {
   const filtered = (lots || []).filter((l) => !q || (l.lot_number + " " + l.part_number + " " + l.company_ref).toLowerCase().includes(q.toLowerCase()));
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.ink, fontFamily: "'IBM Plex Sans',sans-serif", padding: "28px 32px" }}>
+    <div style={{ minHeight: embedded ? "auto" : "100vh", background: embedded ? "transparent" : C.bg, color: C.ink, fontFamily: "'IBM Plex Sans',sans-serif", padding: embedded ? "24px 22px 60px" : "28px 32px", maxWidth: embedded ? 1180 : "none", margin: embedded ? "0 auto" : 0 }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');`}</style>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
         <span style={{ fontFamily: "'Bricolage Grotesque',sans-serif", fontWeight: 800, fontSize: 26 }}>Compliance & Traceability</span>
-        <button onClick={onClose} style={{ ...btn, marginLeft: "auto" }}>← Back to app</button>
+        {!embedded && <button onClick={onClose} style={{ ...btn, marginLeft: "auto" }}>← Back to app</button>}
       </div>
       <div style={{ color: C.muted, fontSize: 13, marginBottom: 20 }}>{user.org?.legal_name} · lot genealogy, DHR trace maps, and supplier certifications</div>
 
