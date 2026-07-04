@@ -24,8 +24,7 @@ async def scan_org(con, org_id, who="Agent") -> dict:
         "FROM sales_orders WHERE org_id=$1 AND promise_date IS NOT NULL "
         "AND promise_date < CURRENT_DATE "
         "AND lower(coalesce(status,'')) <> ALL($2::text[]) "
-        "AND coalesce(qty_shipped,0) < coalesce(quantity,0) "
-        "AND ship_date IS NULL",
+        "AND coalesce(qty_shipped,0) < coalesce(quantity,0)",
         org_id, list(_CLOSED_SO))
     created = []
     for r in rows:
@@ -42,10 +41,17 @@ async def scan_org(con, org_id, who="Agent") -> dict:
             n += 1
             bid = "BLK-" + str(2001 + int(n))
         what = r["part_number"] or r["customer"] or "order"
-        title = "Past due: %s L%s — %s" % (r["so_number"], line, what)
+        ordered = float(r["quantity"] or 0)
+        shipped = float(r["qty_shipped"] or 0)
+        remaining = ordered - shipped
+        partial = shipped > 0
+        bal = (" · %g of %g still open" % (remaining, ordered)) if ordered else ""
+        title = "Past due%s: %s L%s — %s%s" % (
+            " (partial)" if partial else "", r["so_number"], line, what, bal)
         pd = r["promise_date"].isoformat() if r["promise_date"] else "?"
+        detail = ("%g of %g units still unshipped. " % (remaining, ordered)) if partial else ""
         action = ("Auto-detected by the delivery agent: promise date %s has passed with the order "
-                  "still open. Investigate, then Confirm (real blocker) or Dismiss (false alarm)." % pd)
+                  "still open. %sInvestigate, then Confirm (real blocker) or Dismiss (false alarm)." % (pd, detail))
         parts = [r["part_number"]] if r["part_number"] else []
         await con.execute(
             "INSERT INTO blockers (id, org_id, title, status, review_status, assignee, opened_by, "
