@@ -2688,7 +2688,7 @@ const BLK_TONE = { open: "red", assigned: "yellow", closed: "green" };
 const CURRENT_USER = "Anu Mishra";
 let ACTIVE_USER = CURRENT_USER;
 // backend → app shape mappers (members)
-const mapSO = (r) => ({ id: r.so_number + "-L" + (r.line_number || 10), so: r.so_number, line: r.line_number || 10, customer: r.customer, site: r.site || "", promise: r.promise_date, part: r.part_number || "", parts: r.part_number ? [r.part_number] : [], qty: Number(r.quantity) || 0, value: Number(r.value) || 0, status: r.status || "", shipDate: r.ship_date || null, qtyShipped: Number(r.qty_shipped) || 0, promiseChangedBy: r.promise_changed_by || null, promiseChangedAt: r.promise_changed_at || null, statusChangedBy: r.status_changed_by || null, statusChangedAt: r.status_changed_at || null });
+const mapSO = (r) => ({ id: r.so_number + "-L" + (r.line_number || 10), so: r.so_number, line: r.line_number || 10, customer: r.customer, site: r.site || "", promise: r.promise_date, revisedPromise: r.revised_promise_date || null, part: r.part_number || "", parts: r.part_number ? [r.part_number] : [], qty: Number(r.quantity) || 0, value: Number(r.value) || 0, status: r.status || "", shipDate: r.ship_date || null, qtyShipped: Number(r.qty_shipped) || 0, promiseChangedBy: r.promise_changed_by || null, promiseChangedAt: r.promise_changed_at || null, statusChangedBy: r.status_changed_by || null, statusChangedAt: r.status_changed_at || null });
 const mapWO = (r) => ({ id: r.wo_number, part: r.part_number || "", desc: r.description || "" });
 // Legacy blockers referenced bare SO numbers; expand them to line ids so older
 // blockers keep their relationship to (now line-level) sales orders.
@@ -2701,7 +2701,8 @@ const normalizeSos = (arr) => [...new Set((arr || []).flatMap((e) => {
 const mapBlk = (r) => ({ id: r.id, title: r.title, status: r.status, reviewStatus: r.review_status || "confirmed", assignee: r.assignee || null, openedBy: r.opened_by || null, created: r.created_at, closedAt: r.closed_at || null, closedBy: r.closed_by || null, newPromise: r.new_promise || null, action: r.action || "", wo: r.wo || null, sos: normalizeSos(r.sos), parts: r.parts || [], comments: r.comments || [] });
 // effective promise = revised date from an open blocker (if any), else the original committed date
 const revisedForSO = (blockers, soId) => { const b = blockers.find((x) => x.status !== "closed" && x.newPromise && x.sos.includes(soId)); return b ? b.newPromise : null; };
-const effPromise = (blockers, o) => revisedForSO(blockers, o.id) || o.promise;
+const effPromise = (blockers, o) => o.revisedPromise || revisedForSO(blockers, o.id) || o.promise;
+const isClosedLine = (o) => (o.qty > 0 && (o.qtyShipped || 0) >= o.qty) || ["shipped", "closed", "complete", "completed", "delivered"].includes((o.status || "").toLowerCase());
 const fmtDateTime = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }); } catch (_) { return String(iso); } };
 
 /* date helpers (local, no TZ surprises) */
@@ -3093,7 +3094,7 @@ function SalesOrderModal({ id }) {
   const [ship, setShip] = useState({ qty: "", date: new Date().toISOString().slice(0, 10) });
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState("");
-  useEffect(() => { if (o) { setEf({ promise: o.promise || "", status: o.status || "", shipDate: o.shipDate || "" }); setEdit(false); setNote(""); } }, [o && o.id]);
+  useEffect(() => { if (o) { setEf({ promise: o.revisedPromise || "", status: o.status || "", shipDate: o.shipDate || "" }); setEdit(false); setNote(""); } }, [o && o.id]);
   if (!o) return null;
   const blk = openBlockerForSO(blockers, id);
   const related = blockers.filter((b) => b.sos.includes(id)).sort((a, b) => (a.status === "closed") - (b.status === "closed") || blockerValue(b) - blockerValue(a));
@@ -3115,8 +3116,9 @@ function SalesOrderModal({ id }) {
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", marginBottom: 16 }}>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>End item</span><span style={{ fontSize: 13 }}>{o.part ? <PartLink pn={o.part} style={{ color: "var(--thread)" }}>{o.part}</PartLink> : "—"}{o.part && ACTIVE_PART_DESC[o.part] ? <span style={{ color: "var(--muted)" }}> · {ACTIVE_PART_DESC[o.part]}</span> : null}</span>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Site</span><span style={{ fontSize: 13 }}>{o.site}</span>
-          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Promise date</span><span style={{ fontSize: 13, textDecoration: revised ? "line-through" : "none", opacity: revised ? 0.6 : 1 }}>{o.promise}</span>
-          {revised && <><span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Revised promise</span><span style={{ fontSize: 13, fontWeight: 700, color: "var(--amber)" }}>{revised} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", fontWeight: 400 }}>· most probable</span></span></>}
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Promise date</span><span style={{ fontSize: 13, textDecoration: (o.revisedPromise || revised) ? "line-through" : "none", opacity: (o.revisedPromise || revised) ? 0.55 : 1 }}>{o.promise}</span>
+          {o.revisedPromise && <><span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Revised promise</span><span style={{ fontSize: 13, fontWeight: 700, color: "var(--amber)" }}>{o.revisedPromise}{o.promiseChangedBy ? <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", fontWeight: 400 }}> · by {o.promiseChangedBy}</span> : null}</span></>}
+          {!o.revisedPromise && revised && <><span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Revised promise</span><span style={{ fontSize: 13, fontWeight: 700, color: "var(--amber)" }}>{revised} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", fontWeight: 400 }}>· most probable</span></span></>}
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Quantity</span><span style={{ fontSize: 13 }}>{o.qty}</span>
           <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Total value</span><span className="tf-disp" style={{ fontSize: 16, fontWeight: 800 }}>{fmtMoney(o.value)}</span>
         </div>
@@ -3126,8 +3128,9 @@ function SalesOrderModal({ id }) {
           const recognized = o.qty > 0 ? o.value * ((o.qtyShipped || 0) / o.qty) : 0;
           const done = o.shipDate || ["shipped", "closed", "complete", "completed", "delivered"].includes((o.status || "").toLowerCase());
           const inp = { fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 9px", color: "var(--ink)", outline: "none" };
-          const save = async () => { setBusy("save"); setNote(""); const patch = {}; if (ef.promise !== (o.promise || "")) patch.promise_date = ef.promise; if (ef.status !== (o.status || "")) patch.status = ef.status; if (ef.shipDate !== (o.shipDate || "")) patch.ship_date = ef.shipDate; if (!Object.keys(patch).length) { setEdit(false); setBusy(""); return; } const r = await editSOLine(o.so, o.line, patch); setBusy(""); if (r && r.offline) setNote("Editing works on live data only."); else setEdit(false); };
-          const doShip = async () => { const q = parseFloat(ship.qty); if (!q || q <= 0) { setNote("Enter a quantity to ship."); return; } if (q > remaining + 1e-9) { setNote(`Only ${remaining} remaining.`); return; } setBusy("ship"); const r = await recordShipment(o.so, o.line, q, ship.date); setBusy(""); if (r && r.offline) setNote("Shipping works on live data only."); else { setShip({ qty: "", date: ship.date }); setNote(r.closed ? "Fully shipped — order auto-closed." : `Shipped ${q}. $${(r.recognized || 0).toLocaleString()} recognized.`); } };
+          const okDate = (s) => s === "" || /^\d{4}-\d{2}-\d{2}$/.test(s);
+          const save = async () => { if (!okDate(ef.promise) || !okDate(ef.shipDate)) { setNote("Dates must be YYYY-MM-DD."); return; } setBusy("save"); setNote(""); const patch = {}; if (ef.promise !== (o.revisedPromise || "")) patch.revised_promise_date = ef.promise; if (ef.status !== (o.status || "")) patch.status = ef.status; if (ef.shipDate !== (o.shipDate || "")) patch.ship_date = ef.shipDate; if (!Object.keys(patch).length) { setEdit(false); setBusy(""); return; } const r = await editSOLine(o.so, o.line, patch); setBusy(""); if (r && r.offline) setNote("Editing works on live data only."); else setEdit(false); };
+          const doShip = async () => { const q = parseFloat(ship.qty); if (!q || q <= 0) { setNote("Enter a quantity to ship."); return; } if (q > remaining + 1e-9) { setNote(`Only ${remaining} remaining.`); return; } if (!okDate(ship.date) || ship.date === "") { setNote("Ship date must be YYYY-MM-DD."); return; } setBusy("ship"); const r = await recordShipment(o.so, o.line, q, ship.date); setBusy(""); if (r && r.offline) setNote("Shipping works on live data only."); else { setShip({ qty: "", date: ship.date }); setNote(r.closed ? "Fully shipped — order auto-closed." : `Shipped ${q}. $${(r.recognized || 0).toLocaleString()} recognized.`); } };
           return (
             <div style={{ marginBottom: 16, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -3152,18 +3155,18 @@ function SalesOrderModal({ id }) {
               {edit && (
                 <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 12, display: "grid", gap: 9 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 74 }}>Promise</span>
-                    <input type="date" style={{ ...inp, flex: 1 }} value={ef.promise || ""} onChange={(e) => setEf({ ...ef, promise: e.target.value })} />
+                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 92 }}>Revised promise</span>
+                    <input type="text" inputMode="numeric" placeholder="YYYY-MM-DD" style={{ ...inp, flex: 1 }} value={ef.promise || ""} onChange={(e) => setEf({ ...ef, promise: e.target.value })} />
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 74 }}>Status</span>
+                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 92 }}>Status</span>
                     <select style={{ ...inp, flex: 1 }} value={ef.status || ""} onChange={(e) => setEf({ ...ef, status: e.target.value })}>
                       {["", "open", "in_production", "shipped", "closed", "on_hold", "cancelled"].map((s) => <option key={s} value={s}>{s || "—"}</option>)}
                     </select>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 74 }}>Ship date</span>
-                    <input type="date" style={{ ...inp, flex: 1 }} value={ef.shipDate || ""} onChange={(e) => setEf({ ...ef, shipDate: e.target.value })} />
+                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 92 }}>Ship date</span>
+                    <input type="text" inputMode="numeric" placeholder="YYYY-MM-DD" style={{ ...inp, flex: 1 }} value={ef.shipDate || ""} onChange={(e) => setEf({ ...ef, shipDate: e.target.value })} />
                   </div>
                   <button className="tf-btn tf-btn-primary" style={{ justifySelf: "start", padding: "7px 14px" }} disabled={busy === "save"} onClick={save}>{busy === "save" ? "Saving…" : "Save changes"}</button>
                 </div>
@@ -3174,7 +3177,7 @@ function SalesOrderModal({ id }) {
                   <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginBottom: 7 }}>RECORD SHIPMENT</div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <input type="number" min="0" step="any" placeholder={`qty (≤ ${remaining})`} style={{ ...inp, width: 120 }} value={ship.qty} onChange={(e) => setShip({ ...ship, qty: e.target.value })} />
-                    <input type="date" style={inp} value={ship.date} onChange={(e) => setShip({ ...ship, date: e.target.value })} />
+                    <input type="text" inputMode="numeric" placeholder="YYYY-MM-DD" style={{ ...inp, width: 130 }} value={ship.date} onChange={(e) => setShip({ ...ship, date: e.target.value })} />
                     <button className="tf-btn tf-btn-primary" style={{ padding: "7px 14px" }} disabled={busy === "ship"} onClick={doShip}>{busy === "ship" ? "…" : "Ship"}</button>
                   </div>
                 </div>
@@ -3326,9 +3329,10 @@ function DeliveryPage() {
 
   const Card = ({ o }) => {
     const blk = openBlockerForSO(blockers, o.id);
+    const done = isClosedLine(o);
     return (
-      <div className="tf-panel" onClick={() => openSO(o.id)} style={{ padding: 0, marginBottom: 8, overflow: "hidden", cursor: "pointer", border: blk ? "1px solid var(--red)" : "1px solid var(--line)" }}>
-        {blk && <div style={{ height: 4, background: "var(--red)" }} />}
+      <div className="tf-panel" onClick={() => openSO(o.id)} style={{ padding: 0, marginBottom: 8, overflow: "hidden", cursor: "pointer", border: done ? "1px solid var(--green)" : blk ? "1px solid var(--red)" : "1px solid var(--line)", background: done ? "rgba(67,194,119,.06)" : undefined }}>
+        {done ? <div style={{ height: 4, background: "var(--green)" }} /> : blk ? <div style={{ height: 4, background: "var(--red)" }} /> : null}
         <div style={{ padding: "10px 11px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontWeight: 700, fontSize: 13 }}>{o.customer}</span>

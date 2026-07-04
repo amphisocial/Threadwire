@@ -610,3 +610,8 @@ CREATE TABLE IF NOT EXISTS so_shipments (
 );
 CREATE INDEX IF NOT EXISTS so_shipments_org_date ON so_shipments (org_id, ship_date);
 CREATE INDEX IF NOT EXISTS so_shipments_org_line ON so_shipments (org_id, so_number, line_number);
+
+-- ===== revised promise date (014) =====
+-- Keep the original promise_date immutable for the record; edits set a revised date.
+-- Effective promise = COALESCE(revised_promise_date, promise_date).
+ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS revised_promise_date date;

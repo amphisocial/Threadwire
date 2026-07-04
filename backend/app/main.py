@@ -777,15 +777,17 @@ async def list_events(limit: int = 20, user: dict = Depends(current_user)):
 async def get_sales_orders(user: dict = Depends(current_user)):
     async with db.pool().acquire() as con:
         rows = await con.fetch(
-            "SELECT so_number, line_number, customer, site, promise_date, part_number, quantity, value, status, "
+            "SELECT so_number, line_number, customer, site, promise_date, revised_promise_date, part_number, quantity, value, status, "
             "ship_date, qty_shipped, promise_changed_by, promise_changed_at, status_changed_by, status_changed_at "
-            "FROM sales_orders WHERE org_id = $1 ORDER BY promise_date NULLS LAST, so_number, line_number", user["org_id"])
+            "FROM sales_orders WHERE org_id = $1 "
+            "ORDER BY COALESCE(revised_promise_date, promise_date) NULLS LAST, so_number, line_number", user["org_id"])
     out = []
     for r in rows:
         out.append({
             "so_number": r["so_number"], "line_number": r["line_number"] or 10,
             "customer": r["customer"], "site": r["site"] or "",
             "promise_date": r["promise_date"].isoformat() if r["promise_date"] else None,
+            "revised_promise_date": r["revised_promise_date"].isoformat() if r["revised_promise_date"] else None,
             "part_number": r["part_number"] or "",
             "quantity": float(r["quantity"]) if r["quantity"] is not None else 0,
             "value": float(r["value"]) if r["value"] is not None else 0,
@@ -800,7 +802,7 @@ async def get_sales_orders(user: dict = Depends(current_user)):
 
 
 class SOLineEdit(BaseModel):
-    promise_date: Optional[str] = None   # YYYY-MM-DD, or "" to clear
+    revised_promise_date: Optional[str] = None  # YYYY-MM-DD, or "" to clear the revision
     status: Optional[str] = None
     ship_date: Optional[str] = None
 
@@ -808,28 +810,27 @@ class SOLineEdit(BaseModel):
 def _parse_date(s):
     if s is None or s == "":
         return None
-    return datetime.strptime(s, "%Y-%m-%d").date()
+    return datetime.strptime(s.strip(), "%Y-%m-%d").date()
 
 
 @app.patch("/api/sales_orders/{so_number}/{line_number}")
 async def edit_sales_order_line(so_number: str, line_number: int, body: SOLineEdit,
                                 user: dict = Depends(current_user)):
     who = user.get("full_name") or user["email"]
-    now = datetime.now(timezone.utc)
     async with db.pool().acquire() as con:
         cur = await con.fetchrow(
-            "SELECT promise_date, status FROM sales_orders WHERE org_id=$1 AND so_number=$2 AND line_number=$3",
-            user["org_id"], so_number, line_number)
+            "SELECT revised_promise_date, status FROM sales_orders "
+            "WHERE org_id=$1 AND so_number=$2 AND line_number=$3", user["org_id"], so_number, line_number)
         if not cur:
             raise HTTPException(404, "Order line not found")
         sets, args, changed = [], [], []
-        if body.promise_date is not None:
-            newd = _parse_date(body.promise_date)
-            if newd != cur["promise_date"]:
-                args.append(newd); sets.append("promise_date=$%d" % (len(args)))
+        if body.revised_promise_date is not None:
+            newd = _parse_date(body.revised_promise_date)
+            if newd != cur["revised_promise_date"]:
+                args.append(newd); sets.append("revised_promise_date=$%d" % (len(args)))
                 args.append(who); sets.append("promise_changed_by=$%d" % (len(args)))
                 sets.append("promise_changed_at=now()")
-                changed.append("promise %s→%s" % (cur["promise_date"] or "—", newd or "—"))
+                changed.append("revised promise %s→%s" % (cur["revised_promise_date"] or "—", newd or "—"))
         if body.status is not None and body.status != (cur["status"] or ""):
             args.append(body.status); sets.append("status=$%d" % (len(args)))
             args.append(who); sets.append("status_changed_by=$%d" % (len(args)))
