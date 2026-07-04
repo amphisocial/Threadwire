@@ -1,0 +1,5 @@
+customer_code,name,email,region
+C-MED,Medtronic OEM Div,po@medoem.example,US-Midwest
+C-AERO2,Lockheed Sensors,contracts@lmsensors.example,US-South
+C-LAB,Photon Instruments,buyer@photoninst.example,US-Northeast
+C-DEF2,Raytheon Optics,purchasing@rtxoptics.example,US-Northeast

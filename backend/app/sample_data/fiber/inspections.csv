@@ -1,0 +1,4 @@
+lot_number,inspection_type,result,inspector,inspected_at,ncr_number,notes
+LT-7001,final,pass,QA-05,2026-06-20,,Insertion loss within spec; ITAR docs filed
+LT-7002,incoming,conditional,QA-05,2026-06-23,,Missing supplier CoC for fiber
+LT-7003,dimensional,fail,QA-08,2026-06-25,NCR-7001,Bore diameter out of tolerance

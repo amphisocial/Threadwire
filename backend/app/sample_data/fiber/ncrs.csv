@@ -1,0 +1,3 @@
+ncr_number,lot_number,part_number,description,disposition,capa_number,status,opened_at,closed_at
+NCR-7001,LT-7003,FO-400,Bore diameter out of tolerance,rework,CAPA-71,open,2026-06-25,
+NCR-7002,LT-7002,FO-120,Supplier CoC missing at receipt,use-as-is,CAPA-72,open,2026-06-23,

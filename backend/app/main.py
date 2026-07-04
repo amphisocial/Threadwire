@@ -73,7 +73,8 @@ async def load_session(request: Request):
                    u.id AS user_id, u.email, u.full_name, u.role, u.mfa_enabled, u.mfa_secret,
                    u.plan, u.stripe_customer_id,
                    o.id AS org_id, o.legal_name,
-                   o.enterprise, o.stripe_customer_id AS org_stripe_customer_id
+                   o.enterprise, o.stripe_customer_id AS org_stripe_customer_id,
+                   o.quote_to_order
             FROM sessions s
             JOIN users u ON u.id = s.user_id
             JOIN organizations o ON o.id = u.org_id
@@ -311,7 +312,22 @@ async def me(user: dict = Depends(current_user)):
     pub["daily_limit"] = None if unlimited else settings.free_daily_tokens
     pub["billing_configured"] = bool(settings.stripe_secret_key)
     pub["billing_mode"] = "live" if settings._payment_live else "test"
+    pub["quote_to_order"] = bool(user.get("quote_to_order"))
     return pub
+
+
+class OrgSettingsIn(BaseModel):
+    quote_to_order: bool
+
+
+@app.patch("/api/admin/settings")
+async def update_org_settings(body: OrgSettingsIn, user: dict = Depends(current_user)):
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+    async with db.pool().acquire() as con:
+        await con.execute("UPDATE organizations SET quote_to_order=$2 WHERE id=$1",
+                          user["org_id"], body.quote_to_order)
+    return {"quote_to_order": body.quote_to_order}
 
 
 # --------------------------------------------------------------------------- #
@@ -1117,6 +1133,61 @@ async def ai_trace_lot(lot_number: str, user: dict = Depends(current_user)):
         "TRACE_MAP = " + json.dumps(trace) + ("\n\nDOCUMENTS:\n" + doc_ctx if doc_ctx else ""))
     text = await ai_complete(system, [{"role": "user", "content": "Compile the compliance trace map for lot %s." % lot_number}])
     return {"lot_number": lot_number, "narrative": text, "trace": trace}
+
+
+_SAMPLE_ORDER = ["parts", "boms", "vendors", "vendor_parts", "customers",
+                 "sales_orders", "work_orders", "operators", "lots", "inspections", "ncrs", "quotes"]
+
+
+def _sample_dir(industry: str):
+    if industry not in ("machining", "fiber"):
+        return None
+    return Path(__file__).resolve().parent / "sample_data" / industry
+
+
+class SampleDatasetIn(BaseModel):
+    industry: str  # "machining" | "fiber"
+
+
+@app.post("/api/admin/load_sample_dataset")
+async def load_sample_dataset(body: SampleDatasetIn, user: dict = Depends(current_user)):
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+    d = _sample_dir(body.industry)
+    if not d or not d.exists():
+        raise HTTPException(404, "Unknown industry dataset")
+    results = {}
+    async with db.pool().acquire() as con:
+        for entity in _SAMPLE_ORDER:
+            f = d / (entity + ".csv")
+            if not f.exists():
+                continue
+            rows, _headers = importer.parse_csv(f.read_text())
+            if not rows:
+                continue
+            try:
+                r = await importer.do_import(con, user["org_id"], entity, rows)
+                results[entity] = {"inserted": r["inserted"], "updated": r["updated"], "errors": r["error_count"]}
+                await con.execute(
+                    "INSERT INTO import_events (org_id, entity, inserted, updated, errors, by_user) "
+                    "VALUES ($1,$2,$3,$4,$5,$6)",
+                    user["org_id"], entity, r["inserted"], r["updated"], r["error_count"], user["user_id"])
+            except Exception as e:
+                results[entity] = {"error": str(e)[:200]}
+    return {"industry": body.industry, "results": results}
+
+
+@app.get("/api/admin/sample_dataset/{industry}/{entity}.csv")
+async def download_sample_csv(industry: str, entity: str, user: dict = Depends(current_user)):
+    d = _sample_dir(industry)
+    if not d:
+        raise HTTPException(404, "Unknown industry")
+    f = d / (entity + ".csv")
+    if not f.exists():
+        raise HTTPException(404, "No such sample file")
+    import io as _io
+    return StreamingResponse(_io.BytesIO(f.read_bytes()), media_type="text/csv",
+                             headers={"Content-Disposition": 'attachment; filename="%s_%s.csv"' % (industry, entity)})
 
 
 @app.get("/api/quotes")

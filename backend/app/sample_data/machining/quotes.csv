@@ -1,0 +1,4 @@
+quote_number,customer,product_family,custom_attributes,quantity,value,required_date,promised_date,expected_ship_date,owner,status,blocker,blocker_category,next_action,site,company_ref,notes
+Q-6001,Vertex Aerospace,Lace-up grips,cable dia 12mm,100,14500,2026-07-20,2026-07-18,,A. Mishra,quoted,,none,Follow up with customer,"Lawrence, MA",AMTEC,Repeat geometry
+Q-6002,Northwind Motors,Bolt-on grips,"18mm, qty flex",60,10100,2026-07-25,,,R. Alvarez,open,Awaiting material quote,material,Get 6061 pricing,"Greenville, SC",AMTEC,New customer
+Q-6003,Apex Defense,Servo bracket,anodize Type II,200,17200,2026-08-01,,,A. Kidd,won,,none,Convert to order,"Greenville, SC",AMTEC,Contract renewal

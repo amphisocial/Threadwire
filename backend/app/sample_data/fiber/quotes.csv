@@ -1,0 +1,4 @@
+quote_number,customer,product_family,custom_attributes,quantity,value,required_date,promised_date,expected_ship_date,owner,status,blocker,blocker_category,next_action,site,company_ref,notes
+Q-7001,Medtronic OEM Div,Custom light guide,"NA 0.22, 850nm, sterilizable",40,35200,2026-07-30,2026-07-28,,R. Alvarez,quoted,,none,Confirm biocompat evidence,"Sturbridge, CT",FTI,ISO 13485 customer
+Q-7002,Photon Instruments,Fiber bundle,"7-strand, custom length",80,7680,2026-08-05,,,J. Okafor,open,Awaiting engineering feasibility,engineering,Confirm fiber type/NA,"Orlando, FL",FTI,Non-telecom
+Q-7003,Raytheon Optics,Light guide + driver,"ITAR, AS9100",30,26400,2026-08-12,,,R. Alvarez,open,Waiting on customer spec,customer,Get transmission target,"Sturbridge, CT",FTI,Regulated; evidence-heavy

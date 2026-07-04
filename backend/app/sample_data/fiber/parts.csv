@@ -1,0 +1,11 @@
+part_number,description,unit_cost,uom,commodity,revision,lifecycle
+FO-100,Custom light guide assembly,880,ea,Assembly,C,production
+FO-110,"Drawn fiber, 62.5um",4.10,m,Fiber,B,production
+FO-120,"Fiber bundle, 7-strand",96,ea,Assembly,B,production
+FO-200,"Optical connector, SMA",31,ea,Purchased,A,production
+FO-210,"Ferrule, ceramic",6.80,ea,Purchased,A,production
+FO-300,"Cleanroom package, sealed",54,ea,Packaging,A,production
+FO-400,"Machined housing, SS316",118,ea,Machined,B,production
+RM-SIL,Silica preform,210,ea,Raw,-,production
+RM-316,Bar stock SS316,28,ft,Raw,-,production
+EA-100,Electronic driver board,145,ea,Electronic,A,production

@@ -5,6 +5,7 @@ import {
   adminUsage, updateMember, billingCheckout, importFromSource,
   listDataSources, createDataSource, syncDataSource,
   listDocuments, uploadDocument, loadSampleDocs, docDownloadUrl,
+  updateSettings, loadSampleDataset, sampleCsvUrl,
 } from "../lib/api.js";
 
 /* ---- design tokens (must match ThreadWire.jsx) ---- */
@@ -524,6 +525,69 @@ function LicenseTab({ isAdmin }) {
 }
 
 /* =================== MAIN ADMIN SHELL =================== */
+function SettingsTab({ isAdmin, user }) {
+  const [qto, setQto] = useState(!!user?.quote_to_order);
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState("");
+  const ENTITIES = ["parts", "boms", "vendors", "vendor_parts", "customers", "sales_orders", "work_orders", "operators", "lots", "inspections", "ncrs", "quotes"];
+  if (!isAdmin) return <div style={{ color: C.faint, fontSize: 13, padding: 20 }}>Admins only.</div>;
+
+  const toggle = async (v) => {
+    setQto(v); setBusy("qto"); setMsg("");
+    try { await updateSettings({ quote_to_order: v }); setMsg("Saved. Reload the app for the change to take full effect."); }
+    catch (e) { setMsg(e.message); setQto(!v); } finally { setBusy(""); }
+  };
+  const seed = async (industry) => {
+    setBusy(industry); setMsg("");
+    try { const r = await loadSampleDataset(industry); const n = Object.values(r.results).reduce((a, x) => a + (x.inserted || 0) + (x.updated || 0), 0); setMsg("Loaded " + n + " records for the " + industry + " dataset."); }
+    catch (e) { setMsg(e.message); } finally { setBusy(""); }
+  };
+
+  const card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18, marginBottom: 16 };
+  return (
+    <div style={{ paddingTop: 8 }}>
+      {msg && <div style={{ fontSize: 12.5, color: C.thread, marginBottom: 12 }}>{msg}</div>}
+
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Quote-to-Order tracking</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+              Turn on the Delivery Desk quote pipeline (quote → order) for shops without a full ERP/MES. Off by default; leave off for companies that already track quotes in their own systems.
+            </div>
+          </div>
+          <button onClick={() => toggle(!qto)} disabled={busy === "qto"}
+            style={{ width: 54, height: 30, borderRadius: 999, border: "none", cursor: "pointer", position: "relative", background: qto ? C.green : C.line2, transition: "background .15s" }}>
+            <span style={{ position: "absolute", top: 3, left: qto ? 27 : 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+          </button>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Sample datasets</div>
+        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
+          Seed a full, linked demo dataset (parts, BOMs, vendors, orders, work orders, lots, inspections, NCRs, quotes) for a target industry — or download the CSVs to edit and re-import.
+        </div>
+        {[["machining", "AMTEC-style machining / grips"], ["fiber", "FTI-style fiber-optic (regulated)"]].map(([ind, label]) => (
+          <div key={ind} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: `1px solid ${C.line}` }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13.5 }}>{label}</div>
+              <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{ind}</div>
+            </div>
+            <button style={btnP} disabled={busy === ind} onClick={() => seed(ind)}>{busy === ind ? "Loading…" : "Load into my org"}</button>
+            <details style={{ position: "relative" }}>
+              <summary style={{ ...btn, listStyle: "none", cursor: "pointer" }}>Download CSVs ▾</summary>
+              <div style={{ position: "absolute", right: 0, marginTop: 6, background: C.panel2, border: `1px solid ${C.line2}`, borderRadius: 10, padding: 8, zIndex: 5, minWidth: 160, maxHeight: 260, overflowY: "auto" }}>
+                {ENTITIES.map((e) => <a key={e} href={sampleCsvUrl(ind, e)} style={{ display: "block", padding: "5px 8px", fontFamily: mono, fontSize: 11.5, color: C.thread, textDecoration: "none" }}>{e}.csv ↓</a>)}
+              </div>
+            </details>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DataSourcesDocs({ isAdmin }) {
   const [sources, setSources] = useState([]);
   const [docs, setDocs] = useState([]);
@@ -654,6 +718,7 @@ export default function Admin({ user, onClose }) {
             { id: "import", label: "Data Import", icon: "⬆" },
             { id: "users", label: "User Management", icon: "👥" },
             { id: "compliance", label: "Data Sources", icon: "🧬" },
+            { id: "settings", label: "Settings", icon: "⚙" },
             { id: "license", label: "License", icon: "★" },
           ]}
           active={tab} setActive={setTab}
@@ -662,6 +727,7 @@ export default function Admin({ user, onClose }) {
         {tab === "import" && <DataImportTab isAdmin={isAdmin} />}
         {tab === "users" && <UserManagementTab isAdmin={isAdmin} />}
         {tab === "compliance" && <DataSourcesDocs isAdmin={isAdmin} />}
+        {tab === "settings" && <SettingsTab isAdmin={isAdmin} user={user} />}
         {tab === "license" && <LicenseTab isAdmin={isAdmin} />}
       </div>
     </div>

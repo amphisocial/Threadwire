@@ -1,0 +1,8 @@
+so_number,line_number,customer,site,promise_date,part_number,quantity,value,status
+SO-7001,10,Medtronic OEM Div,"Sturbridge, CT",2026-06-25,FO-100,40,35200,open
+SO-7001,20,Medtronic OEM Div,"Sturbridge, CT",2026-06-28,FO-120,120,11520,open
+SO-7002,10,Lockheed Sensors,"Sturbridge, CT",2026-07-02,FO-100,25,22000,open
+SO-7003,10,Photon Instruments,"Orlando, FL",2026-07-09,FO-400,60,7080,open
+SO-7004,10,Raytheon Optics,"Sturbridge, CT",2026-07-16,FO-100,30,26400,open
+SO-7004,20,Raytheon Optics,"Sturbridge, CT",2026-07-18,FO-200,200,6200,open
+SO-7005,10,Medtronic OEM Div,"Orlando, FL",2026-07-23,FO-120,80,7680,open

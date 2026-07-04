@@ -1,0 +1,3 @@
+lot_number,inspection_type,result,inspector,inspected_at,ncr_number,notes
+LT-6001,final,pass,QA-03,2026-06-19,,All dims in tolerance
+LT-6002,in-process,fail,QA-03,2026-06-21,NCR-6001,Anodize thickness low

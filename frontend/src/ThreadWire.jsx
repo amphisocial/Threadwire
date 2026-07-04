@@ -244,14 +244,14 @@ function genSPC(n = 28, target = 50, sigma = 1.1, seed = 7) {
 }
 
 /* ----------------------------- shared UI -------------------------------- */
-function TopNav({ route, go, tier, onContact }) {
-  const links = [
-    ["home", "Home"], ["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"], ["roi", "ROI Calculator"],
-  ];
+function TopNav({ route, go, tier, onContact, loggedIn }) {
+  const links = loggedIn
+    ? [["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"]]
+    : [["home", "Home"], ["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"], ["roi", "ROI Calculator"]];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(10,14,21,.72)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "14px 22px", display: "flex", alignItems: "center", gap: 20 }}>
-        <div onClick={() => go("home")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+        <div onClick={() => go("home")} title={loggedIn ? "Open the Threadwire website" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
           <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center" }}>
             <Workflow size={17} color="#0a0e15" strokeWidth={2.4} />
           </div>
@@ -272,7 +272,7 @@ function TopNav({ route, go, tier, onContact }) {
           <span className="tf-chip" style={{ color: tier === "paid" ? "var(--amber)" : "var(--muted)" }}>
             {tier === "paid" ? "● Connected" : "○ Sample data"}
           </span>
-          <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }} onClick={onContact}>Request a diagnostic</button>
+          {!loggedIn && <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }} onClick={onContact}>Request a diagnostic</button>}
         </div>
       </div>
     </div>
@@ -3511,7 +3511,7 @@ function FinancePage() {
 
 export default function App({ user }) {
   const backend = !!user;
-  const [route, setRoute] = useState("home");
+  const [route, setRoute] = useState(user ? "visibility" : "home");
   const [contactOpen, setContactOpen] = useState(false);
   const [assetStage, setAssetStage] = useState("all");
   const [tier, setTier] = useState({ assets: "free", contracts: "free", requirements: "free", thread: "free", directspend: "free" });
@@ -3636,7 +3636,7 @@ export default function App({ user }) {
       <style>{`
         @media(max-width:820px){.tf-cols{grid-template-columns:1fr !important}.hide-sm{display:none !important}.tf-nav{display:none !important}}
       `}</style>
-      <TopNav route={route} go={go} tier={Object.values(tier).includes("paid") ? "paid" : "free"} onContact={() => setContactOpen(true)} />
+      <TopNav route={route} go={go} tier={Object.values(tier).includes("paid") ? "paid" : "free"} onContact={() => setContactOpen(true)} loggedIn={backend} />
       {route === "home" && <Home go={go} onContact={() => setContactOpen(true)} />}
       {route === "assets" && <AssetsPage tier={tier.assets} setTier={setT("assets")} stage={assetStage} setStage={setAssetStage} />}
       {route === "contracts" && <ContractsPage tier={tier.contracts} setTier={setT("contracts")} />}

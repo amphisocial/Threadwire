@@ -1,0 +1,2 @@
+ncr_number,lot_number,part_number,description,disposition,capa_number,status,opened_at,closed_at
+NCR-6001,LT-6002,PN-4501,Anodize coating below spec,rework,CAPA-22,open,2026-06-21,

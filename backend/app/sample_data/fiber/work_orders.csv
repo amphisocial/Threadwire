@@ -1,0 +1,4 @@
+wo_number,part_number,description,quantity,site,status,due_date,operator
+WO-7101,FO-100,Assemble custom light guide,40,"Sturbridge, CT",in-process,2026-06-23,J. Okafor
+WO-7102,FO-120,Bundle + terminate fiber,120,"Sturbridge, CT",released,2026-06-26,J. Okafor
+WO-7103,FO-400,Machine SS316 housing,60,"Orlando, FL",hold,2026-07-07,L. Tran

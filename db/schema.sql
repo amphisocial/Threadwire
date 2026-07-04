@@ -531,3 +531,8 @@ CREATE TABLE IF NOT EXISTS quotes (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS quotes_org_num ON quotes (org_id, quote_number);
 CREATE INDEX IF NOT EXISTS quotes_org_status ON quotes (org_id, status);
+
+-- ===== org settings: quote-to-order flag (010) =====
+-- Per-company feature flag: Quote-to-Order tracking (Delivery Desk for small-cap
+-- shops without heavy ERP/MES). Default OFF — companies with full systems don't see it.
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS quote_to_order boolean NOT NULL DEFAULT false;

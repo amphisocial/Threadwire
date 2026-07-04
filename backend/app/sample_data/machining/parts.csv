@@ -1,0 +1,13 @@
+part_number,description,unit_cost,uom,commodity,revision,lifecycle
+PN-3320,"Spindle Housing, machined 4140",318,ea,Machined,C,production
+PN-3321,"Bearing, angular contact",12.40,ea,Purchased,A,production
+PN-3322,"Shaft, hardened 4140",64,ea,Machined,B,production
+PN-3323,Collet nut,9.10,ea,Machined,A,production
+PN-4501,"Servo bracket, aluminum",86,ea,Fabricated,A,production
+PN-1188,"Grip assembly, standard",210,ea,Assembly,B,production
+GR-100,"Lace-up grip, 12mm",145,ea,Assembly,C,production
+GR-200,"Bolt-on grip, 18mm",168,ea,Assembly,B,production
+RM-4140,"Bar stock 4140, 2in",22,ft,Raw,-,production
+RM-6061,"Bar stock 6061, 1.5in",9.50,ft,Raw,-,production
+HW-M8,Fastener M8 socket cap,0.35,ea,Hardware,-,production
+CG-01,Anodize coating service,4.20,ea,Service,-,production

@@ -1,0 +1,4 @@
+wo_number,part_number,description,quantity,site,status,due_date,operator
+WO-6101,PN-3320,Machine spindle housing,40,"Lawrence, MA",in-process,2026-06-22,M. Reyes
+WO-6102,PN-4501,Fab + anodize bracket,200,"Greenville, SC",hold,2026-06-25,A. Kidd
+WO-6103,GR-100,Assemble lace-up grips,100,"Lawrence, MA",released,2026-06-24,M. Reyes

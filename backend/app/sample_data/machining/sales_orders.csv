@@ -1,0 +1,9 @@
+so_number,line_number,customer,site,promise_date,part_number,quantity,value,status
+SO-6001,10,Vertex Aerospace,"Lawrence, MA",2026-06-24,PN-3320,40,128000,open
+SO-6001,20,Vertex Aerospace,"Lawrence, MA",2026-06-27,GR-100,100,14500,open
+SO-6002,10,Helios Robotics,"Lawrence, MA",2026-06-26,PN-1188,30,63000,open
+SO-6003,10,Apex Defense,"Greenville, SC",2026-06-30,PN-4501,200,17200,open
+SO-6003,20,Apex Defense,"Greenville, SC",2026-07-03,GR-200,50,8400,open
+SO-6004,10,Northwind Motors,"Greenville, SC",2026-07-08,GR-100,120,17400,open
+SO-6005,10,Vertex Aerospace,"Lawrence, MA",2026-07-15,PN-3320,25,80000,open
+SO-6006,10,Helios Robotics,"Monterrey, MX",2026-07-22,PN-1188,18,37800,open

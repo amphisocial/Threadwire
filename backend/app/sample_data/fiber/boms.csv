@@ -1,0 +1,10 @@
+parent_part_number,child_part_number,quantity,find_number,ref_designators
+FO-100,FO-120,1,10,LG1
+FO-100,FO-200,2,20,"C1,C2"
+FO-100,FO-400,1,30,H1
+FO-100,FO-300,1,40,-
+FO-120,FO-110,7,10,-
+FO-120,FO-210,7,20,-
+FO-400,RM-316,1,10,-
+FO-110,RM-SIL,1,10,-
+FO-100,EA-100,1,50,D1

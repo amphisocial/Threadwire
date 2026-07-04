@@ -1,0 +1,13 @@
+parent_part_number,child_part_number,quantity,find_number,ref_designators
+PN-3320,PN-3321,2,10,"B1,B2"
+PN-3320,PN-3322,1,20,S1
+PN-3320,PN-3323,4,30,"N1,N2,N3,N4"
+PN-3322,RM-4140,1,10,-
+PN-4501,RM-6061,1,10,-
+PN-4501,CG-01,1,20,-
+PN-1188,PN-3321,1,10,B1
+PN-1188,PN-4501,2,20,"K1,K2"
+PN-1188,HW-M8,6,30,-
+GR-100,RM-6061,1,10,-
+GR-100,HW-M8,4,20,-
+GR-200,RM-6061,1,10,-

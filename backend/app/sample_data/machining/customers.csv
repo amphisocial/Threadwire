@@ -1,0 +1,5 @@
+customer_code,name,email,region
+C-AERO,Vertex Aerospace,po@vertexaero.example,US-West
+C-ROBO,Helios Robotics,buyer@heliosrobotics.example,US-Northeast
+C-MOTOR,Northwind Motors,purchasing@northwind.example,US-Midwest
+C-DEF,Apex Defense,contracts@apexdef.example,US-South

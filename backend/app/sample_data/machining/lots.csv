@@ -1,0 +1,3 @@
+lot_number,part_number,work_order,quantity,site,company_ref,mfg_date,status,disposition
+LT-6001,PN-3320,WO-6101,40,"Lawrence, MA",AMTEC,2026-06-18,released,accepted
+LT-6002,PN-4501,WO-6102,200,"Greenville, SC",AMTEC,2026-06-20,hold,pending NCR

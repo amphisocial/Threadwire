@@ -68,3 +68,8 @@ export const aiTraceLot = (lot) => fetch("/api/ai/trace/" + encodeURIComponent(l
 // Delivery Desk — quotes
 export const getQuotes = () => fetch("/api/quotes", { credentials: "include" }).then(jsonOrThrow);
 export const convertQuote = (quoteNumber) => fetch("/api/quotes/" + encodeURIComponent(quoteNumber) + "/convert", opts("POST")).then(jsonOrThrow);
+
+// org settings + sample datasets
+export const updateSettings = (settings) => fetch("/api/admin/settings", { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) }).then(jsonOrThrow);
+export const loadSampleDataset = (industry) => fetch("/api/admin/load_sample_dataset", opts("POST", { industry })).then(jsonOrThrow);
+export const sampleCsvUrl = (industry, entity) => "/api/admin/sample_dataset/" + industry + "/" + entity + ".csv";

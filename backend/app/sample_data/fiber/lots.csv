@@ -1,0 +1,4 @@
+lot_number,part_number,work_order,quantity,site,company_ref,mfg_date,status,disposition
+LT-7001,FO-100,WO-7101,40,"Sturbridge, CT",FTI,2026-06-19,released,accepted
+LT-7002,FO-120,WO-7102,120,"Sturbridge, CT",FTI,2026-06-22,quarantine,awaiting evidence
+LT-7003,FO-400,WO-7103,60,"Orlando, FL",FTI,2026-06-24,hold,pending NCR
