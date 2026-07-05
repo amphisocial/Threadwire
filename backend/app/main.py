@@ -75,7 +75,7 @@ async def load_session(request: Request):
                    u.plan, u.stripe_customer_id,
                    o.id AS org_id, o.legal_name,
                    o.enterprise, o.stripe_customer_id AS org_stripe_customer_id,
-                   o.quote_to_order
+                   o.quote_to_order, o.compliance_enabled
             FROM sessions s
             JOIN users u ON u.id = s.user_id
             JOIN organizations o ON o.id = u.org_id
@@ -314,21 +314,27 @@ async def me(user: dict = Depends(current_user)):
     pub["billing_configured"] = bool(settings.stripe_secret_key)
     pub["billing_mode"] = "live" if settings._payment_live else "test"
     pub["quote_to_order"] = bool(user.get("quote_to_order"))
+    pub["compliance_enabled"] = bool(user.get("compliance_enabled"))
     return pub
 
 
 class OrgSettingsIn(BaseModel):
-    quote_to_order: bool
+    quote_to_order: Optional[bool] = None
+    compliance_enabled: Optional[bool] = None
 
 
 @app.patch("/api/admin/settings")
 async def update_org_settings(body: OrgSettingsIn, user: dict = Depends(current_user)):
     if user["role"] not in ("org_admin", "superadmin"):
         raise HTTPException(403, "Admins only")
+    fields = {k: v for k, v in body.dict(exclude_unset=True).items() if v is not None}
+    if not fields:
+        raise HTTPException(400, "Nothing to update")
+    sets = ", ".join("%s=$%d" % (k, i + 2) for i, k in enumerate(fields))
     async with db.pool().acquire() as con:
-        await con.execute("UPDATE organizations SET quote_to_order=$2 WHERE id=$1",
-                          user["org_id"], body.quote_to_order)
-    return {"quote_to_order": body.quote_to_order}
+        await con.execute("UPDATE organizations SET %s WHERE id=$1" % sets,
+                          user["org_id"], *fields.values())
+    return fields
 
 
 # --------------------------------------------------------------------------- #

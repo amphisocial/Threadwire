@@ -527,6 +527,7 @@ function LicenseTab({ isAdmin }) {
 /* =================== MAIN ADMIN SHELL =================== */
 function SettingsTab({ isAdmin, user }) {
   const [qto, setQto] = useState(!!user?.quote_to_order);
+  const [comp, setComp] = useState(!!user?.compliance_enabled);
   const [busy, setBusy] = useState("");
   const [msg, setMsg] = useState("");
   const ENTITIES = ["parts", "boms", "vendors", "vendor_parts", "customers", "sales_orders", "work_orders", "operators", "lots", "inspections", "ncrs", "quotes"];
@@ -536,6 +537,11 @@ function SettingsTab({ isAdmin, user }) {
     setQto(v); setBusy("qto"); setMsg("");
     try { await updateSettings({ quote_to_order: v }); setMsg("Saved. Reload the app for the change to take full effect."); }
     catch (e) { setMsg(e.message); setQto(!v); } finally { setBusy(""); }
+  };
+  const toggleComp = async (v) => {
+    setComp(v); setBusy("comp"); setMsg("");
+    try { await updateSettings({ compliance_enabled: v }); setMsg("Saved. Reload the app for the change to take full effect."); }
+    catch (e) { setMsg(e.message); setComp(!v); } finally { setBusy(""); }
   };
   const seed = async (industry) => {
     setBusy(industry); setMsg("");
@@ -559,6 +565,21 @@ function SettingsTab({ isAdmin, user }) {
           <button onClick={() => toggle(!qto)} disabled={busy === "qto"}
             style={{ width: 54, height: 30, borderRadius: 999, border: "none", cursor: "pointer", position: "relative", background: qto ? C.green : C.line2, transition: "background .15s" }}>
             <span style={{ position: "absolute", top: 3, left: qto ? 27 : 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
+          </button>
+        </div>
+      </div>
+
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Compliance module</div>
+            <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+              Show the Compliance tab (certs, documents, lot trace) in the top navigation for everyone in this workspace. Off by default; turn on when the team is ready to use it.
+            </div>
+          </div>
+          <button onClick={() => toggleComp(!comp)} disabled={busy === "comp"}
+            style={{ width: 54, height: 30, borderRadius: 999, border: "none", cursor: "pointer", position: "relative", background: comp ? C.green : C.line2, transition: "background .15s" }}>
+            <span style={{ position: "absolute", top: 3, left: comp ? 27 : 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", transition: "left .15s" }} />
           </button>
         </div>
       </div>

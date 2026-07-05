@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useContext } from "react";
 import Compliance from "./compliance/Compliance.jsx";
 import { PeggingExplorerPro, EcoImpactAnalyzerPro } from "./thread/DigitalThreadPro.jsx";
+import { getQuotes, convertQuote } from "./lib/api.js";
 import {
   LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip,
   AreaChart, Area, BarChart, Bar, CartesianGrid,
@@ -246,14 +247,17 @@ function genSPC(n = 28, target = 50, sigma = 1.1, seed = 7) {
 }
 
 /* ----------------------------- shared UI -------------------------------- */
-function TopNav({ route, go, tier, onContact, loggedIn }) {
+function TopNav({ route, go, tier, onContact, loggedIn, user }) {
+  const isSiteAdmin = user?.role === "superadmin";
   const links = loggedIn
-    ? [["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"], ["compliance", "Compliance"]]
-    : [["home", "Home"], ["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"], ["roi", "ROI Calculator"]];
+    ? [["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"],
+       ...(user?.compliance_enabled ? [["compliance", "Compliance"]] : []),
+       ...(user?.quote_to_order ? [["quotes", "Quote-to-Order"]] : [])]
+    : [["home", "Home"], ["roi", "ROI Calculator"]];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(10,14,21,.72)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "14px 22px", display: "flex", alignItems: "center", gap: 20 }}>
-        <div onClick={() => go("home")} title={loggedIn ? "Open the Threadwire website" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+        <div onClick={() => go(loggedIn ? "visibility" : "home")} title={loggedIn ? "Go to Delivery" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
           <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center" }}>
             <Workflow size={17} color="#0a0e15" strokeWidth={2.4} />
           </div>
@@ -269,7 +273,7 @@ function TopNav({ route, go, tier, onContact, loggedIn }) {
               {l}
             </span>
           ))}
-          {!loggedIn && (
+          {(!loggedIn || isSiteAdmin) && (
             <span className="tf-link" onClick={() => { window.location.href = "/case-studies"; }}
               style={{ borderBottom: "2px solid transparent", paddingBottom: 3 }}>
               Case Studies
@@ -452,6 +456,13 @@ const ASSISTANT = {
       : /weight|rfq|scoring/i.test(q) ? "Weighted RFQ avoids picking on price alone: score each supplier on price, quality, lead time, supply risk and sustainability, then weight those to your category strategy. Strategic/bottleneck items lean toward risk and lead time; leverage items lean toward price."
       : /se-1048|win|award/i.test(q) ? "For SE-1048 (PN-3322 shaft), the recommendation shifts with your weights: price-weighted favors Midwest Forge (lowest quote), while quality/risk-weighted favors Apex. The should-cost (~$8) shows real headroom against the ~$8.90 best quote."
       : "Sourcing events fire from BOM/ECO changes. Pick one to load its weighted RFQ and should-cost. Ask me to compare suppliers or size the savings.",
+  },
+  quotes: {
+    subject: "Quote-to-Order Pipeline", accent: "var(--thread)",
+    intro: "Ask about pipeline value, quotes at risk, or what to convert next.",
+    suggestions: ["What should we convert this week?", "Which quotes are blocked?", "Pipeline value by stage?"],
+    system: "You help a manufacturing sales/ops team run a quote-to-order pipeline (open → quoted → won → converted). Prioritize by value, required date and blockers; recommend which won quotes to convert to sales orders. Be concise.\n\n" + CTX.home,
+    fallback: () => "The pipeline runs open → quoted → won → converted. Convert won quotes with the nearest required dates first so they land on the delivery calendar with a real promise date; clear blockers on quoted deals before they age out.",
   },
   blockers: {
     subject: "Shop-floor Blockers", accent: "var(--red)",
@@ -1371,6 +1382,94 @@ function RequirementsPage({ tier, setTier }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* --------------------------- QUOTE-TO-ORDER ----------------------------- */
+/* Delivery Desk pipeline for shops without a full ERP/MES: quotes move
+   open → quoted → won → converted; converting creates a single-line sales
+   order that lands on the Delivery calendar. Enabled per-org from Admin. */
+const SAMPLE_QUOTES = [
+  { quote_number: "Q-2451", customer: "MedTech Systems", product_family: "Actuator Assy", quantity: 24, value: 186000, required_date: "2026-07-24", promised_date: null, owner: "S. Ortiz", status: "open", blocker: "", next_action: "Send revised pricing", site: "BOS", converted_so: "" },
+  { quote_number: "Q-2447", customer: "Aerospace OEM", product_family: "Spindle Assy", quantity: 48, value: 402000, required_date: "2026-08-10", promised_date: "2026-08-14", owner: "S. Ortiz", status: "quoted", blocker: "Awaiting export review", next_action: "Follow up on ITAR screen", site: "BOS", converted_so: "" },
+  { quote_number: "Q-2440", customer: "Northbridge Automation", product_family: "Servo Bracket", quantity: 120, value: 96000, required_date: "2026-07-18", promised_date: "2026-07-18", owner: "A. Kidd", status: "won", blocker: "", next_action: "Convert to order", site: "ATL", converted_so: "" },
+  { quote_number: "Q-2433", customer: "Helix Alloys", product_family: "Precision Shaft", quantity: 500, value: 61000, required_date: "2026-07-09", promised_date: "2026-07-09", owner: "A. Kidd", status: "converted", blocker: "", next_action: "", site: "ATL", converted_so: "SO-Q-2433" },
+];
+const QSTAGES = [["open", "Open", "var(--blue)"], ["quoted", "Quoted", "var(--yellow)"], ["won", "Won", "var(--green)"], ["converted", "Converted", "var(--thread)"]];
+
+function QuotesPage() {
+  const [rows, setRows] = useState(SAMPLE_QUOTES);
+  const [note, setNote] = useState("Demo data shown until live quotes are imported.");
+  const [busy, setBusy] = useState("");
+  const [live, setLive] = useState(false);
+
+  const load = async () => {
+    try {
+      const r = await getQuotes();
+      if (Array.isArray(r) && r.length) { setRows(r); setLive(true); setNote("Live quotes loaded — convert a won quote to put it on the delivery calendar."); }
+      else { setLive(true); setNote("No quotes yet — import quotes (Admin → Sample datasets or CSV) to fill the pipeline."); setRows([]); }
+    } catch (e) { setLive(false); setRows(SAMPLE_QUOTES); setNote("Demo data shown until live quotes are imported."); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const doConvert = async (q) => {
+    if (!live) { setNote("Converting works on live data only — this is the demo pipeline."); return; }
+    setBusy(q.quote_number);
+    try { const r = await convertQuote(q.quote_number); setNote(`${q.quote_number} → ${r.so_number}${r.already ? " (already converted)" : " created on the delivery calendar."}`); await load(); }
+    catch (e) { setNote(String(e.message || e)); }
+    finally { setBusy(""); }
+  };
+
+  const byStage = (s) => rows.filter((q) => (q.status || "open") === s);
+  const stageVal = (s) => byStage(s).reduce((a, q) => a + (q.value || 0), 0);
+  const fmtD = (d) => (d ? d.slice(5) : "—");
+
+  return (
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={ClipboardList} eyebrow="Manufacturing Delivery Control · Delivery desk" title="Quote-to-order pipeline"
+        sub="Track quotes from open to converted. Converting a won quote creates the sales order and puts it on the Delivery calendar with its promise date — so commitments are protected from the first customer conversation." />
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <span className="tf-chip">{note}</span>
+        <span className="tf-chip" style={{ marginLeft: "auto" }}>Pipeline (open+quoted+won): {fmtMoney(stageVal("open") + stageVal("quoted") + stageVal("won"))}</span>
+      </div>
+
+      <div className="tf-cols" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, alignItems: "start" }}>
+        {QSTAGES.map(([key, label, color]) => (
+          <div key={key} className="tf-panel" style={{ overflow: "hidden" }}>
+            <div style={{ padding: "11px 14px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
+              <b style={{ fontSize: 13 }}>{label}</b>
+              <span className="tf-mono" style={{ marginLeft: "auto", fontSize: 10.5, color: "var(--faint)" }}>{byStage(key).length} · {fmtMoney(stageVal(key))}</span>
+            </div>
+            <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 8, minHeight: 90 }}>
+              {byStage(key).map((q) => (
+                <div key={q.quote_number} className="tf-panel" style={{ padding: 11, border: "1px solid var(--line2)" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--amber)" }}>{q.quote_number}</span>
+                    <span className="tf-mono" style={{ marginLeft: "auto", fontSize: 10, color: "var(--faint)" }}>{q.site}</span>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginTop: 3 }}>{q.customer}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{q.product_family}{q.quantity ? ` · qty ${q.quantity}` : ""}</div>
+                  <div className="tf-disp" style={{ fontSize: 15, fontWeight: 800, margin: "5px 0 2px" }}>{fmtMoney(q.value || 0)}</div>
+                  <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>need {fmtD(q.required_date)}{q.promised_date ? ` · promised ${fmtD(q.promised_date)}` : ""}{q.owner ? ` · ${q.owner}` : ""}</div>
+                  {q.blocker && <div className="tf-mono" style={{ fontSize: 10, color: "var(--red)", marginTop: 4 }}>⚠ {q.blocker}</div>}
+                  {q.next_action && key !== "converted" && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Next: {q.next_action}</div>}
+                  {key === "converted" && q.converted_so && <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--thread)", marginTop: 4 }}>→ {q.converted_so}</div>}
+                  {key !== "converted" && (
+                    <button className={`tf-btn ${key === "won" ? "tf-btn-primary" : "tf-btn-ghost"}`} disabled={busy === q.quote_number}
+                      style={{ marginTop: 8, padding: "5px 11px", fontSize: 11 }} onClick={() => doConvert(q)}>
+                      {busy === q.quote_number ? "Converting…" : "Convert to order"}
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!byStage(key).length && <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", padding: 6 }}>No quotes in {label.toLowerCase()}.</div>}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -2317,7 +2416,7 @@ function ContactModal({ onClose }) {
 }
 
 /* ----------------------------- ROOT ------------------------------------- */
-const EMPTY_CHATS = { home: { msgs: [], hist: [] }, assets: { msgs: [], hist: [] }, contracts: { msgs: [], hist: [] }, requirements: { msgs: [], hist: [] }, thread: { msgs: [], hist: [] }, roi: { msgs: [], hist: [] }, directspend: { msgs: [], hist: [] }, blockers: { msgs: [], hist: [] }, visibility: { msgs: [], hist: [] }, finance: { msgs: [], hist: [] } };
+const EMPTY_CHATS = { home: { msgs: [], hist: [] }, quotes: { msgs: [], hist: [] }, compliance: { msgs: [], hist: [] }, assets: { msgs: [], hist: [] }, contracts: { msgs: [], hist: [] }, requirements: { msgs: [], hist: [] }, thread: { msgs: [], hist: [] }, roi: { msgs: [], hist: [] }, directspend: { msgs: [], hist: [] }, blockers: { msgs: [], hist: [] }, visibility: { msgs: [], hist: [] }, finance: { msgs: [], hist: [] } };
 
 /* ===================== DIGITAL THREAD — object explorer =================
    Click any part / BOM / work order / ECO / PO / supplier anywhere in the app
@@ -3694,6 +3793,12 @@ export default function App({ user }) {
     ].join("\n");
   })();
   const go = (r) => { setRoute(r); window.scrollTo?.({ top: 0, behavior: "instant" }); };
+  useEffect(() => {
+    if (!user) return;
+    const marketing = route === "home" || route === "roi";
+    const gatedOff = (route === "compliance" && !user.compliance_enabled) || (route === "quotes" && !user.quote_to_order);
+    if (marketing || gatedOff) setRoute("visibility");
+  }, [user, route]);
   const setT = (page) => (v) => setTier((t) => ({ ...t, [page]: v }));
   const updateChat = (r, fn) => setChats((c) => ({ ...c, [r]: fn(c[r]) }));
 
@@ -3705,13 +3810,14 @@ export default function App({ user }) {
       <style>{`
         @media(max-width:820px){.tf-cols{grid-template-columns:1fr !important}.hide-sm{display:none !important}.tf-nav{display:none !important}}
       `}</style>
-      <TopNav route={route} go={go} tier={Object.values(tier).includes("paid") ? "paid" : "free"} onContact={() => setContactOpen(true)} loggedIn={backend} />
+      <TopNav route={route} go={go} tier={Object.values(tier).includes("paid") ? "paid" : "free"} onContact={() => setContactOpen(true)} loggedIn={backend} user={user} />
       {route === "home" && <Home go={go} onContact={() => setContactOpen(true)} />}
       {route === "assets" && <AssetsPage tier={tier.assets} setTier={setT("assets")} stage={assetStage} setStage={setAssetStage} />}
       {route === "contracts" && <ContractsPage tier={tier.contracts} setTier={setT("contracts")} />}
       {route === "requirements" && <RequirementsPage tier={tier.requirements} setTier={setT("requirements")} />}
       {route === "thread" && <ThreadPage tier={tier.thread} setTier={setT("thread")} />}
-      {route === "compliance" && user && <Compliance user={user} embedded />}
+      {route === "compliance" && user && user.compliance_enabled && <Compliance user={user} embedded />}
+      {route === "quotes" && user && user.quote_to_order && <QuotesPage />}
       {route === "roi" && <ROIPage />}
 
       {route === "blockers" && <BlockersPage />}
