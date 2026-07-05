@@ -1086,7 +1086,9 @@ async def edit_sales_order_line(so_number: str, line_number: int, body: SOLineEd
             "WHERE org_id=$1 AND so_number=$2 AND line_number=$3", user["org_id"], so_number, line_number)
         if not cur:
             raise HTTPException(404, "Order line not found")
-        sets, args, changed = [], [], []
+        # WHERE params occupy $1..$3; SET params must number from $4 onward,
+        # so seed args with the WHERE values before appending SET values.
+        sets, args, changed = [], [user["org_id"], so_number, line_number], []
         if body.revised_promise_date is not None:
             newd = _parse_date(body.revised_promise_date)
             if newd != cur["revised_promise_date"]:
@@ -1104,7 +1106,6 @@ async def edit_sales_order_line(so_number: str, line_number: int, body: SOLineEd
         if not sets:
             return {"changed": False}
         sets.append("updated_at=now()")
-        args = [user["org_id"], so_number, line_number] + args
         await con.execute(
             "UPDATE sales_orders SET %s WHERE org_id=$1 AND so_number=$2 AND line_number=$3" % ",".join(sets), *args)
         if changed:

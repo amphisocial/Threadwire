@@ -2985,7 +2985,7 @@ function SalesOrderModal({ id }) {
           const remaining = Math.max(0, o.qty - (o.qtyShipped || 0));
           const recognized = o.qty > 0 ? o.value * ((o.qtyShipped || 0) / o.qty) : 0;
           const done = o.shipDate || ["shipped", "closed", "complete", "completed", "delivered"].includes((o.status || "").toLowerCase());
-          const inp = { fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 9px", color: "var(--ink)", outline: "none" };
+          const inp = { fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 9px", color: "var(--ink)", outline: "none", colorScheme: "dark" };
           const okDate = (s) => s === "" || /^\d{4}-\d{2}-\d{2}$/.test(s);
           const CLOSED_STATUSES = ["shipped", "closed", "complete", "completed", "delivered"];
           const closeAttached = () => {
@@ -3229,7 +3229,7 @@ function DeliveryPage() {
           </div>
           <div className="tf-disp" style={{ fontSize: 16, fontWeight: 800, margin: "3px 0 1px" }}>{fmtMoney(o.value)}</div>
           <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{o.so} · L{o.line} · qty {o.qty}</div>
-          {revisedForSO(blockers, o.id) && <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--amber)", marginTop: 2 }}>↪ revised from {o.promise}</div>}
+          {(o.revisedPromise || revisedForSO(blockers, o.id)) && <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--amber)", marginTop: 2 }}>↪ revised from <span style={{ textDecoration: "line-through", opacity: 0.7 }}>{o.promise}</span> → {o.revisedPromise || revisedForSO(blockers, o.id)}</div>}
           <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 4 }}>
             {o.parts.map((pn) => <PartLink key={pn} pn={pn} style={{ fontSize: 10, padding: "1px 6px", border: "1px solid var(--line2)", borderRadius: 6 }}>{pn}</PartLink>)}
           </div>
@@ -3310,7 +3310,7 @@ function DeliveryPage() {
     const y = monthRef.getFullYear();
     const qIdx = Math.floor(monthRef.getMonth() / 3);
     const qMonths = [0, 1, 2].map((k) => new Date(y, qIdx * 3 + k, 1));
-    const sp = splitFor((s) => { const d = D(s.promise); return d.getFullYear() === y && Math.floor(d.getMonth() / 3) === qIdx; });
+    const sp = splitFor((s) => { const d = D(effPromise(blockers, s)); return d.getFullYear() === y && Math.floor(d.getMonth() / 3) === qIdx; });
     const goQ = (delta) => setMonthRef(new Date(y, qIdx * 3 + delta * 3, 1));
     return (
       <>
