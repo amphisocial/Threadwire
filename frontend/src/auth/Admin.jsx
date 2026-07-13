@@ -10,10 +10,10 @@ import {
 
 /* ---- design tokens (must match ThreadWire.jsx) ---- */
 const C = {
-  bg: "#08090d", bg2: "#0e1117", panel: "#13181f", panel2: "#1a2030",
-  line: "#252d3d", line2: "#303d52",
-  ink: "#f0f4f8", muted: "#b8c5d6", faint: "#7a8fa8",
-  amber: "#ff9a4d", thread: "#4dd8ca", green: "#4dcb80",
+  bg: "#F4F6FA", bg2: "#EEF2F7", panel: "#FFFFFF", panel2: "#F5F8FC",
+  line: "#DCE3EC", line2: "#C6D2E0",
+  ink: "#15222D", muted: "#47606F", faint: "#8093A0",
+  amber: "#2A46C4", thread: "#3E6FE0", green: "#4dcb80",
   red: "#f26249", blue: "#6ab4ff",
 };
 const mono = "'IBM Plex Mono',monospace";
@@ -29,7 +29,7 @@ const btn = {
   padding: "9px 14px", cursor: "pointer", border: `1px solid ${C.line2}`,
   background: C.panel2, color: C.ink, display: "inline-flex", alignItems: "center", gap: 6,
 };
-const btnP = { ...btn, background: `linear-gradient(180deg,${C.amber},#cc7530)`, border: "none", color: "#150b02" };
+const btnP = { ...btn, background: `linear-gradient(180deg,${C.amber},#1B2E8C)`, border: "none", color: "#ffffff" };
 const card = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 20 };
 const eyebrow = { fontFamily: mono, fontSize: 10.5, letterSpacing: ".22em", textTransform: "uppercase", color: C.amber, marginBottom: 12 };
 
@@ -716,9 +716,9 @@ export default function Admin({ user, onClose }) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
         * { box-sizing: border-box; }
-        select option { background: #13181f; color: #f0f4f8; }
-        input::placeholder, textarea::placeholder { color: #7a8fa8; }
-        input:focus, textarea:focus, select:focus { border-color: #ff9a4d !important; outline: none; }
+        select option { background: #FFFFFF; color: #15222D; }
+        input::placeholder, textarea::placeholder { color: #8093A0; }
+        input:focus, textarea:focus, select:focus { border-color: #2A46C4 !important; outline: none; }
       `}</style>
 
       <div style={{ maxWidth: 1020, margin: "0 auto", padding: "28px 22px 80px" }}>

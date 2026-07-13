@@ -8,7 +8,7 @@ import Profile, { PlanBadge } from "./auth/Profile.jsx";
 import CaseStudies from "./pages/CaseStudies.jsx";
 import { getMe, logout, billingConfirm } from "./lib/api.js";
 
-const center = { minHeight: "100vh", display: "grid", placeItems: "center", background: "#0a0e15", color: "#8d9fb5", fontFamily: "'IBM Plex Mono',monospace" };
+const center = { minHeight: "100vh", display: "grid", placeItems: "center", background: "#F4F6FA", color: "#47606F", fontFamily: "'IBM Plex Mono',monospace" };
 
 function Root() {
   const params = new URLSearchParams(window.location.search);
@@ -53,23 +53,23 @@ function Root() {
       {state.user ? (
         <>
           <button onClick={() => setAdminOpen(true)}
-            style={{ ...pill, left: 16, color: "#1a0f06", background: "linear-gradient(180deg,#48d6c8,#2a8f86)", border: "none", fontWeight: 600 }}>
+            style={{ ...pill, left: 16, color: "#fff", background: "linear-gradient(180deg,#2A46C4,#1B2E8C)", border: "none", fontWeight: 600 }}>
             {state.user.role === "org_admin" || state.user.role === "superadmin" ? "⚙ Admin" : "⚙ Connections"}
           </button>
 
           <button onClick={() => logout().then(refresh)} title={`Signed in as ${state.user.email}`}
-            style={{ ...pill, left: 132, color: "#8d9fb5", background: "rgba(13,18,28,.85)", border: "1px solid #243245" }}>
+            style={{ ...pill, left: 132, color: "#47606F", background: "rgba(255,255,255,.9)", border: "1px solid #DCE3EC" }}>
             Sign out
           </button>
           <button onClick={() => setProfileOpen(true)} title="Profile & subscription"
-            style={{ ...pill, left: 214, color: "#e7eef6", background: "rgba(13,18,28,.85)", border: "1px solid #243245", display: "flex", alignItems: "center", gap: 7 }}>
+            style={{ ...pill, left: 214, color: "#15222D", background: "rgba(255,255,255,.9)", border: "1px solid #DCE3EC", display: "flex", alignItems: "center", gap: 7 }}>
             {state.user.full_name || state.user.email} <PlanBadge plan={state.user.plan} />
           </button>
           {profileOpen && <Profile user={state.user} onClose={() => setProfileOpen(false)} />}
         </>
       ) : (
         <button onClick={() => setShowAuth(true)}
-          style={{ ...pill, left: 16, color: "#1a0f06", background: "linear-gradient(180deg,#ff8a3d,#cc6a26)", border: "none", fontWeight: 600 }}>
+          style={{ ...pill, left: 16, color: "#fff", background: "linear-gradient(180deg,#2A46C4,#1B2E8C)", border: "none", fontWeight: 600 }}>
           Sign up / Log in
         </button>
       )}

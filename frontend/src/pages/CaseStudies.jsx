@@ -20,11 +20,11 @@ const Styles = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
     .cs {
-      --bg:#08090d; --bg2:#0e1117; --panel:#13181f; --panel2:#1a2030;
-      --line:#252d3d; --line2:#303d52;
-      --ink:#f0f4f8; --muted:#b8c5d6; --faint:#7a8fa8;
-      --amber:#ff9a4d; --amber-d:#cc7530;
-      --thread:#4dd8ca; --thread-d:#2a8f86;
+      --bg:#F4F6FA; --bg2:#EEF2F7; --panel:#FFFFFF; --panel2:#F5F8FC;
+      --line:#DCE3EC; --line2:#C6D2E0;
+      --ink:#15222D; --muted:#47606F; --faint:#8093A0;
+      --amber:#2A46C4; --amber-d:#1B2E8C;
+      --thread:#3E6FE0; --thread-d:#1B2E8C;
       --red:#f26249;
       --disp:'Bricolage Grotesque',sans-serif; --body:'Inter',sans-serif; --mono:'IBM Plex Mono',monospace;
       color:var(--ink); font-family:var(--body); letter-spacing:.1px;
@@ -41,7 +41,7 @@ const Styles = () => (
     .cs-btn{font-family:var(--mono);font-size:13px;font-weight:600;border-radius:10px;padding:9px 14px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);cursor:pointer;transition:.16s;display:inline-flex;align-items:center;gap:8px}
     .cs-btn:hover{border-color:var(--amber);transform:translateY(-1px)}
     .cs-btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
-    .cs-btn-primary{background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:transparent;color:#150b02;font-weight:700}
+    .cs-btn-primary{background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:transparent;color:#ffffff;font-weight:700}
     .cs-btn-primary:hover{filter:brightness(1.08)}
     .cs-btn-danger:hover{border-color:var(--red);color:var(--red)}
     .cs-input{font-family:var(--mono);font-size:13px;background:rgba(255,255,255,.04);border:1px solid var(--line2);border-radius:10px;padding:10px 13px;color:var(--ink);width:100%;outline:none}
@@ -143,7 +143,7 @@ export default function CaseStudies({ user }) {
         <div style={{ maxWidth: 1280, margin: "0 auto", padding: "13px 22px", display: "flex", alignItems: "center", gap: 12 }}>
           <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
             <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center" }}>
-              <Workflow size={17} color="#0a0e15" strokeWidth={2.4} />
+              <Workflow size={17} color="#F4F6FA" strokeWidth={2.4} />
             </div>
             <div>
               <span className="cs-disp" style={{ fontWeight: 800, fontSize: 19 }}>{BRAND}</span>

@@ -2,13 +2,13 @@ import React, { useState } from "react";
 import { billingCheckout, billingPortal } from "../lib/api.js";
 
 const C = {
-  bg: "#0a0e15", panel: "#121a26", panel2: "#172132", bg2: "#0d121c",
-  line: "#243245", line2: "#2f4259", ink: "#e7eef6", muted: "#8d9fb5", faint: "#5d6f86",
-  amber: "#ff8a3d", thread: "#48d6c8", green: "#43c277", red: "#f0563a", blue: "#5aa9ff",
+  bg: "#F4F6FA", panel: "#F5F8FC", panel2: "#EEF2F7", bg2: "#FFFFFF",
+  line: "#DCE3EC", line2: "#C6D2E0", ink: "#15222D", muted: "#47606F", faint: "#5d6f86",
+  amber: "#2A46C4", thread: "#3E6FE0", green: "#43c277", red: "#f0563a", blue: "#5aa9ff",
 };
 const mono = "'IBM Plex Mono',monospace";
 const btn = { fontFamily: mono, fontSize: 12.5, fontWeight: 600, borderRadius: 9, padding: "10px 14px", cursor: "pointer", border: `1px solid ${C.line2}`, background: C.panel2, color: C.ink };
-const btnP = { ...btn, background: `linear-gradient(180deg,${C.amber},#cc6a26)`, border: "none", color: "#1a0f06" };
+const btnP = { ...btn, background: `linear-gradient(180deg,${C.amber},#1B2E8C)`, border: "none", color: "#ffffff" };
 
 const PLAN_META = {
   free: { label: "Free", tone: C.muted, blurb: "5 assistant messages per day, reset daily." },

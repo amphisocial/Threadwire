@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useContext } from "react";
 import Compliance from "./compliance/Compliance.jsx";
+import AIWorkbench from "./workbench/AIWorkbench.jsx";
 import { PeggingExplorerPro, EcoImpactAnalyzerPro } from "./thread/DigitalThreadPro.jsx";
 import { getQuotes, convertQuote } from "./lib/api.js";
 import {
@@ -33,48 +34,51 @@ const Styles = () => (
     @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
     .tf {
-      --bg:#08090d; --bg2:#0e1117; --panel:#13181f; --panel2:#1a2030;
-      --line:#252d3d; --line2:#303d52;
-      --ink:#f0f4f8; --muted:#b8c5d6; --faint:#7a8fa8;
-      --amber:#ff9a4d; --amber-d:#cc7530;
-      --thread:#4dd8ca; --thread-d:#2a8f86;
-      --green:#4dcb80; --red:#f26249; --yellow:#e8bc50; --blue:#6ab4ff;
+      /* Blue & white professional theme */
+      --bg:#F4F6FA; --bg2:#EEF2F7; --panel:#FFFFFF; --panel2:#F5F8FC;
+      --line:#DCE3EC; --line2:#C6D2E0;
+      --ink:#15222D; --muted:#47606F; --faint:#8093A0;
+      --inset:#EEF2F7;
+      /* accent (was amber) — now the brand blue so all accents re-theme automatically */
+      --amber:#2A46C4; --amber-d:#1B2E8C;
+      --thread:#3E6FE0; --thread-d:#1B2E8C;
+      --green:#12784E; --red:#AC3247; --yellow:#B27C12; --blue:#2A46C4;
       --disp:'Bricolage Grotesque',sans-serif;
       --body:'Inter',sans-serif;
       --mono:'IBM Plex Mono',monospace;
       color:var(--ink); font-family:var(--body);
       background:
-        radial-gradient(900px 500px at 85% -10%, rgba(255,154,77,.09), transparent 60%),
-        radial-gradient(800px 600px at 0% 110%, rgba(77,216,202,.07), transparent 55%),
+        radial-gradient(900px 500px at 85% -10%, rgba(42,70,196,.06), transparent 60%),
+        radial-gradient(800px 600px at 0% 110%, rgba(62,111,224,.05), transparent 55%),
         var(--bg);
       min-height:100vh; letter-spacing:.1px;
     }
     .tf *{box-sizing:border-box}
     .tf-grid-bg{
-      background-image:linear-gradient(rgba(48,61,82,.22) 1px,transparent 1px),
-                       linear-gradient(90deg,rgba(48,61,82,.22) 1px,transparent 1px);
+      background-image:linear-gradient(rgba(42,70,196,.06) 1px,transparent 1px),
+                       linear-gradient(90deg,rgba(42,70,196,.06) 1px,transparent 1px);
       background-size:46px 46px;
     }
     .tf-disp{font-family:var(--disp);letter-spacing:-.02em;line-height:1.02;color:var(--ink)}
     .tf-mono{font-family:var(--mono);color:var(--muted)}
     .tf-eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--amber)}
-    .tf-panel{background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:14px}
-    .tf-chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--muted);background:rgba(255,255,255,.03)}
-    .tf-btn{font-family:var(--mono);font-size:13px;font-weight:600;border-radius:10px;padding:10px 16px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);cursor:pointer;transition:.16s;display:inline-flex;align-items:center;gap:8px}
-    .tf-btn:hover{border-color:var(--amber);color:#fff;transform:translateY(-1px)}
-    .tf-btn-primary{background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:transparent;color:#150b02;font-weight:700}
-    .tf-btn-primary:hover{filter:brightness(1.08);color:#150b02}
+    .tf-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(21,34,45,.04),0 4px 16px rgba(21,34,45,.04)}
+    .tf-chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--muted);background:var(--panel2)}
+    .tf-btn{font-family:var(--mono);font-size:13px;font-weight:600;border-radius:10px;padding:10px 16px;border:1px solid var(--line2);background:var(--panel);color:var(--ink);cursor:pointer;transition:.16s;display:inline-flex;align-items:center;gap:8px}
+    .tf-btn:hover{border-color:var(--amber);color:var(--amber);transform:translateY(-1px)}
+    .tf-btn-primary{background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:transparent;color:#fff;font-weight:700}
+    .tf-btn-primary:hover{filter:brightness(1.06);color:#fff}
     .tf-btn-ghost{background:transparent;border-color:var(--line2);color:var(--muted)}
     .tf-btn-ghost:hover{color:var(--ink);border-color:var(--amber)}
     .tf-link{cursor:pointer;color:var(--muted);transition:.15s;font-family:var(--mono);font-size:13px}
     .tf-link:hover{color:var(--amber)}
-    .tf-tile{position:relative;overflow:hidden;cursor:pointer;transition:.2s;background:linear-gradient(180deg,var(--panel),var(--bg2));border:1px solid var(--line);border-radius:18px}
-    .tf-tile:hover{transform:translateY(-4px);border-color:var(--line2);box-shadow:0 24px 60px -28px rgba(0,0,0,.8)}
+    .tf-tile{position:relative;overflow:hidden;cursor:pointer;transition:.2s;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 1px 2px rgba(21,34,45,.04),0 4px 16px rgba(21,34,45,.04)}
+    .tf-tile:hover{transform:translateY(-4px);border-color:var(--amber);box-shadow:0 24px 60px -28px rgba(42,70,196,.45)}
     .tf-tile:hover .tf-tile-arrow{transform:translateX(4px);color:var(--amber)}
-    .tf-tile-glow{position:absolute;inset:auto -40px -60px auto;width:200px;height:200px;border-radius:50%;filter:blur(40px);opacity:.18}
+    .tf-tile-glow{position:absolute;inset:auto -40px -60px auto;width:200px;height:200px;border-radius:50%;filter:blur(40px);opacity:.12}
     .tf-row:hover{background:var(--panel2)}
-    .tf-input{font-family:var(--mono);font-size:13px;background:rgba(255,255,255,.04);border:1px solid var(--line2);border-radius:10px;padding:11px 13px;color:var(--ink);width:100%;outline:none}
-    .tf-input:focus{border-color:var(--amber);background:rgba(255,255,255,.06)}
+    .tf-input{font-family:var(--mono);font-size:13px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:11px 13px;color:var(--ink);width:100%;outline:none}
+    .tf-input:focus{border-color:var(--amber);background:var(--panel)}
     .tf-input::placeholder{color:var(--faint)}
     .tf-fade{animation:tfIn .5s ease both}
     .tf-stagger>*{animation:tfIn .5s ease both}
@@ -250,12 +254,12 @@ function genSPC(n = 28, target = 50, sigma = 1.1, seed = 7) {
 function TopNav({ route, go, tier, onContact, loggedIn, user }) {
   const isSiteAdmin = user?.role === "superadmin";
   const links = loggedIn
-    ? [["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"],
+    ? [["workbench", "AI Workbench"], ["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"],
        ...(user?.compliance_enabled ? [["compliance", "Compliance"]] : []),
        ...(user?.quote_to_order ? [["quotes", "Quote-to-Order"]] : [])]
     : [["home", "Home"], ["roi", "ROI Calculator"]];
   return (
-    <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(10,14,21,.72)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
+    <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(255,255,255,.82)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "14px 22px", display: "flex", alignItems: "center", gap: 20 }}>
         <div onClick={() => go(loggedIn ? "visibility" : "home")} title={loggedIn ? "Go to Delivery" : undefined} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
           <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center" }}>
@@ -319,7 +323,7 @@ function TierToggle({ tier, setTier }) {
             display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
             border: "none", borderRadius: 9, padding: "8px 14px",
             background: tier === k ? (k === "paid" ? "linear-gradient(180deg,var(--amber),var(--amber-d))" : "var(--panel2)") : "transparent",
-            color: tier === k ? (k === "paid" ? "#1a0f06" : "var(--ink)") : "var(--faint)",
+            color: tier === k ? (k === "paid" ? "#fff" : "var(--ink)") : "var(--faint)",
           }}>
           <I size={14} /> {l}
         </button>
@@ -600,7 +604,7 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot 
           display: "flex", alignItems: "center", gap: 10, padding: "12px 18px 12px 12px",
           borderRadius: 999, border: "1px solid var(--line2)",
           background: "linear-gradient(180deg,var(--panel),var(--bg2))",
-          boxShadow: "0 18px 50px -18px rgba(0,0,0,.9)", color: "var(--ink)",
+          boxShadow: "0 18px 50px -18px rgba(21,34,45,.28)", color: "var(--ink)",
         }}>
         <span style={{ width: 32, height: 32, borderRadius: 999, background: cfg.accent, display: "grid", placeItems: "center", position: "relative" }}>
           <Bot size={18} color="#0a0e15" />
@@ -622,7 +626,7 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot 
       display: "flex", flexDirection: "column", overflow: "hidden",
       borderRadius: 16, border: "1px solid var(--line2)",
       background: "linear-gradient(180deg,var(--panel),var(--bg2))",
-      boxShadow: "0 30px 80px -24px rgba(0,0,0,.95)",
+      boxShadow: "0 30px 80px -24px rgba(21,34,45,.3)",
     }}>
       {/* header */}
       <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 9 }}>
@@ -2356,7 +2360,7 @@ function ContactModal({ onClose }) {
   );
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 250, background: "rgba(5,8,13,.78)", backdropFilter: "blur(5px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 250, background: "rgba(21,34,45,.5)", backdropFilter: "blur(5px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 18, padding: 28 }}>
 
         {status === "done" ? (
@@ -2522,7 +2526,7 @@ function ThreadModal({ stack, setStack }) {
   const val = (v) => (THREAD[v] ? <ThreadLink id={v} style={{ color: "var(--thread)" }}>{v}</ThreadLink> : v);
 
   return (
-    <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 220, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 220, background: "rgba(21,34,45,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 540, maxHeight: "82vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
           {stack.length > 1 && <span onClick={back} style={{ cursor: "pointer", color: "var(--faint)", fontSize: 13 }}>←</span>}
@@ -2698,7 +2702,7 @@ function BlockerForm({ pre }) {
   const chk = (on) => ({ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${on ? "var(--amber)" : "var(--line)"}`, background: on ? "var(--panel2)" : "var(--bg2)", color: on ? "var(--ink)" : "var(--muted)" });
 
   return (
-    <div onClick={closeForm} style={{ position: "fixed", inset: 0, zIndex: 230, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={closeForm} style={{ position: "fixed", inset: 0, zIndex: 230, background: "rgba(21,34,45,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 560, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
           <ClipboardList size={18} color="var(--amber)" />
@@ -2787,7 +2791,7 @@ function BlockerModal({ id }) {
   const val = blockerValue(b);
 
   return (
-    <div onClick={closeView} style={{ position: "fixed", inset: 0, zIndex: 215, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={closeView} style={{ position: "fixed", inset: 0, zIndex: 215, background: "rgba(21,34,45,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 560, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <Tag tone={BLK_TONE[b.status]}>{b.status}</Tag>
@@ -2893,7 +2897,7 @@ function SOLinesModal({ so }) {
   const reqDateOf = (promise) => { try { return isoOf(addDays(D(promise), -14)); } catch (e) { return "—"; } };
   const cols = "44px 1.4fr 52px 100px 100px 86px";
   return (
-    <div onClick={closeSOLines} style={{ position: "fixed", inset: 0, zIndex: 212, background: "rgba(5,8,13,.74)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={closeSOLines} style={{ position: "fixed", inset: 0, zIndex: 212, background: "rgba(21,34,45,.46)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 680, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <span className="tf-mono" style={{ fontSize: 12, color: "var(--amber)" }}>{soNum}</span>
@@ -2964,7 +2968,7 @@ function PartModal({ pn }) {
   const cell = { padding: "9px 11px", fontSize: 12, borderTop: "1px solid var(--line)" };
 
   return (
-    <div onClick={closePart} style={{ position: "fixed", inset: 0, zIndex: 224, background: "rgba(5,8,13,.76)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={closePart} style={{ position: "fixed", inset: 0, zIndex: 224, background: "rgba(21,34,45,.48)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 640, maxHeight: "88vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <span className="tf-mono" style={{ fontSize: 13, color: "var(--thread)" }}>{pn}</span>
@@ -3060,7 +3064,7 @@ function SalesOrderModal({ id }) {
   const siblings = linesOfSO(o.so);
 
   return (
-    <div onClick={closeSO} style={{ position: "fixed", inset: 0, zIndex: 206, background: "rgba(5,8,13,.72)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+    <div onClick={closeSO} style={{ position: "fixed", inset: 0, zIndex: 206, background: "rgba(21,34,45,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
       <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 540, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           {(() => { const done = isClosedLine(o); return <Tag tone={done ? "green" : blk ? "red" : "green"}>{done ? "closed" : blk ? "at risk" : "on track"}</Tag>; })()}
@@ -3820,6 +3824,7 @@ export default function App({ user }) {
       {route === "quotes" && user && user.quote_to_order && <QuotesPage />}
       {route === "roi" && <ROIPage />}
 
+      {route === "workbench" && <AIWorkbench />}
       {route === "blockers" && <BlockersPage />}
       {route === "visibility" && <DeliveryPage />}
       {route === "finance" && <FinancePage />}
@@ -3840,7 +3845,7 @@ export default function App({ user }) {
         resetKey={`${bView || ""}|${bForm ? "f" : ""}|${soView || ""}|${soLinesView || ""}|${partView || ""}`}
         fallback={() => (
           <div onClick={() => { setBView(null); setBForm(null); setSoView(null); setSoLinesView(null); setPartView(null); }}
-            style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(5,8,13,.8)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+            style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(21,34,45,.5)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
             <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 14, padding: 22, textAlign: "center" }}>
               <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Couldn't open that view</div>
               <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>Something went wrong rendering this popup. The rest of the app is fine — details are in the browser console.</div>

@@ -3,27 +3,27 @@ import { login, register, verifyMfa, searchCompanies } from "../lib/api.js";
 
 const wrap = {
   minHeight: "100vh", display: "grid", placeItems: "center",
-  fontFamily: "'IBM Plex Sans',system-ui,sans-serif", color: "#e7eef6",
+  fontFamily: "'IBM Plex Sans',system-ui,sans-serif", color: "#15222D",
   background:
     "radial-gradient(900px 500px at 85% -10%, rgba(255,138,61,.10), transparent 60%)," +
-    "radial-gradient(800px 600px at 0% 110%, rgba(72,214,200,.08), transparent 55%), #0a0e15",
+    "radial-gradient(800px 600px at 0% 110%, rgba(42,70,196,.06), transparent 55%), #F4F6FA",
   padding: 20,
 };
 const card = {
-  width: "100%", maxWidth: 430, background: "linear-gradient(180deg,#121a26,#0d121c)",
-  border: "1px solid #243245", borderRadius: 16, padding: 28,
+  width: "100%", maxWidth: 430, background: "#FFFFFF",
+  border: "1px solid #DCE3EC", borderRadius: 16, padding: 28,
 };
 const input = {
-  fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, background: "#0d121c",
-  border: "1px solid #243245", borderRadius: 10, padding: "11px 13px", color: "#e7eef6",
+  fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, background: "#FFFFFF",
+  border: "1px solid #DCE3EC", borderRadius: 10, padding: "11px 13px", color: "#15222D",
   width: "100%", outline: "none", marginBottom: 10, boxSizing: "border-box",
 };
 const btn = {
   fontFamily: "'IBM Plex Mono',monospace", fontSize: 13, fontWeight: 600, width: "100%",
   border: "none", borderRadius: 10, padding: "12px", cursor: "pointer",
-  background: "linear-gradient(180deg,#ff8a3d,#cc6a26)", color: "#1a0f06",
+  background: "linear-gradient(180deg,#2A46C4,#1B2E8C)", color: "#ffffff",
 };
-const muted = { color: "#8d9fb5" };
+const muted = { color: "#47606F" };
 
 /* ---- type-ahead company picker with "add new company" ---- */
 function CompanyCombobox({ name, onChange }) {
@@ -82,7 +82,7 @@ function CompanyCombobox({ name, onChange }) {
       {open && rows.length > 0 && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20,
-          background: "#0d121c", border: "1px solid #2f4259", borderRadius: 10, overflow: "hidden",
+          background: "#FFFFFF", border: "1px solid #C6D2E0", borderRadius: 10, overflow: "hidden",
           maxHeight: 230, overflowY: "auto", boxShadow: "0 20px 50px -20px rgba(0,0,0,.9)",
         }}>
           {rows.map((row, i) => (
@@ -91,14 +91,14 @@ function CompanyCombobox({ name, onChange }) {
               onMouseDown={(e) => { e.preventDefault(); pick(row); }}
               style={{
                 padding: "10px 13px", cursor: "pointer", fontSize: 13,
-                background: hi === i ? "#172132" : "transparent",
+                background: hi === i ? "#EEF2F7" : "transparent",
                 display: "flex", alignItems: "center", gap: 8,
-                borderTop: row.type === "add" ? "1px solid #243245" : "none",
+                borderTop: row.type === "add" ? "1px solid #DCE3EC" : "none",
               }}>
               {row.type === "add" ? (
                 <>
-                  <span style={{ color: "#ff8a3d", fontWeight: 700 }}>＋</span>
-                  <span>Add “<span style={{ color: "#e7eef6" }}>{name.trim()}</span>” as a new company</span>
+                  <span style={{ color: "#2A46C4", fontWeight: 700 }}>＋</span>
+                  <span>Add “<span style={{ color: "#15222D" }}>{name.trim()}</span>” as a new company</span>
                 </>
               ) : (
                 <>
@@ -159,7 +159,7 @@ export default function Login({ onAuthed, onCancel }) {
 
   const Brand = (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-      <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,#ff8a3d,#48d6c8)" }} />
+      <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,#2A46C4,#3E6FE0)" }} />
       <span style={{ fontFamily: "'Bricolage Grotesque',sans-serif", fontWeight: 800, fontSize: 20 }}>ThreadWire</span>
     </div>
   );
@@ -172,10 +172,10 @@ export default function Login({ onAuthed, onCancel }) {
         <div style={card}>
           {Brand}
           {regInfo && (
-            <div style={{ fontSize: 12.5, ...muted, marginBottom: 12, padding: "8px 11px", background: "#0d121c", border: "1px solid #243245", borderRadius: 9 }}>
+            <div style={{ fontSize: 12.5, ...muted, marginBottom: 12, padding: "8px 11px", background: "#FFFFFF", border: "1px solid #DCE3EC", borderRadius: 9 }}>
               {regInfo.joined
-                ? <>Joining <b style={{ color: "#e7eef6" }}>{regInfo.org.legal_name}</b> as a <b style={{ color: "#48d6c8" }}>member</b>. Your admin manages connectors.</>
-                : <>Workspace <b style={{ color: "#e7eef6" }}>{regInfo.org.legal_name}</b> created — you're the <b style={{ color: "#ff8a3d" }}>admin</b>.</>}
+                ? <>Joining <b style={{ color: "#15222D" }}>{regInfo.org.legal_name}</b> as a <b style={{ color: "#3E6FE0" }}>member</b>. Your admin manages connectors.</>
+                : <>Workspace <b style={{ color: "#15222D" }}>{regInfo.org.legal_name}</b> created — you're the <b style={{ color: "#2A46C4" }}>admin</b>.</>}
             </div>
           )}
           <h1 style={{ fontFamily: "'Bricolage Grotesque',sans-serif", fontSize: 23, fontWeight: 800, margin: "0 0 4px" }}>
@@ -188,12 +188,12 @@ export default function Login({ onAuthed, onCancel }) {
           </p>
 
           {mfaSetup && (
-            <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16, padding: 14, background: "#0d121c", border: "1px solid #243245", borderRadius: 12 }}>
+            <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16, padding: 14, background: "#FFFFFF", border: "1px solid #DCE3EC", borderRadius: 12 }}>
               <div style={{ width: 132, height: 132, background: "#fff", borderRadius: 8, padding: 6, flexShrink: 0 }}
                    dangerouslySetInnerHTML={{ __html: mfaSetup.qr_svg }} />
               <div>
                 <div style={{ fontSize: 11, ...muted, marginBottom: 4 }}>Can't scan? Enter this key:</div>
-                <code style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: "#48d6c8", wordBreak: "break-all" }}>{mfaSetup.secret}</code>
+                <code style={{ fontFamily: "'IBM Plex Mono',monospace", fontSize: 11.5, color: "#3E6FE0", wordBreak: "break-all" }}>{mfaSetup.secret}</code>
               </div>
             </div>
           )}
@@ -257,7 +257,7 @@ export default function Login({ onAuthed, onCancel }) {
 
         <div style={{ textAlign: "center", marginTop: 16, fontSize: 13, ...muted }}>
           {mode === "login" ? "New here? " : "Already have an account? "}
-          <span style={{ color: "#ff8a3d", cursor: "pointer" }}
+          <span style={{ color: "#2A46C4", cursor: "pointer" }}
                 onClick={() => { setErr(""); setMode(mode === "login" ? "register" : "login"); }}>
             {mode === "login" ? "Register your company" : "Sign in"}
           </span>

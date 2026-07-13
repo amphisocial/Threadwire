@@ -2,13 +2,13 @@ import React, { useEffect, useState } from "react";
 import { getLots, traceLot, aiTraceLot, searchDocuments, docDownloadUrl } from "../lib/api.js";
 
 const C = {
-  bg: "#0a0e15", panel: "#121a26", panel2: "#172132", bg2: "#0d121c",
-  line: "#243245", line2: "#2f4259", ink: "#e7eef6", muted: "#8d9fb5", faint: "#5d6f86",
-  amber: "#ff8a3d", thread: "#48d6c8", green: "#43c277", red: "#f0563a", blue: "#5aa9ff",
+  bg: "#F4F6FA", panel: "#F5F8FC", panel2: "#EEF2F7", bg2: "#FFFFFF",
+  line: "#DCE3EC", line2: "#C6D2E0", ink: "#15222D", muted: "#47606F", faint: "#5d6f86",
+  amber: "#2A46C4", thread: "#3E6FE0", green: "#43c277", red: "#f0563a", blue: "#5aa9ff",
 };
 const mono = "'IBM Plex Mono',monospace";
 const btn = { fontFamily: mono, fontSize: 12.5, fontWeight: 600, borderRadius: 9, padding: "9px 13px", cursor: "pointer", border: `1px solid ${C.line2}`, background: C.panel2, color: C.ink };
-const btnP = { ...btn, background: `linear-gradient(180deg,${C.amber},#cc6a26)`, border: "none", color: "#1a0f06" };
+const btnP = { ...btn, background: `linear-gradient(180deg,${C.amber},#1B2E8C)`, border: "none", color: "#ffffff" };
 const tone = { pass: C.green, released: C.green, closed: C.green, fail: C.red, hold: C.red, quarantine: C.red, open: C.amber, conditional: C.amber };
 const Tag = ({ children, t }) => <span style={{ fontFamily: mono, fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 6, color: tone[String(children).toLowerCase()] || C.muted, background: (tone[String(children).toLowerCase()] || C.muted) + "22" }}>{children}</span>;
 const Eyebrow = ({ children }) => <div style={{ fontFamily: mono, fontSize: 10.5, letterSpacing: ".2em", textTransform: "uppercase", color: C.amber, margin: "18px 0 8px" }}>{children}</div>;
@@ -141,7 +141,7 @@ export default function Compliance({ user, onClose, embedded }) {
               </div>
 
               {narrative && (
-                <div style={{ background: "linear-gradient(180deg,#141d2b,#0f1622)", border: `1px solid ${C.thread}44`, borderRadius: 12, padding: 16, margin: "8px 0 4px", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55 }}>
+                <div style={{ background: "linear-gradient(180deg,#141d2b,#FFFFFF)", border: `1px solid ${C.thread}44`, borderRadius: 12, padding: 16, margin: "8px 0 4px", whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55 }}>
                   <div style={{ fontFamily: mono, fontSize: 10, color: C.thread, marginBottom: 6, letterSpacing: ".15em" }}>AI AUDIT NARRATIVE</div>
                   {narrative}
                 </div>
