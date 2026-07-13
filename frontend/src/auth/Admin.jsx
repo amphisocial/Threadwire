@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { AGENT_META, DEFAULT_PROMPTS, loadPrompts, savePrompt, isCustomized } from "../workbench/prompts.js";
 import {
   listInvites, createInvite, revokeInvite,
   importEntities, importData, listEvents, sampleUrl,
@@ -707,6 +708,103 @@ function DataSourcesDocs({ isAdmin }) {
   );
 }
 
+/* =================== TAB: AI WORKBENCH (curated prompts) =================== */
+function AIWorkbenchTab({ isAdmin }) {
+  const order = ["extractor", "derivation", "testgen", "cdrl"];
+  const [prompts, setPrompts] = useState(() => loadPrompts());
+  const [active, setActive] = useState("extractor");
+  const [draft, setDraft] = useState(() => loadPrompts()[ "extractor" ]);
+  const [savedTick, setSavedTick] = useState(0);
+
+  useEffect(() => { setDraft(prompts[active]); }, [active]); // eslint-disable-line
+
+  const meta = AGENT_META[active];
+  const dirty = draft !== prompts[active];
+  const customized = isCustomized(active);
+
+  const save = () => {
+    savePrompt(active, draft);
+    const next = loadPrompts();
+    setPrompts(next);
+    setSavedTick(Date.now());
+  };
+  const resetToDefault = () => {
+    setDraft(DEFAULT_PROMPTS[active]);
+  };
+
+  return (
+    <div>
+      <div style={eyebrow}>AI Workbench · curated prompts</div>
+      <div style={{ color: C.muted, fontSize: 13.5, lineHeight: 1.6, marginBottom: 20, maxWidth: 720 }}>
+        Each agent runs an admin-owned curated prompt. Edits saved here become the
+        baseline every engineer sees. Engineers can still fine-tune a copy for a
+        single run inside the agent, but the saved version below is the default
+        they start from.
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 20, alignItems: "start" }}>
+        {/* agent list */}
+        <div style={{ ...card, padding: 8 }}>
+          {order.map((k) => {
+            const m = AGENT_META[k];
+            const on = active === k;
+            const cust = isCustomized(k);
+            return (
+              <button key={k} onClick={() => setActive(k)} style={{
+                width: "100%", textAlign: "left", border: "none", cursor: "pointer",
+                borderRadius: 9, padding: "11px 12px", marginBottom: 2,
+                background: on ? C.panel2 : "transparent",
+                borderLeft: on ? `3px solid ${C.amber}` : "3px solid transparent",
+                display: "flex", alignItems: "center", gap: 8,
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: on ? C.ink : C.muted }}>{m.name}</div>
+                  <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{m.v}</div>
+                </div>
+                {cust && <Tag tone="amber">edited</Tag>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* editor */}
+        <div style={card}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: disp, fontWeight: 800, fontSize: 18 }}>{meta.name}</span>
+            <Tag tone="blue">{meta.v}</Tag>
+            {customized ? <Tag tone="amber">customized</Tag> : <Tag tone="muted">shipped default</Tag>}
+            {savedTick > 0 && !dirty && <span style={{ fontFamily: mono, fontSize: 11, color: C.green }}>✓ saved</span>}
+          </div>
+          <div style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginBottom: 12 }}>
+            Variables auto-filled at run time: {meta.vars.join("  ")}
+          </div>
+
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            disabled={!isAdmin}
+            spellCheck={false}
+            style={{
+              width: "100%", minHeight: 320, resize: "vertical",
+              fontFamily: mono, fontSize: 12.5, lineHeight: 1.7,
+              color: C.ink, background: C.panel2, border: `1px solid ${C.line2}`,
+              borderRadius: 10, padding: 14, outline: "none",
+            }}
+          />
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+            {!isAdmin && <span style={{ fontFamily: mono, fontSize: 11.5, color: C.faint }}>Read-only — org admins can edit curated prompts.</span>}
+            <div style={{ flex: 1 }} />
+            <button style={btn} onClick={resetToDefault} disabled={!isAdmin || draft === DEFAULT_PROMPTS[active]}>Reset to shipped default</button>
+            <button style={btn} onClick={() => setDraft(prompts[active])} disabled={!dirty}>Discard changes</button>
+            <button style={{ ...btnP, opacity: isAdmin && dirty ? 1 : 0.5, pointerEvents: isAdmin && dirty ? "auto" : "none" }} onClick={save}>Save curated prompt</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Admin({ user, onClose }) {
   const isAdmin = user.role === "org_admin" || user.role === "superadmin";
   const [tab, setTab] = useState("import");
@@ -737,6 +835,7 @@ export default function Admin({ user, onClose }) {
         <TabBar
           tabs={[
             { id: "import", label: "Data Import", icon: "⬆" },
+            { id: "workbench", label: "AI Workbench", icon: "🤖" },
             { id: "users", label: "User Management", icon: "👥" },
             { id: "compliance", label: "Data Sources", icon: "🧬" },
             { id: "settings", label: "Settings", icon: "⚙" },
@@ -746,6 +845,7 @@ export default function Admin({ user, onClose }) {
         />
 
         {tab === "import" && <DataImportTab isAdmin={isAdmin} />}
+        {tab === "workbench" && <AIWorkbenchTab isAdmin={isAdmin} />}
         {tab === "users" && <UserManagementTab isAdmin={isAdmin} />}
         {tab === "compliance" && <DataSourcesDocs isAdmin={isAdmin} />}
         {tab === "settings" && <SettingsTab isAdmin={isAdmin} user={user} />}

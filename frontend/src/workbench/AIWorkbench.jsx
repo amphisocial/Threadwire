@@ -2,8 +2,9 @@ import React, { useState, useRef, useMemo, useEffect } from "react";
 import {
   FileText, GitBranch, ArrowRight, ChevronRight, Sparkles, Upload,
   Check, X, Pencil, Link2, Inbox, Clock, Bot, ShieldCheck, Layers,
-  FlaskConical, ScrollText, Zap,
+  FlaskConical, ScrollText, Zap, FolderOpen, ClipboardList, Image as ImageIcon,
 } from "lucide-react";
+import { AGENT_META, DEFAULT_PROMPTS, getPrompt } from "./prompts.js";
 
 /* =========================================================================
    ThreadWire — AI Workbench
@@ -11,7 +12,7 @@ import {
    admin-owned prompt over engineer-supplied source material, and lets the
    engineer accept / reject / refine every result before export.
 
-   Two agents ship in this build:
+   Four agents ship in this build:
      1. Requirements Extractor  — pulls candidate requirements from documents
      2. Derivation Assistant    — decomposes parent requirements into children
 
@@ -245,7 +246,40 @@ const WBStyles = () => (
   .wb-toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:13px 20px;border-radius:11px;box-shadow:0 12px 40px rgba(21,34,45,.25);display:flex;align-items:center;gap:11px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:.25s;z-index:300}
   .wb-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-  @media(max-width:760px){.wb-srctabs{flex-direction:column}.wb-stepper{flex-wrap:wrap}}
+  /* modal form fields (shared) */
+  .wb-field{margin-bottom:14px}
+  .wb-field label{display:block;font-size:12.5px;font-weight:500;margin-bottom:6px;color:var(--ink)}
+  .wb-field input,.wb-field select{width:100%;border:1px solid var(--line2);border-radius:8px;padding:9px 12px;background:var(--panel);color:var(--ink);font-family:var(--body)}
+  .wb-field input:focus,.wb-field select:focus{outline:none;border-color:var(--wb-brand)}
+  .wb-note{font-size:12px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:11px;margin-top:4px}
+
+  /* test-case card body */
+  .wb-tc{margin-top:2px}
+  .wb-tc-obj{font-size:14px;line-height:1.5;color:var(--ink);margin-bottom:12px}
+  .wb-tc-grid{display:grid;grid-template-columns:1fr 1.4fr;gap:16px;margin-bottom:12px}
+  .wb-tc-h{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--wb-brand-ink);font-weight:700;margin-bottom:5px}
+  .wb-tc ul,.wb-tc ol{margin:0;padding-left:18px;font-size:13px;line-height:1.6;color:var(--muted)}
+  .wb-tc-row{padding:9px 11px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);margin-top:8px;font-size:13px;color:var(--ink)}
+  .wb-tc-row.pf{background:var(--wb-ok-wash);border-color:var(--wb-ok-line)}
+  .wb-tc-pre{white-space:pre-wrap;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;margin:2px 0 0}
+
+  /* network folder + logo chips */
+  .wb-netfolder{display:flex;align-items:center;gap:10px;border:1px solid var(--line2);border-radius:10px;padding:8px 12px;background:var(--panel);flex-wrap:wrap}
+  .wb-netfolder input{flex:1;min-width:200px;border:none;outline:none;background:transparent;color:var(--ink);font-family:var(--mono);font-size:12.5px}
+  .wb-logo-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:8px;padding:4px 8px 4px 4px;background:var(--panel2);font-size:12px}
+  .wb-logo-chip img{height:22px;max-width:60px;object-fit:contain;border-radius:4px;background:#fff}
+  .wb-logo-chip button{border:none;background:none;color:var(--faint);cursor:pointer;display:grid;place-items:center}
+  .wb-logo-chip button:hover{color:var(--wb-no)}
+
+  /* CDRL draft view */
+  .wb-cdrl-head{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel2);flex-wrap:wrap}
+  .wb-cdrl-logo{height:46px;max-width:120px;object-fit:contain;background:#fff;border-radius:6px;padding:3px;border:1px solid var(--line)}
+  .wb-cdrl-sec{margin-bottom:16px}
+  .wb-cdrl-h{font-family:var(--disp);font-weight:700;font-size:14px;color:var(--wb-brand-ink);margin-bottom:6px}
+  .wb-cdrl-sec textarea{width:100%;border:1px solid var(--line2);border-radius:9px;padding:11px 13px;font-size:13.5px;line-height:1.6;color:var(--ink);background:var(--panel);resize:vertical;min-height:70px;font-family:var(--body)}
+  .wb-cdrl-sec textarea:focus{outline:none;border-color:var(--wb-brand)}
+
+  @media(max-width:760px){.wb-srctabs{flex-direction:column}.wb-stepper{flex-wrap:wrap}.wb-tc-grid{grid-template-columns:1fr}}
   `}</style>
 );
 
@@ -292,16 +326,16 @@ const AGENTS = [
     skills: ["Decomposition", "Apportionment", "Rationale"],
   },
   {
-    key: "testgen", name: "Test Case Generator", badge: "next",
-    icon: FlaskConical, accent: "var(--wb-ai)", wash: "var(--wb-ai-wash)",
-    tagline: "Generates verification test cases from accepted requirements — method, steps and pass/fail criteria, traced back to each requirement.",
-    skills: ["Verification", "Method selection", "Coverage"],
+    key: "testgen", name: "Test Case Generator", badge: "live",
+    icon: FlaskConical, accent: "var(--wb-brand)", wash: "var(--wb-brand-wash)",
+    tagline: "Generates verification test cases and step-by-step procedures from selected requirements — method, steps and pass/fail criteria, traced back to each requirement.",
+    skills: ["Verification", "Procedures", "Pass/fail criteria"],
   },
   {
-    key: "cdrl", name: "CDRL Drafter", badge: "soon",
-    icon: ScrollText, accent: "var(--faint)", wash: "var(--inset)",
-    tagline: "Drafts contract data deliverables (CDRLs / DIDs) from program artifacts, formatted to the applicable data item description.",
-    skills: ["Contract data", "DID formatting", "Compliance"],
+    key: "cdrl", name: "CDRL Drafter", badge: "live",
+    icon: ScrollText, accent: "var(--wb-brand)", wash: "var(--wb-brand-wash)",
+    tagline: "Drafts a CDRL deliverable in a format you provide (DID or completed example), populated from your project technical data, and exports to Word with the template's logos.",
+    skills: ["Format matching", "Project data", "Word export"],
   },
 ];
 
@@ -532,28 +566,10 @@ const SAMPLE_PARENTS = [
   { id: "SYS-155", text: "The system shall operate across an ambient temperature range of -40 C to +55 C.", meta: "L1 · Approved" },
 ];
 
-const EXTRACT_PROMPT = `ROLE: You are a systems engineering requirements analyst.
-
-TASK: Review the source document(s) and identify every candidate requirement. A candidate is any statement that imposes a binding condition, capability, constraint, or interface on the system.
-
-RULES:
-- Normalize each candidate to a single "shall" statement.
-- Classify as: Functional | Performance | Interface | Environmental | Safety | Design Constraint.
-- Flag non-binding language ("should", "will", "may") for engineer confirmation.
-- Capture ORIGIN for every candidate: {document}, {section}, {page/line}.
-- If a Figure or Table is referenced near the requirement, attach it.
-- Do NOT invent requirements not grounded in the source text.`;
-
-const DERIVE_PROMPT = `ROLE: You are a systems engineer performing requirements decomposition.
-
-TASK: For each selected PARENT requirement, propose the child (derived) requirements necessary and sufficient to satisfy it.
-
-RULES:
-- Every derived requirement MUST trace to exactly one parent {parent_id}.
-- Provide a one-sentence RATIONALE grounded in engineering analysis (budgets, apportionment, standards).
-- If essential context is missing (RCS, LRU count, MTTR, timing reserve), REQUEST it before deriving.
-- Use apportionment where a parent budget must be split across subsystems.
-- Maintain "shall" phrasing and testability.`;
+/* Curated prompts + meta now come from the shared, admin-editable store.
+   getPrompt(key) returns the admin override if set, else the shipped default. */
+const EXTRACT_PROMPT = DEFAULT_PROMPTS.extractor;
+const DERIVE_PROMPT = DEFAULT_PROMPTS.derivation;
 
 /* =========================================================================
    AGENT 1 — REQUIREMENTS EXTRACTOR
@@ -562,7 +578,7 @@ function ExtractorAgent({ toast }) {
   const [step, setStep] = useState(0);
   const [files, setFiles] = useState([]);
   const [pasted, setPasted] = useState("");
-  const [prompt, setPrompt] = useState(EXTRACT_PROMPT);
+  const [prompt, setPrompt] = useState(() => getPrompt("extractor"));
   const [promptOpen, setPromptOpen] = useState(false);
   const [candidates, setCandidates] = useState([]);
   const [statuses, setStatuses] = useState({});
@@ -573,9 +589,10 @@ function ExtractorAgent({ toast }) {
   const [editing, setEditing] = useState(null);
   const [editVal, setEditVal] = useState("");
   const inputRef = useRef();
-  const meta = { name: "Requirements Extractor", v: "v3.2", vars: ["{document}", "{section}", "{page/line}", "{project_context}"] };
+  const meta = AGENT_META.extractor;
+  const baseline = getPrompt("extractor");
 
-  const promptDirty = prompt !== EXTRACT_PROMPT;
+  const promptDirty = prompt !== baseline;
   const sourceText = useMemo(() => {
     const ft = files.filter((f) => f.status === "ok").map((f) => f.text).join("\n\n");
     return [ft, pasted].filter((t) => t && t.trim()).join("\n\n");
@@ -691,7 +708,7 @@ function ExtractorAgent({ toast }) {
               </div>
             </div>
           </div>
-          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} defaultPrompt={EXTRACT_PROMPT} />
+          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} defaultPrompt={baseline} />
           <div className="wb-actionbar">
             <div className="sum">{hasSource ? <><b>Source ready.</b> Run extraction to surface candidate requirements.</> : "Add at least one source to begin."}</div>
             <div style={{ flex: 1 }} />
@@ -702,7 +719,7 @@ function ExtractorAgent({ toast }) {
 
       {step === 1 && (running ? <RunOverlay h="Re-running extraction" p="Applying your prompt changes to the source text." /> : (
         <>
-          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} review defaultPrompt={EXTRACT_PROMPT} onRerun={runExtract} />
+          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} review defaultPrompt={baseline} onRerun={runExtract} />
           <TriageToolbar tally={tally} filter={filter} setFilter={setFilter} onAcceptAll={() => setStatuses((s) => { const n = { ...s }; candidates.forEach((c) => { if (!(n[c.id] === "ok" || n[c.id] === "no")) n[c.id] = "ok"; }); return n; })} />
           {visible.length ? visible.map((c) => {
             const st = statuses[c.id] || "pend"; const edited = edits[c.id] != null;
@@ -813,7 +830,7 @@ function DerivationAgent({ toast }) {
   const [selected, setSelected] = useState(() => Object.fromEntries(SAMPLE_PARENTS.map((p) => [p.id, true])));
   const [feedLoaded, setFeedLoaded] = useState(false);
   const [pasteRaw, setPasteRaw] = useState("");
-  const [prompt, setPrompt] = useState(DERIVE_PROMPT);
+  const [prompt, setPrompt] = useState(() => getPrompt("derivation"));
   const [promptOpen, setPromptOpen] = useState(false);
   const [awaitingContext, setAwaitingContext] = useState(false);
   const [contextQs, setContextQs] = useState([]);
@@ -828,9 +845,10 @@ function DerivationAgent({ toast }) {
   const [editVal, setEditVal] = useState("");
   const [parentView, setParentView] = useState(null);
   const inputRef = useRef();
-  const meta = { name: "Derivation Assistant", v: "v2.1", vars: ["{parent_id}", "{parent_text}", "{project_context}", "{applicable_standards}"] };
+  const meta = AGENT_META.derivation;
+  const baseline = getPrompt("derivation");
 
-  const promptDirty = prompt !== DERIVE_PROMPT;
+  const promptDirty = prompt !== baseline;
   const selectedParents = parents.filter((p) => selected[p.id]);
   const tally = useMemo(() => {
     const ok = derived.filter((d) => statuses[d.id] === "ok").length;
@@ -1003,7 +1021,7 @@ function DerivationAgent({ toast }) {
             </div>
           )}
 
-          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} defaultPrompt={DERIVE_PROMPT} />
+          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} defaultPrompt={baseline} />
 
           {awaitingContext ? (
             <div className="wb-ctx">
@@ -1036,7 +1054,7 @@ function DerivationAgent({ toast }) {
 
       {step === 1 && (running ? <RunOverlay h="Re-deriving" p="Applying prompt changes to your selected parents." /> : (
         <>
-          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} review defaultPrompt={DERIVE_PROMPT} onRerun={runDerivation} />
+          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} review defaultPrompt={baseline} onRerun={runDerivation} />
           <TriageToolbar tally={tally} filter={filter} setFilter={setFilter} onAcceptAll={() => setStatuses((s) => { const n = { ...s }; derived.forEach((d) => { if (!(n[d.id] === "ok" || n[d.id] === "no")) n[d.id] = "ok"; }); return n; })} />
           {(() => {
             const groups = {}; visible.forEach((d) => { (groups[d.parent] = groups[d.parent] || []).push(d); });
@@ -1159,6 +1177,663 @@ function DerivationAgent({ toast }) {
 }
 
 /* =========================================================================
+   AGENT 3 — TEST CASE GENERATOR
+   Takes selected requirements (upload / paste / RM feed) and generates test
+   cases + procedures. Engineer accepts / rejects / edits each. On export the
+   engineer supplies RM-tool credentials (authored as them) or exports XLSX/CSV.
+   ========================================================================= */
+const TESTGEN_PROMPT = DEFAULT_PROMPTS.testgen;
+
+const SAMPLE_REQS = [
+  { id: "SRS-210", text: "The system shall acquire target track data at a minimum rate of 10 Hz across the full operational field of regard.", meta: "SRS · Performance" },
+  { id: "SRS-224", text: "The processor shall complete threat classification within 250 ms of track establishment under nominal processing load.", meta: "SRS · Performance" },
+  { id: "SRS-231", text: "The subsystem shall transmit track messages over the MIL-STD-1553B data bus per ICD-4471.", meta: "SRS · Interface" },
+  { id: "SRS-240", text: "The equipment shall operate within specification across an ambient temperature range of -40 C to +71 C.", meta: "SRS · Environmental" },
+  { id: "SRS-255", text: "The line-replaceable unit shall not exceed 12 kg in mass.", meta: "SRS · Design Constraint" },
+];
+
+const TestGen = {
+  method(text) {
+    const t = text.toLowerCase();
+    if (/(mass|weight|dimension|not exceed \d|material|marking|label|finish)/.test(t)) return "Inspection";
+    if (/(analy|predict|budget|apportion|model|worst[- ]case|calcul)/.test(t)) return "Analysis";
+    if (/(display|operator|demonstrat|usab|procedure|report|indicat)/.test(t) && !/\bms\b|\bhz\b|within/.test(t)) return "Demonstration";
+    return "Test";
+  },
+  run(reqs) {
+    const out = [];
+    reqs.forEach((r) => {
+      const method = this.method(r.text);
+      const t = r.text;
+      const num = (re) => { const m = t.match(re); return m ? m[1] : null; };
+      const hz = num(/(\d+(?:\.\d+)?)\s*hz/i);
+      const ms = num(/within\s*(\d+(?:\.\d+)?)\s*ms/i);
+      const kg = num(/(\d+(?:\.\d+)?)\s*kg/i);
+      const tmp = t.match(/(-?\d+)\s*C\b[^0-9]{0,10}\+?(-?\d+)\s*C/i);
+      const bus = /1553|icd|data bus|message|interface/i.test(t);
+
+      let objective, pre = [], steps = [], expected, criteria;
+      if (hz) {
+        objective = `Verify the system meets the minimum update-rate requirement of ${hz} Hz.`;
+        pre = ["System powered and in operational mode", "Instrumented data recorder connected to the track-data output", "Simulated target present across the full field of regard"];
+        steps = ["Command the system into normal track mode.", `Inject a simulated target and record track-data output for 60 s.`, `Compute the mean and minimum update rate from timestamps.`, "Repeat at three azimuths spanning the field of regard."];
+        expected = `Measured update rate ≥ ${hz} Hz at every azimuth, with no dropped updates over the 60 s window.`;
+        criteria = `PASS if minimum measured rate ≥ ${hz} Hz across all runs; FAIL otherwise.`;
+      } else if (ms) {
+        objective = `Verify the timing requirement of ${ms} ms is met under nominal load.`;
+        pre = ["System at nominal processing load", "Timing instrumentation on track-establishment and classification events"];
+        steps = ["Establish a target track and timestamp track establishment (t0).", "Timestamp classification completion (t1).", "Compute latency = t1 − t0.", "Repeat for 30 tracks under nominal load."];
+        expected = `Classification latency ≤ ${ms} ms for the 95th percentile of trials.`;
+        criteria = `PASS if 95th-percentile latency ≤ ${ms} ms over ≥ 30 trials; FAIL otherwise.`;
+      } else if (kg) {
+        objective = `Confirm the LRU mass does not exceed ${kg} kg.`;
+        pre = ["Calibrated scale (resolution ≤ 0.05 kg)", "LRU in delivered configuration"];
+        steps = ["Zero the calibrated scale.", "Place the LRU on the scale and record the stable reading.", "Record ambient conditions and scale calibration reference."];
+        expected = `Recorded mass ≤ ${kg} kg.`;
+        criteria = `PASS if measured mass ≤ ${kg} kg; FAIL otherwise.`;
+      } else if (tmp) {
+        objective = `Verify operation across the ambient range ${tmp[1]} C to +${tmp[2]} C.`;
+        pre = ["Environmental chamber with the unit installed and instrumented", "Functional test sequence loaded"];
+        steps = [`Soak the unit at ${tmp[1]} C for the specified dwell, then run the functional test.`, `Soak the unit at +${tmp[2]} C for the specified dwell, then run the functional test.`, "Record all functional results and chamber readings at each extreme."];
+        expected = `Unit meets all functional criteria at both temperature extremes.`;
+        criteria = `PASS if all functional tests pass at both ${tmp[1]} C and +${tmp[2]} C; FAIL otherwise.`;
+      } else if (bus) {
+        objective = `Verify interface conformance for messages on the specified data bus.`;
+        pre = ["Bus analyzer connected per the ICD", "Reference message set available"];
+        steps = ["Command the subsystem to transmit the required messages.", "Capture bus traffic with the analyzer.", "Compare captured frames against the ICD message format.", "Inject a malformed frame and observe subsystem behavior."];
+        expected = `All messages conform to the ICD; malformed frames are rejected without loss of function.`;
+        criteria = `PASS if 100% of captured frames conform and malformed input is rejected gracefully; FAIL otherwise.`;
+      } else {
+        objective = `Verify satisfaction of ${r.id} by ${method.toLowerCase()}.`;
+        pre = ["System in the applicable configuration and mode"];
+        steps = [`Execute the ${method.toLowerCase()} activity appropriate to the requirement.`, "Record observed results and supporting evidence."];
+        expected = `Observed behavior satisfies the requirement statement.`;
+        criteria = `PASS if the requirement is satisfied as stated; FAIL otherwise.`;
+      }
+      out.push({
+        id: "TC-" + (r.id.replace(/[^0-9]/g, "") || r.id) + "-01",
+        req: r.id, reqText: r.text, method, objective,
+        pre, steps, expected, criteria,
+      });
+    });
+    return out;
+  },
+};
+
+function TestGenAgent({ toast }) {
+  const [step, setStep] = useState(0);
+  const [src, setSrc] = useState("feed");
+  const [reqs, setReqs] = useState(SAMPLE_REQS);
+  const [selected, setSelected] = useState(() => Object.fromEntries(SAMPLE_REQS.map((r) => [r.id, true])));
+  const [feedLoaded, setFeedLoaded] = useState(false);
+  const [pasteRaw, setPasteRaw] = useState("");
+  const [prompt, setPrompt] = useState(() => getPrompt("testgen"));
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [cases, setCases] = useState([]);
+  const [statuses, setStatuses] = useState({});
+  const [edits, setEdits] = useState({});
+  const [filter, setFilter] = useState("all");
+  const [running, setRunning] = useState(false);
+  const [drag, setDrag] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [editVal, setEditVal] = useState("");
+  const [exportOpen, setExportOpen] = useState(null);
+  const inputRef = useRef();
+  const meta = AGENT_META.testgen;
+  const baseline = getPrompt("testgen");
+  const promptDirty = prompt !== baseline;
+
+  const selectedReqs = reqs.filter((r) => selected[r.id]);
+  const tally = useMemo(() => {
+    const ok = cases.filter((c) => statuses[c.id] === "ok").length;
+    const no = cases.filter((c) => statuses[c.id] === "no").length;
+    return { ok, no, pend: cases.length - ok - no };
+  }, [cases, statuses]);
+  const accepted = cases.filter((c) => statuses[c.id] === "ok");
+  const visible = cases.filter((c) => { const st = statuses[c.id] || "pend"; return filter === "all" || filter === st; });
+  const eff = (c) => (edits[c.id] != null ? edits[c.id] : c);
+
+  function setSel(id) { setSelected((s) => ({ ...s, [id]: !s[id] })); }
+  function loadSample() { setReqs(SAMPLE_REQS); setSelected(Object.fromEntries(SAMPLE_REQS.map((r) => [r.id, true]))); }
+  function loadFeed() { toast("Pulling from Jama…"); setTimeout(() => { setReqs(SAMPLE_REQS); setSelected(Object.fromEntries(SAMPLE_REQS.map((r) => [r.id, true]))); setFeedLoaded(true); }, 700); }
+  function parsePasted(raw) {
+    const rows = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const rs = rows.map((l, i) => {
+      const m = l.match(/^([A-Za-z][\w.\-]{1,20})[\s:\-–]+(.+)$/);
+      return m ? { id: m[1].toUpperCase(), text: m[2].trim(), meta: "imported" } : { id: "REQ-" + String(i + 1).padStart(3, "0"), text: l, meta: "imported" };
+    });
+    setReqs(rs); setSelected(Object.fromEntries(rs.map((r) => [r.id, true])));
+  }
+  async function importFile(file) {
+    const ext = fileExt(file.name);
+    try {
+      let rows;
+      if (ext === "csv" || ext === "txt") rows = (await file.text()).split(/\r?\n/).map((r) => r.split(","));
+      else if (ext === "xlsx" || ext === "xls") {
+        await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+        const wb = window.XLSX.read(await file.arrayBuffer(), { type: "array" });
+        rows = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+      } else throw new Error("Unsupported");
+      rows = rows.filter((r) => r && r.some((c) => String(c || "").trim()));
+      if (!rows.length) return;
+      const head = rows[0].map((c) => String(c || "").toLowerCase());
+      let idi = head.findIndex((h) => /^id$|identifier|key|req/.test(h));
+      let txi = head.findIndex((h) => /text|requirement|description|name/.test(h));
+      let start = 1; if (idi < 0 && txi < 0) { idi = 0; txi = 1; start = 0; }
+      if (txi < 0) txi = idi === 0 ? 1 : 0;
+      const rs = [];
+      for (let i = start; i < rows.length; i++) { const r = rows[i], text = String(r[txi] || "").trim(); if (!text) continue; const id = String(r[idi] != null ? r[idi] : "") || "REQ-" + String(i).padStart(3, "0"); rs.push({ id: id.toUpperCase ? id.toUpperCase() : id, text, meta: "imported" }); }
+      setReqs(rs); setSelected(Object.fromEntries(rs.map((r) => [r.id, true]))); toast(`Imported ${rs.length} requirement(s)`);
+    } catch (e) { toast(/load failed/.test(e.message) ? "Spreadsheet engine blocked — paste instead" : "Import failed: " + e.message); }
+  }
+
+  async function runGen() {
+    if (!selectedReqs.length) return;
+    setRunning(true); await wait(1000);
+    const out = TestGen.run(selectedReqs);
+    setCases(out); setStatuses({}); setEdits({}); setFilter("all"); setStep(1); setRunning(false);
+    toast(`Generated ${out.length} test case(s) from ${selectedReqs.length} requirement(s)`);
+  }
+  function act(id, a) {
+    if (a === "edit") { const c = cases.find((x) => x.id === id); const e = edits[id] || c; setEditing(id); setEditVal(procToText(e)); return; }
+    setStatuses((s) => ({ ...s, [id]: s[id] === a ? "pend" : a }));
+  }
+  function procToText(c) {
+    return `Objective: ${c.objective}\nMethod: ${c.method}\nPreconditions:\n${c.pre.map((p) => "- " + p).join("\n")}\nProcedure:\n${c.steps.map((s, i) => (i + 1) + ". " + s).join("\n")}\nExpected: ${c.expected}\nPass/Fail: ${c.criteria}`;
+  }
+  function saveEdit() {
+    const c = cases.find((x) => x.id === editing);
+    setEdits((e) => ({ ...e, [editing]: { ...c, _edited: editVal } }));
+    setStatuses((s) => ({ ...s, [editing]: "ok" })); setEditing(null); toast("Edit saved & accepted");
+  }
+
+  function rows() {
+    return accepted.map((c) => { const e = eff(c); return {
+      TestCaseID: e.id, Requirement: e.req, Method: e.method, Objective: e.objective,
+      Preconditions: (e.pre || []).join(" | "), Procedure: (e.steps || []).map((s, i) => (i + 1) + ". " + s).join(" "),
+      ExpectedResult: e.expected, PassFailCriteria: e.criteria, Edited: edits[c.id] != null ? "YES" : "",
+      ...(e._edited ? { EditedText: e._edited } : {}),
+    }; });
+  }
+  function exportFlat(kind) {
+    const rs = rows(); if (!rs.length) return;
+    if (kind === "json") { download("test_cases.json", JSON.stringify(rs, null, 2), "application/json"); toast(`Exported ${rs.length} to JSON`); return; }
+    const cols = Object.keys(rs[0]);
+    const csv = [cols.join(","), ...rs.map((r) => cols.map((k) => csvCell(r[k])).join(","))].join("\n");
+    download("test_cases." + (kind === "xlsx" ? "csv" : "csv"), csv, "text/csv");
+    toast(`Exported ${rs.length} test case(s) to ${kind.toUpperCase()}`);
+  }
+
+  const steps = ["Select requirements", "Review test cases", "Export"];
+  const can = [true, cases.length > 0, cases.length > 0];
+
+  return (
+    <>
+      <Stepper steps={steps} step={step} setStep={setStep} can={can} />
+
+      {step === 0 && (running ? <RunOverlay h="Generating test cases & procedures" p="Running the curated Test Case Generator prompt over your selected requirements." /> : (
+        <>
+          <div className="wb-srctabs">
+            {[["feed", "API feed", "Live pull from Jama / DOORS"], ["upload", "Upload file", "Excel, CSV, or text"], ["paste", "Paste", "One requirement per line"]].map((t) => (
+              <button key={t[0]} className={`wb-srctab ${src === t[0] ? "on" : ""}`} onClick={() => setSrc(t[0])}>
+                <div className="si">{t[0] === "feed" ? <Zap size={17} /> : t[0] === "upload" ? <Upload size={17} /> : <Layers size={17} />}</div>
+                <h4>{t[1]}</h4><p>{t[2]}</p>
+              </button>
+            ))}
+          </div>
+          {src === "feed" && (
+            <div className="wb-panel"><div className="wb-panel-pad wb-feed">
+              <div className="fb">{feedLoaded ? <Check size={18} /> : <Zap size={18} />}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 13.5 }}>{feedLoaded ? "Connected · Jama Connect" : "Connect to your requirements tool"}</div>
+                <div className="wb-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{feedLoaded ? "project SENTINEL · module: Software Requirements · " + reqs.length + " items pulled" : "authenticate to pull the Software Requirements module"}</div>
+              </div>
+              <button className={`tf-btn ${feedLoaded ? "tf-btn-ghost" : "tf-btn-primary"}`} style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={loadFeed}>{feedLoaded ? "Refresh feed" : "Connect & pull"}</button>
+              <span className="wb-stub"><Sparkles size={11} /> seam · stubbed</span>
+            </div></div>
+          )}
+          {src === "upload" && (
+            <div className="wb-panel"><div className="wb-panel-pad">
+              <div className={`wb-drop ${drag ? "drag" : ""}`} onClick={() => inputRef.current.click()}
+                onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
+                onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files[0]) importFile(e.dataTransfer.files[0]); }}>
+                <div className="dic"><Upload size={22} /></div><h4>Drop a requirements export</h4>
+                <p>.csv / .xlsx with ID and Text columns — parsed in-browser.</p><div className="fmt">.csv · .xlsx · .xls · .txt</div>
+              </div>
+              <input ref={inputRef} type="file" accept=".csv,.xlsx,.xls,.txt" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) importFile(e.target.files[0]); e.target.value = ""; }} />
+            </div></div>
+          )}
+          {src === "paste" && (
+            <div className="wb-panel"><div className="wb-panel-pad">
+              <textarea className="wb-paste" value={pasteRaw} onChange={(e) => setPasteRaw(e.target.value)}
+                placeholder={"SRS-210: The system shall acquire target track data at a minimum rate of 10 Hz.\nSRS-224: The processor shall complete threat classification within 250 ms."} />
+              <div style={{ marginTop: 10, display: "flex", gap: 10 }}>
+                <button className="tf-btn tf-btn-ghost" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={() => { if (pasteRaw.trim()) parsePasted(pasteRaw); }}>Load pasted requirements</button>
+                <button className="tf-btn tf-btn-ghost" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={loadSample}>Load sample set</button>
+              </div>
+            </div></div>
+          )}
+
+          {reqs.length > 0 && (
+            <div className="wb-panel">
+              <div className="wb-selecthead">
+                <span className="lft">{reqs.length} requirement(s)</span><div style={{ flex: 1 }} />
+                <button className="tf-btn tf-btn-ghost" style={{ padding: "6px 11px", fontSize: 12.5 }} onClick={() => setSelected(Object.fromEntries(reqs.map((r) => [r.id, true])))}>Select all</button>
+                <button className="tf-btn tf-btn-ghost" style={{ padding: "6px 11px", fontSize: 12.5 }} onClick={() => setSelected({})}>Clear</button>
+              </div>
+              <div className="wb-selectlist">
+                {reqs.map((r) => (
+                  <div key={r.id} className={`wb-selrow ${selected[r.id] ? "sel" : ""}`} onClick={() => setSel(r.id)}>
+                    <div className="wb-cb">{selected[r.id] && <Check size={13} />}</div>
+                    <span className="rid">{r.id}</span><div className="rt">{r.text}</div><span className="rmeta">{r.meta || ""}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} defaultPrompt={baseline} />
+          <div className="wb-actionbar">
+            <div className="sum">{selectedReqs.length ? <>Generating from <b>{selectedReqs.length} requirement(s)</b></> : "Select at least one requirement to generate test cases."}</div>
+            <div style={{ flex: 1 }} />
+            <button className="tf-btn tf-btn-primary" disabled={!selectedReqs.length} onClick={runGen}><Sparkles size={15} /> Generate test cases <ArrowRight size={15} /></button>
+          </div>
+        </>
+      ))}
+
+      {step === 1 && (running ? <RunOverlay h="Re-generating" p="Applying prompt changes to your selected requirements." /> : (
+        <>
+          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} review defaultPrompt={baseline} onRerun={runGen} />
+          <TriageToolbar tally={tally} filter={filter} setFilter={setFilter} onAcceptAll={() => setStatuses((s) => { const n = { ...s }; cases.forEach((c) => { if (!(n[c.id] === "ok" || n[c.id] === "no")) n[c.id] = "ok"; }); return n; })} />
+          {visible.length ? visible.map((c) => {
+            const st = statuses[c.id] || "pend"; const edited = edits[c.id] != null; const e = eff(c);
+            return (
+              <div key={c.id} className={`wb-card ${st === "ok" ? "ok" : st === "no" ? "no" : ""}`}>
+                <div className="rail" />
+                <div className="cbody">
+                  <div className="top">
+                    <span className="rid">{c.id}</span>
+                    <span className="wb-mini type">{c.method}</span>
+                    <span className="wb-mini ver">↳ verifies {c.req}</span>
+                    {edited && <span className="wb-mini edited">Edited</span>}
+                    <StatusLabel st={st} />
+                  </div>
+                  {editing === c.id ? (
+                    <>
+                      <textarea className="edit" style={{ minHeight: 220, fontFamily: "var(--mono)", fontSize: 12.5 }} value={editVal} onChange={(ev) => setEditVal(ev.target.value)} autoFocus />
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button className="tf-btn tf-btn-primary" style={{ padding: "6px 11px", fontSize: 12.5 }} onClick={saveEdit}>Save & accept</button>
+                        <button className="tf-btn tf-btn-ghost" style={{ padding: "6px 11px", fontSize: 12.5 }} onClick={() => setEditing(null)}>Cancel</button>
+                      </div>
+                    </>
+                  ) : e._edited ? (
+                    <pre className="wb-tc-pre">{e._edited}</pre>
+                  ) : (
+                    <div className="wb-tc">
+                      <div className="wb-tc-obj">{renderHighlighted(e.objective)}</div>
+                      <div className="wb-tc-grid">
+                        <div><span className="wb-tc-h">Preconditions</span><ul>{e.pre.map((p, i) => <li key={i}>{p}</li>)}</ul></div>
+                        <div><span className="wb-tc-h">Procedure</span><ol>{e.steps.map((s, i) => <li key={i}>{s}</li>)}</ol></div>
+                      </div>
+                      <div className="wb-tc-row"><span className="wb-tc-h">Expected result</span><span>{e.expected}</span></div>
+                      <div className="wb-tc-row pf"><span className="wb-tc-h">Pass / fail</span><span>{e.criteria}</span></div>
+                    </div>
+                  )}
+                  <div className="wb-foot">
+                    <div className="trace"><Link2 size={14} /> Verifies <span className="wb-mono" style={{ color: "var(--wb-brand-ink)", fontWeight: 600 }}>{c.req}</span></div>
+                    <div className="spacer" />
+                    <TriageActions st={st} id={c.id} onAct={act} />
+                  </div>
+                </div>
+              </div>
+            );
+          }) : <div className="wb-empty"><Inbox size={40} /><div>No test cases match this filter.</div></div>}
+          <div className="wb-actionbar">
+            <div className="sum"><b>{tally.ok} of {cases.length}</b> accepted · export what you approve</div>
+            <div style={{ flex: 1 }} />
+            <button className="tf-btn tf-btn-ghost" onClick={() => setStep(0)}>Back to selection</button>
+            <button className="tf-btn tf-btn-primary" disabled={!accepted.length} onClick={() => setStep(2)}>Export accepted set <ArrowRight size={15} /></button>
+          </div>
+        </>
+      ))}
+
+      {step === 2 && (
+        <>
+          <div className="wb-exp-summary">
+            <div><span className="k">Accepted</span><span className="v">{accepted.length}</span></div>
+            <div><span className="k">Requirements covered</span><span className="v">{new Set(accepted.map((c) => c.req)).size}</span></div>
+            <div><span className="k">Edited</span><span className="v">{accepted.filter((c) => edits[c.id] != null).length}</span></div>
+            <div><span className="k">Rejected</span><span className="v">{tally.no}</span></div>
+          </div>
+          <div className="wb-panel">
+            <div className="wb-panel-head"><h3>Export test cases</h3><span className="cnt">{accepted.length} item(s)</span></div>
+            <div className="wb-panel-pad">
+              {accepted.length ? [
+                ["rm", "RMTL", "Push to test / requirements tool", "Authenticate — cases are authored under your credentials"],
+                ["xlsx", "XLSX", "Excel workbook", "Structured export with full procedure columns"],
+                ["csv", "CSV", "CSV", "Flat export with all columns"],
+                ["json", "JSON", "JSON", "Machine-readable export for pipelines"],
+              ].map((o) => (
+                <div key={o[0]} className="wb-export-opt" onClick={() => (o[0] === "rm" ? setExportOpen("rm") : exportFlat(o[0]))}>
+                  <div className="ei">{o[1]}</div>
+                  <div><div className="n">{o[2]}</div><div className="d">{o[3]}</div></div>
+                  <div className="go"><ChevronRight size={16} /></div>
+                </div>
+              )) : <div className="wb-empty"><Inbox size={40} /><div>Nothing accepted yet. Go back and approve some test cases.</div></div>}
+            </div>
+          </div>
+          <div className="wb-actionbar">
+            <div className="sum"><b>{accepted.length}</b> test case(s) ready</div>
+            <div style={{ flex: 1 }} />
+            <button className="tf-btn tf-btn-ghost" onClick={() => setStep(1)}>Back to review</button>
+          </div>
+        </>
+      )}
+
+      {exportOpen === "rm" && (
+        <CredsModal
+          title="Push to test / requirements tool"
+          subtitle={`${accepted.length} test case(s) · authored under your credentials`}
+          toolOptions={["Jama Connect — SENTINEL / Verification", "IBM DOORS — SENTINEL Test module", "Polarion — SENTINEL / Test Cases"]}
+          confirmLabel={`Sign in & push ${accepted.length}`}
+          onClose={() => setExportOpen(null)}
+          onConfirm={(creds) => { setExportOpen(null); toast(`Pushed ${accepted.length} test case(s) as ${creds.user || "you"} · integration seam · stubbed`); }}
+        />
+      )}
+    </>
+  );
+}
+
+/* Shared credentials modal — used for "authored as you" RM/test-tool exports. */
+function CredsModal({ title, subtitle, toolOptions, confirmLabel, onClose, onConfirm }) {
+  const [tool, setTool] = useState(toolOptions[0]);
+  const [user, setUser] = useState("");
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 260, background: "rgba(17,28,37,.5)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="wb" style={{ maxWidth: 520, width: "100%", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 9, background: "var(--wb-brand-wash)", color: "var(--wb-brand)", display: "grid", placeItems: "center" }}><Link2 size={16} /></div>
+          <div><div style={{ fontFamily: "var(--disp)", fontSize: 16, fontWeight: 700 }}>{title}</div><div style={{ fontSize: 12.5, color: "var(--muted)" }}>{subtitle}</div></div>
+        </div>
+        <div style={{ padding: "20px 22px" }}>
+          <div className="wb-field"><label>Tool & module</label><select value={tool} onChange={(e) => setTool(e.target.value)}>{toolOptions.map((t) => <option key={t}>{t}</option>)}</select></div>
+          <div className="wb-field"><label>Username</label><input value={user} onChange={(e) => setUser(e.target.value)} placeholder="you@org.mil" /></div>
+          <div className="wb-field"><label>API token</label><input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="••••••••••••••••" /></div>
+          <div className="wb-note">Items are created and <b>authored as you</b> in the selected tool. <span className="wb-stub"><Sparkles size={11} /> integration seam · stubbed in this build</span></div>
+        </div>
+        <div style={{ padding: "14px 22px", borderTop: "1px solid var(--line)", display: "flex", gap: 10, justifyContent: "flex-end", background: "var(--panel2)" }}>
+          <button className="tf-btn tf-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="tf-btn tf-btn-primary" disabled={busy} onClick={() => { setBusy(true); setTimeout(() => onConfirm({ tool, user, token }), 800); }}>{busy ? <><span className="wb-spin" /> Pushing…</> : confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+   AGENT 4 — CDRL DRAFTER
+   Uses a provided FORMAT (DID or completed CDRL example) + project technical
+   context (uploads or a network-folder pointer) to draft a CDRL that mirrors
+   the format, populated with project data. Engineer edits, then exports to
+   Word — with any logos from the format template carried into the export.
+   ========================================================================= */
+const CDRL_PROMPT = DEFAULT_PROMPTS.cdrl;
+
+const SAMPLE_DID_SECTIONS = [
+  "1. SCOPE", "2. APPLICABLE DOCUMENTS", "3. REQUIREMENTS",
+  "3.1 System Description", "3.2 Performance Summary", "3.3 Verification Approach",
+  "4. TEST & VERIFICATION RESULTS", "5. OPEN ITEMS & RISKS", "6. NOTES",
+];
+
+const CDRLDrafter = {
+  draft(format, project) {
+    const secs = (format.sections && format.sections.length ? format.sections : SAMPLE_DID_SECTIONS);
+    const ctx = project.text || "";
+    const pick = (re, fallback) => { const m = ctx.match(re); return m ? m[0] : fallback; };
+    const body = secs.map((s) => {
+      const low = s.toLowerCase();
+      let content;
+      if (/scope/.test(low)) content = `This deliverable is submitted in accordance with ${format.name || "the referenced Data Item Description"} for the ${project.program || "SENTINEL"} program. It documents the ${project.item || "Radar Subsystem"} in the format prescribed by the provided template.`;
+      else if (/applicable documents/.test(low)) content = pick(/(MIL-STD-[\d]+[A-Z]?(?:,\s*MIL-STD-[\d]+[A-Z]?)*)/i, "MIL-STD-461, MIL-STD-810, ICD-4471") + " apply to this deliverable.";
+      else if (/system description|3\.1/.test(low)) content = pick(/the (system|subsystem)[^.]{20,180}\./i, "The subsystem provides target detection, tracking and threat classification, interfacing to the host platform via the MIL-STD-1553B data bus.");
+      else if (/performance/.test(low)) content = pick(/(within \d[^.]{0,80}\.|\d+\s*hz[^.]{0,80}\.|\d+\s*ms[^.]{0,80}\.)/i, "Track update rate ≥ 10 Hz; threat classification ≤ 250 ms; operation across -40 C to +71 C.");
+      else if (/verification approach|3\.3/.test(low)) content = "Verification is performed by Test, Analysis, Inspection and Demonstration per the approved verification matrix; each requirement traces to at least one verification activity.";
+      else if (/test.*results|verification results/.test(low)) content = ctx.trim() ? "Results summarized from the provided project technical data. [Detailed results table to be attached from the verification record.]" : "[TBD — data not provided]";
+      else if (/open items|risks/.test(low)) content = "No open items affecting deliverable acceptance at time of submission. [Confirm against current risk register.]";
+      else content = "[TBD — data not provided]";
+      return { heading: s, content };
+    });
+    return { title: format.title || "Contract Data Requirements List Deliverable", did: format.name || "DI-MGMT-80xxx", logos: format.logos || [], sections: body };
+  },
+};
+
+function CDRLDrafterAgent({ toast }) {
+  const [step, setStep] = useState(0);
+  const [fmtFile, setFmtFile] = useState(null);
+  const [logos, setLogos] = useState([]);
+  const [ctxFiles, setCtxFiles] = useState([]);
+  const [netFolder, setNetFolder] = useState("");
+  const [ctxText, setCtxText] = useState("");
+  const [program, setProgram] = useState("SENTINEL");
+  const [item, setItem] = useState("Radar Subsystem");
+  const [prompt, setPrompt] = useState(() => getPrompt("cdrl"));
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [doc, setDoc] = useState(null);
+  const [dragF, setDragF] = useState(false);
+  const [dragC, setDragC] = useState(false);
+  const fmtRef = useRef(); const logoRef = useRef(); const ctxRef = useRef();
+  const meta = AGENT_META.cdrl;
+  const baseline = getPrompt("cdrl");
+  const promptDirty = prompt !== baseline;
+
+  const hasFormat = !!fmtFile;
+  const hasContext = ctxFiles.some((f) => f.status === "ok") || ctxText.trim().length > 20 || netFolder.trim().length > 0;
+
+  async function readTextFile(file) {
+    const ext = fileExt(file.name);
+    if (["txt", "md", "csv", "text"].includes(ext) || !ext) return file.text();
+    if (ext === "docx") { await loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"); const r = await window.mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() }); return r.value; }
+    if (ext === "pdf") { await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"); window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; const pdf = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise; let t = ""; for (let p = 1; p <= pdf.numPages; p++) { const pg = await pdf.getPage(p); const tc = await pg.getTextContent(); t += tc.items.map((i) => i.str).join(" ") + "\n"; } return t; }
+    throw new Error("Unsupported");
+  }
+  async function onFormat(file) {
+    try {
+      const text = await readTextFile(file);
+      const secs = [];
+      text.split(/\r?\n/).forEach((ln) => { const l = ln.trim(); if (!l) return; if (/^(\d+(\.\d+)*)(\s+|\.\s+)[A-Za-z].{2,60}$/.test(l) || (/^[A-Z][A-Z0-9 ,&/\-]{4,50}$/.test(l) && l.split(" ").length <= 8)) secs.push(l.replace(/\s+/g, " ")); });
+      setFmtFile({ name: file.name, title: file.name.replace(/\.[^.]+$/, ""), sections: secs.slice(0, 14), text });
+      toast(`Format loaded · ${secs.length ? secs.length + " sections detected" : "structure will use the standard DID outline"}`);
+    } catch (e) { toast(/load failed/.test(e.message) ? "Parser CDN blocked — paste context instead" : "Could not read format: " + (e.message || "failed")); }
+  }
+  function onLogos(list) {
+    Array.from(list).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => setLogos((ls) => [...ls, { name: file.name, dataUrl: reader.result }]);
+      reader.readAsDataURL(file);
+    });
+  }
+  async function onCtxFiles(list) {
+    for (const file of Array.from(list)) {
+      const uid = "c" + Math.random().toString(36).slice(2, 8);
+      const rec = { uid, name: file.name, ext: (fileExt(file.name) || "txt").toUpperCase().slice(0, 4), sizeLabel: sizeLabel(file.size), status: "busy", text: "" };
+      setCtxFiles((fs) => [...fs, rec]);
+      const patch = (u) => setCtxFiles((fs) => fs.map((f) => (f.uid === uid ? { ...f, ...u } : f)));
+      try { const t = await readTextFile(file); patch({ text: t, status: t.trim() ? "ok" : "err", error: "No text found" }); }
+      catch (e) { patch({ status: "err", error: /load failed/.test(e.message) ? "Parser CDN blocked" : (e.message || "Parse failed") }); }
+    }
+  }
+  async function runDraft() {
+    if (!hasFormat) return;
+    setRunning(true); await wait(1100);
+    const text = [ctxText, netFolder ? `[Network folder referenced: ${netFolder}]` : "", ...ctxFiles.filter((f) => f.status === "ok").map((f) => f.text)].filter(Boolean).join("\n\n");
+    const d = CDRLDrafter.draft({ ...fmtFile, logos, name: fmtFile.name }, { text, program, item });
+    setDoc(d); setStep(1); setRunning(false);
+    toast(`Drafted ${d.sections.length}-section CDRL in the provided format`);
+  }
+  function setSection(i, content) { setDoc((d) => ({ ...d, sections: d.sections.map((s, ix) => (ix === i ? { ...s, content } : s)) })); }
+
+  function exportWord() {
+    if (!doc) return;
+    const logoHtml = (doc.logos || []).map((l) => `<img src="${l.dataUrl}" style="max-height:64px;margin:0 14px 6px 0" />`).join("");
+    const secHtml = doc.sections.map((s) => `<h2 style="font-family:Arial;font-size:12.5pt;color:#1B2E8C;margin:14px 0 4px">${s.heading}</h2><p style="font-family:Arial;font-size:10.5pt;color:#222;line-height:1.5;white-space:pre-wrap">${(s.content || "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`).join("");
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body style="font-family:Arial">
+      <div style="text-align:center;border-bottom:2px solid #1B2E8C;padding-bottom:10px;margin-bottom:14px">${logoHtml}<div style="font-family:Arial;font-size:16pt;font-weight:bold;color:#15222D">${doc.title}</div>
+      <div style="font-family:Arial;font-size:9.5pt;color:#666">Format: ${doc.did} · Program: ${program} · ${item} · ${new Date().toLocaleDateString()}</div></div>
+      ${secHtml}
+      <p style="font-family:Arial;font-size:8pt;color:#999;margin-top:20px">Generated by ThreadWire · AI Workbench · CDRL Drafter — review before submission.</p></body></html>`;
+    download((doc.title || "cdrl_deliverable").replace(/[^\w]+/g, "_") + ".doc", html, "application/msword");
+    toast("Exported CDRL to Word" + (doc.logos && doc.logos.length ? " (logos embedded)" : ""));
+  }
+
+  const steps = ["Format & context", "Draft & edit", "Export"];
+  const can = [true, !!doc, !!doc];
+
+  return (
+    <>
+      <Stepper steps={steps} step={step} setStep={setStep} can={can} />
+
+      {step === 0 && (running ? <RunOverlay h="Drafting the CDRL" p="Reading your format template and project technical data, then populating each section." /> : (
+        <>
+          <div className="wb-panel">
+            <div className="wb-panel-head"><ClipboardList size={16} color="var(--wb-brand)" /><h3>Format template (DID or completed CDRL example)</h3></div>
+            <div className="wb-panel-pad">
+              {!fmtFile ? (
+                <div className={`wb-drop ${dragF ? "drag" : ""}`} onClick={() => fmtRef.current.click()}
+                  onDragOver={(e) => { e.preventDefault(); setDragF(true); }} onDragLeave={() => setDragF(false)}
+                  onDrop={(e) => { e.preventDefault(); setDragF(false); if (e.dataTransfer.files[0]) onFormat(e.dataTransfer.files[0]); }}>
+                  <div className="dic"><FileText size={22} /></div><h4>Drop the format to follow</h4>
+                  <p>A Data Item Description or a completed CDRL example. The draft mirrors its section structure.</p>
+                  <div className="fmt">.docx · .pdf · .txt · .md</div>
+                </div>
+              ) : (
+                <div className="wb-file">
+                  <div className="fi">{(fileExt(fmtFile.name) || "doc").toUpperCase().slice(0, 4)}</div>
+                  <div className="meta"><div className="fn">{fmtFile.name}</div><div className="fs">{fmtFile.sections.length ? fmtFile.sections.length + " sections detected" : "standard DID outline"}</div></div>
+                  <span className="st ok"><Check size={13} /> Loaded</span>
+                  <button className="rm" onClick={() => setFmtFile(null)}><X size={14} /></button>
+                </div>
+              )}
+              <input ref={fmtRef} type="file" accept=".docx,.pdf,.txt,.md" style={{ display: "none" }} onChange={(e) => { if (e.target.files[0]) onFormat(e.target.files[0]); e.target.value = ""; }} />
+
+              <div className="wb-orline">company logos for the export (optional)</div>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button className="tf-btn tf-btn-ghost" style={{ padding: "7px 12px", fontSize: 12.5 }} onClick={() => logoRef.current.click()}><ImageIcon size={14} /> Add logo image(s)</button>
+                <input ref={logoRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => { onLogos(e.target.files); e.target.value = ""; }} />
+                {logos.map((l, i) => (
+                  <span key={i} className="wb-logo-chip"><img src={l.dataUrl} alt="" /><span>{l.name}</span><button onClick={() => setLogos((ls) => ls.filter((_, ix) => ix !== i))}><X size={11} /></button></span>
+                ))}
+                {!logos.length && <span className="wb-mono" style={{ fontSize: 11, color: "var(--faint)" }}>logos are embedded in the Word export header</span>}
+              </div>
+            </div>
+          </div>
+
+          <div className="wb-panel">
+            <div className="wb-panel-head"><FolderOpen size={16} color="var(--wb-brand)" /><h3>Project technical data</h3><span className="cnt">{ctxFiles.length} file(s)</span></div>
+            <div className="wb-panel-pad">
+              <div className={`wb-drop ${dragC ? "drag" : ""}`} onClick={() => ctxRef.current.click()}
+                onDragOver={(e) => { e.preventDefault(); setDragC(true); }} onDragLeave={() => setDragC(false)}
+                onDrop={(e) => { e.preventDefault(); setDragC(false); if (e.dataTransfer.files.length) onCtxFiles(e.dataTransfer.files); }}>
+                <div className="dic"><Upload size={22} /></div><h4>Drop technical context for the AI to review</h4>
+                <p>Specs, test reports, design notes — used to populate the deliverable.</p><div className="fmt">.docx · .pdf · .txt · .md · .csv</div>
+              </div>
+              <input ref={ctxRef} type="file" multiple accept=".docx,.pdf,.txt,.md,.csv" style={{ display: "none" }} onChange={(e) => { onCtxFiles(e.target.files); e.target.value = ""; }} />
+              {ctxFiles.length > 0 && (
+                <div className="wb-filelist">
+                  {ctxFiles.map((f) => (
+                    <div key={f.uid} className="wb-file">
+                      <div className="fi">{f.ext}</div>
+                      <div className="meta"><div className="fn">{f.name}</div><div className="fs">{f.sizeLabel}</div></div>
+                      <span className={`st ${f.status}`}>{f.status === "ok" ? <><Check size={13} /> Parsed</> : f.status === "busy" ? <><span className="wb-spin" /> Parsing</> : <><X size={13} /> {f.error || "Failed"}</>}</span>
+                      <button className="rm" onClick={() => setCtxFiles((fs) => fs.filter((x) => x.uid !== f.uid))}><X size={14} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="wb-orline">or point to a network folder</div>
+              <div className="wb-netfolder">
+                <FolderOpen size={16} color="var(--faint)" />
+                <input value={netFolder} onChange={(e) => setNetFolder(e.target.value)} placeholder="\\\\fileserver\\programs\\SENTINEL\\technical-data" />
+                <span className="wb-stub"><Sparkles size={11} /> indexed server-side · seam · stubbed</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+                <div className="wb-field" style={{ margin: 0 }}><label>Program</label><input value={program} onChange={(e) => setProgram(e.target.value)} /></div>
+                <div className="wb-field" style={{ margin: 0 }}><label>Item / subsystem</label><input value={item} onChange={(e) => setItem(e.target.value)} /></div>
+              </div>
+              <textarea className="wb-paste" style={{ marginTop: 12 }} value={ctxText} onChange={(e) => setCtxText(e.target.value)} placeholder="Or paste additional technical context here…" />
+            </div>
+          </div>
+
+          <PromptStrip meta={meta} prompt={prompt} setPrompt={setPrompt} dirty={promptDirty} open={promptOpen} setOpen={setPromptOpen} defaultPrompt={baseline} />
+          <div className="wb-actionbar">
+            <div className="sum">{!hasFormat ? "Provide a format template to follow." : !hasContext ? "Add project technical data (upload, paste, or a folder) to populate the draft." : <><b>Ready.</b> Draft the CDRL in the provided format.</>}</div>
+            <div style={{ flex: 1 }} />
+            <button className="tf-btn tf-btn-primary" disabled={!hasFormat} onClick={runDraft}><Sparkles size={15} /> Draft CDRL <ArrowRight size={15} /></button>
+          </div>
+        </>
+      ))}
+
+      {step === 1 && doc && (
+        <>
+          <div className="wb-panel" style={{ overflow: "hidden" }}>
+            <div className="wb-cdrl-head">
+              {(doc.logos || []).map((l, i) => <img key={i} src={l.dataUrl} alt="" className="wb-cdrl-logo" />)}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "var(--disp)", fontWeight: 800, fontSize: 18 }}>{doc.title}</div>
+                <div className="wb-mono" style={{ fontSize: 11, color: "var(--faint)" }}>Format: {doc.did} · {program} · {item}</div>
+              </div>
+              <span className="wb-mini type">Editable draft</span>
+            </div>
+            <div className="wb-panel-pad">
+              {doc.sections.map((s, i) => (
+                <div key={i} className="wb-cdrl-sec">
+                  <div className="wb-cdrl-h">{s.heading}</div>
+                  <textarea value={s.content} onChange={(e) => setSection(i, e.target.value)} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="wb-actionbar">
+            <div className="sum">Edit any section, then export. Logos: <b>{doc.logos && doc.logos.length ? doc.logos.length + " embedded" : "none"}</b></div>
+            <div style={{ flex: 1 }} />
+            <button className="tf-btn tf-btn-ghost" onClick={() => setStep(0)}>Back to setup</button>
+            <button className="tf-btn tf-btn-primary" onClick={() => setStep(2)}>Review & export <ArrowRight size={15} /></button>
+          </div>
+        </>
+      )}
+
+      {step === 2 && doc && (
+        <>
+          <div className="wb-exp-summary">
+            <div><span className="k">Sections</span><span className="v">{doc.sections.length}</span></div>
+            <div><span className="k">Format</span><span className="v wb-mono" style={{ fontSize: 13 }}>{doc.did}</span></div>
+            <div><span className="k">Logos</span><span className="v">{(doc.logos || []).length}</span></div>
+            <div><span className="k">Filled</span><span className="v">{doc.sections.filter((s) => !/TBD/.test(s.content)).length}/{doc.sections.length}</span></div>
+          </div>
+          <div className="wb-panel">
+            <div className="wb-panel-head"><h3>Export CDRL deliverable</h3></div>
+            <div className="wb-panel-pad">
+              <div className="wb-export-opt" onClick={exportWord}>
+                <div className="ei">DOCX</div>
+                <div><div className="n">Word document</div><div className="d">Formatted to your template{doc.logos && doc.logos.length ? ", with company logos embedded in the header" : ""}</div></div>
+                <div className="go"><ChevronRight size={16} /></div>
+              </div>
+            </div>
+          </div>
+          <div className="wb-actionbar">
+            <div className="sum"><b>{doc.title}</b> ready to export</div>
+            <div style={{ flex: 1 }} />
+            <button className="tf-btn tf-btn-ghost" onClick={() => setStep(1)}>Back to edit</button>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+/* =========================================================================
    TOP-LEVEL WORKBENCH — agent gallery + agent host
    ========================================================================= */
 export default function AIWorkbench() {
@@ -1226,6 +1901,8 @@ export default function AIWorkbench() {
           </div>
           {agent === "extractor" && <ExtractorAgent toast={toast} />}
           {agent === "derivation" && <DerivationAgent toast={toast} />}
+          {agent === "testgen" && <TestGenAgent toast={toast} />}
+          {agent === "cdrl" && <CDRLDrafterAgent toast={toast} />}
         </>
       )}
 
