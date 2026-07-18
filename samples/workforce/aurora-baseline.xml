@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <Name>Aurora</Name>
+  <Tasks>
+    <Task><UID>0</UID><Name>Aurora</Name><Summary>1</Summary><Work>PT2400H0M0S</Work><Start>2026-07-01T08:00:00</Start><Finish>2026-10-30T17:00:00</Finish></Task>
+    <Task><UID>1</UID><Name>Requirements</Name><Summary>0</Summary><Work>PT320H0M0S</Work><Start>2026-07-01T08:00:00</Start><Finish>2026-08-14T17:00:00</Finish></Task>
+    <Task><UID>2</UID><Name>Design</Name><Summary>0</Summary><Work>PT640H0M0S</Work><Start>2026-08-01T08:00:00</Start><Finish>2026-09-30T17:00:00</Finish></Task>
+    <Task><UID>3</UID><Name>Integration</Name><Summary>0</Summary><Work>PT480H0M0S</Work><Start>2026-09-15T08:00:00</Start><Finish>2026-10-30T17:00:00</Finish></Task>
+    <Task><UID>4</UID><Name>Qualification</Name><Summary>0</Summary><Work>PT560H0M0S</Work><Start>2026-10-01T08:00:00</Start><Finish>2026-10-30T17:00:00</Finish></Task>
+  </Tasks>
+</Project>

@@ -1,8 +1,35 @@
-# ThreadWire — AI for Manufacturing
+# Threadwire — Operational Intelligence for Engineering & Manufacturing
 
-A multi-tenant manufacturing platform: requirements (Jama/DOORS), contracts,
-asset lifecycle + SPC, and a digital thread (work orders, BOM, ECO, POs), each
-with a subject-aware AI assistant.
+A multi-tenant platform packaged as **three products that share one operational
+thread**. Buy the whole platform for one connected view, or license any single
+product on its own:
+
+1. **Operational Intelligence** (Delivery Tracker) — blocker-aware delivery
+   calendar, committed-vs-at-risk revenue forecast, and the digital thread
+   (work orders, BOM, ECO, POs).
+2. **Workforce Intelligence** — engineering-resource allocation and capacity:
+   allocation vs plan by project, per-person utilisation and spare capacity,
+   resource requests, and imports for people (CSV), projects (CSV) and
+   Microsoft Project baselines (MSPDI XML). See `frontend/src/workforce/`.
+3. **Requirements Intelligence** — AI-drafted parent/child requirement trees,
+   coverage, conflicts and trace to tests, design and change.
+
+Every product ships with sample data and a page-aware AI assistant for
+contextual **What-If** analysis.
+
+### Workforce Intelligence (new module)
+
+- `frontend/src/workforce/data.js` — deterministic sample-data generator,
+  CSV + Microsoft Project (MSPDI) XML parsers, and the roll-up math.
+- `frontend/src/workforce/WorkforceIntelligence.jsx` — the module UI
+  (Portfolio · Projects · People · Requests · Data & Admin), built on
+  Threadwire's design tokens.
+- It runs entirely in the browser session (no new backend endpoints or DB
+  migrations). Use **Load sample demo data** or the **Data & Admin** tab to
+  import your own. Import templates live in `samples/workforce/`.
+- The module publishes a live snapshot to `window.__twWorkforceCtx`, which the
+  docked assistant appends to its prompt on the Workforce page so What-If
+  questions reason over real numbers.
 
 This repo turns the prototype into a deployable app for a single EC2 box
 (replaces the `threadwire.ai` root), with self-hosted auth + Postgres and a

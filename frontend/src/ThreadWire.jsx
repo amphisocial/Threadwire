@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useContext } from "react";
 import Compliance from "./compliance/Compliance.jsx";
 import AIWorkbench from "./workbench/AIWorkbench.jsx";
 import { PeggingExplorerPro, EcoImpactAnalyzerPro } from "./thread/DigitalThreadPro.jsx";
+import WorkforceIntelligence from "./workforce/WorkforceIntelligence.jsx";
 import { getQuotes, convertQuote } from "./lib/api.js";
 import {
   LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip,
@@ -14,7 +15,7 @@ import {
   Wrench, PackageSearch, FileSpreadsheet, Link2, Layers, Zap, TrendingUp,
   Minus, Trash2, Calculator, SlidersHorizontal, DollarSign, Factory, ChevronDown,
   Coins, Scale, Truck,
-  Plus, CalendarDays, ChevronLeft, ChevronRight, User, X, ClipboardList, Building2, Filter,
+  Plus, CalendarDays, ChevronLeft, ChevronRight, User, Users2, X, ClipboardList, Building2, Filter,
   Mic, MicOff, Volume2, VolumeX,
 } from "lucide-react";
 
@@ -254,10 +255,11 @@ function genSPC(n = 28, target = 50, sigma = 1.1, seed = 7) {
 function TopNav({ route, go, tier, onContact, loggedIn, user }) {
   const isSiteAdmin = user?.role === "superadmin";
   const links = loggedIn
-    ? [["workbench", "AI Workbench"], ["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"],
+    ? [["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"],
+       ["workforce", "Workforce"], ["requirements", "Requirements"], ["workbench", "AI Workbench"],
        ...(user?.compliance_enabled ? [["compliance", "Compliance"]] : []),
        ...(user?.quote_to_order ? [["quotes", "Quote-to-Order"]] : [])]
-    : [["home", "Home"], ["roi", "ROI Calculator"]];
+    : [["home", "Home"], ["visibility", "Operational Intel"], ["workforce", "Workforce"], ["requirements", "Requirements"], ["roi", "ROI"]];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(255,255,255,.82)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "14px 22px", display: "flex", alignItems: "center", gap: 20 }}>
@@ -385,6 +387,8 @@ const CTX = {
     "\n\nBOM (PN-3320 Spindle Assembly):\n" + BOM.map((b) => `${b.pn} ${b.desc} qty/asm ${b.qty} ${b.src} onhand ${b.onhand} demand ${b.demand}`).join("\n") +
     "\n\nECO:\n" + ECO.map((e) => `${e.id} ${e.title} ${e.status} affects ${e.affects.join(",")}`).join("\n") +
     "\n\nPURCHASE ORDERS:\n" + POs.map((p) => `${p.id} ${p.part} ${p.supplier} qty ${p.qty} eta ${p.eta} ${p.status}`).join("\n"),
+  workforce:
+    "Threadwire Workforce Intelligence is an engineering-resource allocation and capacity module. It tracks people (by discipline, location, seniority), projects, allocations (a % loading per person per month), imported baselines/plans (the budget track), timekeeping actuals, and open resource requests. Core reads: allocated-vs-plan by project, per-person utilisation vs a policy ceiling (default 110%), discipline capacity and spare headroom, and attainment (actual vs plan). It answers What-If capacity questions: whether a request can be filled from spare capacity, who is over-allocated, which projects breach their plan if open requests are filled, and where headroom exists. Live numbers are supplied in a separate LIVE WORKFORCE DATA block when data is loaded — always use those exact figures.",
   home:
     "Threadwire is a Manufacturing Delivery Control platform — not a generic AI or BI tool. It overlays Odoo, MRPeasy, JobBOSS, Sage, Epicor SMB, legacy SQL and Excel without replacing the ERP. Core promise: protect customer commitments and revenue. Target: mid-market discrete manufacturers ($20M–$200M revenue), high-mix/low-volume, make-to-order, engineer-to-order, contract manufacturing. Key modules: Delivery Calendar (sales orders by promise date, committed vs blocked revenue), Blockers (shop-floor issues tied to orders, owners, actions, revised dates, revenue at risk), Revenue Forecast (GM-level blocker-aware forecast by quarter/month), Digital Thread (work orders, BOM, ECO, PO, material forecasting), Direct Spend (BOM-linked sourcing, should-cost, Kraljic), ROI Calculator. Pricing: $2,500 Revenue at Risk Diagnostic (credited to pilot); $24K/yr Core (1 site, +$7.5K onboarding); $48K/yr Pro (3 sites, API, AI, +$15K onboarding); $90K–$150K/yr Enterprise. No free trial — the entry offer is a paid diagnostic. Sample data available in all tabs for exploration.",
 };
@@ -492,6 +496,16 @@ const ASSISTANT = {
       return `This week (${c.weekLabel}, ${site}): expected revenue ${fmtMoney(c.expected)} across ${c.orders} order${c.orders === 1 ? "" : "s"} — ${fmtMoney(c.committed)} committed (clear) and ${fmtMoney(c.blocked)} blocked by open issues (at risk). Clear the blockers and the full ${fmtMoney(c.expected)} ships. Use the site filter or prev/next week to change scope.`;
     },
   },
+  workforce: {
+    subject: "Workforce & Capacity", accent: "var(--amber)",
+    intro: "Ask about allocation, utilisation or run a What-If — e.g. can we staff a request from spare capacity, or which projects breach plan?",
+    suggestions: ["Who is over-allocated this month?", "What if I add 2 Software engineers to the busiest project?", "Which projects go over plan if every open request is filled?"],
+    system: "You are a workforce-planning and capacity assistant for engineering resource management. Answer ONLY from the workforce data provided. Be quantitative: cite hours, % loading, headcount, project codes and person names. For What-If questions, reason from spare capacity (ceiling minus current load) and the plan track, and state the assumptions you used. Flag over-allocation (load above the ceiling) and projects whose allocated + open-request demand exceeds plan. If no live data block is present, say the workspace has no data loaded yet and suggest loading sample data or importing.\n\n" + CTX.workforce,
+    fallback: (q) =>
+      /over.?alloc|overload|too much|capacity/i.test(q) ? "Open the People view and sort by load — anyone above 100% for the selected month is over-allocated against the 110% ceiling. Load sample data first if the workspace is empty."
+      : /what.?if|add|hire|scenario/i.test(q) ? "For a What-If, check the discipline with spare capacity on the Portfolio view (people below ~95% load), then use a resource request to place that headroom on a project. I can reason over the exact numbers once data is loaded."
+      : "Workforce Intelligence tracks allocation vs plan, per-person utilisation and open resource requests. Load sample data or import your people and Microsoft Project baselines, then ask me who has capacity or which projects breach plan.",
+  },
   finance: {
     subject: "Revenue Forecast", accent: "var(--green)",
     intro: "Ask about committed vs at-risk revenue, a quarter, or what's dragging the forecast.",
@@ -583,7 +597,8 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot 
     update(route, (c) => ({ ...c, msgs: [...c.msgs, { role: "user", text: q }] }));
     setBusy(true);
     const screenCtx = (route === "thread" && typeof window !== "undefined" && window.__twDigitalThreadCtx && window.__twDigitalThreadCtx.combined) ? "\n\n" + window.__twDigitalThreadCtx.combined : "";
-    const sys = cfg.system + (snapshot ? "\n\n" + snapshot : "") + screenCtx;
+    const wfCtx = (route === "workforce" && typeof window !== "undefined" && window.__twWorkforceCtx) ? "\n\n" + window.__twWorkforceCtx : "";
+    const sys = cfg.system + (snapshot ? "\n\n" + snapshot : "") + screenCtx + wfCtx;
     const reply = await askClaude(sys, q, hist);
     const out = reply || cfg.fallback(q, botCtx);
     update(route, (c) => ({
@@ -754,27 +769,96 @@ function Home({ go, onContact }) {
       {/* HERO */}
       <div className="tf-grid-bg tf-fade" style={{ borderBottom: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "70px 22px 54px" }}>
-          <div className="tf-eyebrow" style={{ marginBottom: 18 }}>Manufacturing Delivery Control · ERP overlay · Revenue assurance</div>
-          <h1 className="tf-disp" style={{ fontSize: "clamp(32px,5.2vw,60px)", fontWeight: 800, maxWidth: 900, margin: 0, lineHeight: 1.06 }}>
-            {HEADLINE}
+          <div className="tf-eyebrow" style={{ marginBottom: 18 }}>The operational intelligence platform for engineering & manufacturing</div>
+          <h1 className="tf-disp" style={{ fontSize: "clamp(32px,5.2vw,60px)", fontWeight: 800, maxWidth: 940, margin: 0, lineHeight: 1.06 }}>
+            Three intelligence products. One thread across delivery, people and requirements.
           </h1>
-          <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.65, maxWidth: 640, margin: "22px 0 10px" }}>
-            {ONE_LINER}
+          <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.65, maxWidth: 680, margin: "22px 0 10px" }}>
+            Threadwire overlays your existing systems and turns operational data into decisions — what will not ship and its cash impact, who is over-allocated and where capacity is free, and which requirements are unverified.
           </p>
-          <p style={{ color: "var(--faint)", fontSize: 15, lineHeight: 1.6, maxWidth: 640, margin: "0 0 32px" }}>
-            Threadwire connects ERP, work-order and sales-order data into a delivery operating system — exposing blockers, assigning owners and quantifying revenue exposure before a customer escalates.
+          <p style={{ color: "var(--faint)", fontSize: 15, lineHeight: 1.6, maxWidth: 680, margin: "0 0 32px" }}>
+            Run all three together in one account, or license any one on its own. Every product ships with sample data and a page-aware AI assistant for What-If analysis.
           </p>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <button className="tf-btn tf-btn-primary" onClick={() => go("visibility")}>
-              See the delivery calendar <ArrowRight size={16} />
+            <button className="tf-btn tf-btn-primary" onClick={() => { const el = document.getElementById("products"); el ? el.scrollIntoView({ behavior: "smooth" }) : go("visibility"); }}>
+              Explore the products <ArrowRight size={16} />
             </button>
-            <button className="tf-btn" onClick={() => go("blockers")}>Open a blocker</button>
+            <button className="tf-btn" onClick={() => go("workforce")}>Try Workforce on sample data</button>
             <button className="tf-btn tf-btn-ghost" onClick={onContact}>Get in touch</button>
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "54px 22px 0" }}>
+      {/* THREE PRODUCTS */}
+      <div id="products" style={{ maxWidth: 1180, margin: "0 auto", padding: "54px 22px 0" }}>
+        <div className="tf-eyebrow" style={{ marginBottom: 8 }}>The platform</div>
+        <h2 className="tf-disp" style={{ fontSize: 30, fontWeight: 800, margin: "0 0 6px" }}>Three products that share one operational thread</h2>
+        <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 26px", maxWidth: 720 }}>
+          Buy the whole platform for one connected view, or license a single product. Each opens on sample data — no login required.
+        </p>
+
+        <div className="tf-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 16, marginBottom: 20 }}>
+          {[
+            {
+              key: "op", icon: Activity, tone: "var(--amber)", name: "Operational Intelligence",
+              tag: "Delivery Tracker",
+              line: "What will not ship — and the cash impact — before the customer does.",
+              points: ["Blocker-aware delivery calendar", "Committed vs at-risk revenue forecast", "Digital thread: work orders, BOM, ECO, POs"],
+              route: "visibility", cta: "Open delivery calendar",
+            },
+            {
+              key: "wf", icon: Users2, tone: "var(--thread)", name: "Workforce Intelligence",
+              tag: "Allocation & Capacity",
+              line: "Who is on what, who is over-allocated, and where capacity is free.",
+              points: ["Allocation vs plan by project", "Per-person utilisation & spare capacity", "Import people, projects & MS Project baselines"],
+              route: "workforce", cta: "Open workforce",
+            },
+            {
+              key: "rq", icon: ClipboardList, tone: "var(--blue)", name: "Requirements Intelligence",
+              tag: "Trace & Coverage",
+              line: "Which requirements are unverified — and what breaks if one changes.",
+              points: ["AI-drafted parent/child requirement trees", "Coverage, conflicts & verification gaps", "Trace to tests, design and change"],
+              route: "requirements", cta: "Open requirements",
+            },
+          ].map((p) => (
+            <div key={p.key} className="tf-tile" style={{ padding: 22, display: "flex", flexDirection: "column" }}>
+              <div className="tf-tile-glow" style={{ background: p.tone }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: "var(--bg2)", border: `1px solid ${p.tone}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <p.icon size={23} color={p.tone} />
+                </div>
+                <div>
+                  <div className="tf-mono" style={{ fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: p.tone }}>{p.tag}</div>
+                  <div className="tf-disp" style={{ fontSize: 19, fontWeight: 800 }}>{p.name}</div>
+                </div>
+              </div>
+              <p style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.5, margin: "0 0 14px", fontWeight: 500 }}>{p.line}</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+                {p.points.map((pt) => (
+                  <div key={pt} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: "var(--muted)", lineHeight: 1.4 }}>
+                    <CheckCircle2 size={14} color={p.tone} style={{ flexShrink: 0, marginTop: 1 }} /> {pt}
+                  </div>
+                ))}
+              </div>
+              <button className="tf-btn tf-btn-primary tf-tile-arrow" style={{ marginTop: "auto", justifyContent: "center" }} onClick={() => go(p.route)}>
+                {p.cta} <ArrowRight size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* bundle / separate */}
+        <div className="tf-panel" style={{ padding: "18px 22px", marginBottom: 48, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", background: "linear-gradient(90deg,rgba(42,70,196,.05),rgba(62,111,224,.03))" }}>
+          <Boxes size={18} color="var(--amber)" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>One account, or three separate licences</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)" }}>Bundle all three for a connected thread — a delivery blocker can point straight at the workforce gap and the requirement behind it — or run a single product standalone and add the others later.</div>
+          </div>
+          <button className="tf-btn" onClick={onContact} style={{ flexShrink: 0 }}>Discuss licensing <ArrowRight size={15} /></button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 22px 0" }}>
 
         {/* ERP OVERLAY BANNER */}
         <div className="tf-panel" style={{ padding: "18px 22px", marginBottom: 48, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", borderColor: "var(--line2)", background: "linear-gradient(90deg,rgba(72,214,200,.06),rgba(255,138,61,.04))" }}>
@@ -947,7 +1031,7 @@ function Home({ go, onContact }) {
           </div>
           <div style={{ display: "flex", gap: 40, flexWrap: "wrap", flex: 1 }}>
             {[
-              { heading: "Product", links: [["Delivery Calendar", "visibility"], ["Blockers", "blockers"], ["Revenue Forecast", "finance"], ["Digital Thread", "thread"], ["ROI Calculator", "roi"]] },
+              { heading: "Products", links: [["Operational Intelligence", "visibility"], ["Workforce Intelligence", "workforce"], ["Requirements Intelligence", "requirements"], ["Digital Thread", "thread"], ["ROI Calculator", "roi"]] },
               { heading: "Resources", links: [["Case studies", "@case-studies"]] },
               { heading: "Industries", links: [["Precision machining", null], ["Electronics / PCBA", null], ["Medical devices", null], ["Contract manufacturing", null]] },
               { heading: "Contact", links: [["Get in touch", null]] },
@@ -2420,7 +2504,7 @@ function ContactModal({ onClose }) {
 }
 
 /* ----------------------------- ROOT ------------------------------------- */
-const EMPTY_CHATS = { home: { msgs: [], hist: [] }, quotes: { msgs: [], hist: [] }, compliance: { msgs: [], hist: [] }, assets: { msgs: [], hist: [] }, contracts: { msgs: [], hist: [] }, requirements: { msgs: [], hist: [] }, thread: { msgs: [], hist: [] }, roi: { msgs: [], hist: [] }, directspend: { msgs: [], hist: [] }, blockers: { msgs: [], hist: [] }, visibility: { msgs: [], hist: [] }, finance: { msgs: [], hist: [] } };
+const EMPTY_CHATS = { home: { msgs: [], hist: [] }, quotes: { msgs: [], hist: [] }, compliance: { msgs: [], hist: [] }, assets: { msgs: [], hist: [] }, contracts: { msgs: [], hist: [] }, requirements: { msgs: [], hist: [] }, thread: { msgs: [], hist: [] }, roi: { msgs: [], hist: [] }, directspend: { msgs: [], hist: [] }, blockers: { msgs: [], hist: [] }, visibility: { msgs: [], hist: [] }, finance: { msgs: [], hist: [] }, workforce: { msgs: [], hist: [] } };
 
 /* ===================== DIGITAL THREAD — object explorer =================
    Click any part / BOM / work order / ECO / PO / supplier anywhere in the app
@@ -3819,6 +3903,7 @@ export default function App({ user }) {
       {route === "assets" && <AssetsPage tier={tier.assets} setTier={setT("assets")} stage={assetStage} setStage={setAssetStage} />}
       {route === "contracts" && <ContractsPage tier={tier.contracts} setTier={setT("contracts")} />}
       {route === "requirements" && <RequirementsPage tier={tier.requirements} setTier={setT("requirements")} />}
+      {route === "workforce" && <WorkforceIntelligence />}
       {route === "thread" && <ThreadPage tier={tier.thread} setTier={setT("thread")} />}
       {route === "compliance" && user && user.compliance_enabled && <Compliance user={user} embedded />}
       {route === "quotes" && user && user.quote_to_order && <QuotesPage />}
