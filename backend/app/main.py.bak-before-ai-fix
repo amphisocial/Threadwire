@@ -158,7 +158,6 @@ class ChatMessage(BaseModel):
 class ChatIn(BaseModel):
     system: Optional[str] = Field(default=None, max_length=120000)
     messages: list[ChatMessage] = Field(min_length=1, max_length=16)
-    page: Optional[str] = Field(default=None, max_length=40)
 
 
 # --------------------------------------------------------------------------- #
@@ -443,56 +442,12 @@ async def _compliance_context(con, org_id, user_text: str) -> str:
     return "\n".join(parts)
 
 
-PAGE_CONTEXT_TABLES = {
-    "visibility": ("sales_orders", "blockers"),
-    "blockers": ("blockers", "sales_orders", "work_orders"),
-    "finance": ("sales_orders", "blockers"),
-    "thread": ("parts", "boms", "work_orders", "sales_orders", "vendors", "vendor_parts"),
-    "directspend": ("parts", "boms", "vendors", "vendor_parts"),
-    "quotes": ("quotes",),
-    "compliance": ("lots", "inspections", "ncrs", "documents"),
-    "workforce": ("wf_people", "wf_projects", "wf_allocations", "wf_requests", "wf_baselines"),
-}
-
-
-async def _page_db_context(con, org_id, page: Optional[str]) -> str:
-    # Return bounded, organization-scoped rows for the active application page.
-    # Table names come only from PAGE_CONTEXT_TABLES.
-    tables = PAGE_CONTEXT_TABLES.get((page or "").strip().lower(), ())
-    if not tables:
-        return ""
-
-    sections = [
-        "SERVER DATABASE CONTEXT (Postgres, organization-scoped, authoritative). "
-        "This data overrides sample/demo records embedded in the client prompt."
-    ]
-    for table in tables:
-        try:
-            rows = await con.fetch(
-                f"SELECT to_jsonb(t) - 'org_id' - 'content_text' AS payload "
-                f"FROM {table} AS t WHERE org_id=$1 LIMIT 60",
-                org_id,
-            )
-        except Exception:
-            # Optional product tables may not be installed for every tenant.
-            continue
-        if rows:
-            payload = [r["payload"] for r in rows]
-            sections.append(f"{table.upper()} = {json.dumps(payload, default=str)}")
-
-    if len(sections) == 1:
-        return ""
-    return "\n".join(sections)[:60000]
-
-
 @app.post("/api/ai/chat")
 async def ai_chat(body: ChatIn, user: dict = Depends(current_user)):
     messages = [{"role": ("assistant" if m.role == "assistant" else "user"), "content": m.content}
                 for m in body.messages]
     system = body.system or ""
-    question = messages[-1]["content"] if messages else ""
     unlimited = is_unlimited(user)
-
     async with db.pool().acquire() as con:
         if not unlimited:
             used = await usage_today(con, user["user_id"])
@@ -509,32 +464,13 @@ async def ai_chat(body: ChatIn, user: dict = Depends(current_user)):
         except Exception:
             pass
         try:
-            csum = await _compliance_context(con, user["org_id"], question)
+            csum = await _compliance_context(con, user["org_id"], messages[-1]["content"] if messages else "")
             if csum:
                 system = (system + "\n\n" + csum) if system else csum
         except Exception:
             pass
-        try:
-            page_context = await _page_db_context(con, user["org_id"], body.page)
-            if page_context:
-                system = (system + "\n\n" + page_context) if system else page_context
-        except Exception:
-            pass
-
-    text = await ai_complete(system, messages)
-    if not text:
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "AI provider returned no answer. Check AI_MODEL/AI_PROVIDER, "
-                "the provider API key, model name, billing/quota, and threadwire-api logs."
-            ),
-        )
-
-    # Count only successful model responses.
-    async with db.pool().acquire() as con:
         await bump_usage(con, user["user_id"], user["org_id"])
-
+    text = await ai_complete(system, messages)
     return {"text": text}
 
 

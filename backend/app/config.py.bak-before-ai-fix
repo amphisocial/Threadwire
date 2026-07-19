@@ -12,14 +12,7 @@ class Settings:
     anthropic_model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
     anthropic_max_tokens = int(os.environ.get("ANTHROPIC_MAX_TOKENS", "1024"))
 
-    # AI_MODEL is the documented setting. Accept older aliases as well so
-    # existing deployments do not silently fall back to Anthropic.
-    ai_provider = (
-        os.environ.get("AI_MODEL")
-        or os.environ.get("AI_PROVIDER")
-        or os.environ.get("AI_Provider")
-        or "anthropic"
-    ).strip().lower()
+    ai_provider = os.environ.get("AI_MODEL", "anthropic").strip().lower()
     openai_api_key = os.environ.get("OPENAI_API_KEY", "")
     openai_model = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     gemini_api_key = os.environ.get("GEMINI_API_KEY", "")

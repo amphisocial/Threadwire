@@ -109,33 +109,17 @@ const Styles = () => (
 );
 
 /* ----------------------------- helpers ---------------------------------- */
-async function askClaude(system, userText, history = [], page = "home") {
-  const messages = [...(history || []), { role: "user", content: userText }];
-  const res = await fetch("/api/ai/chat", {
-    method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-    body: JSON.stringify({
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
-      system: system || "",
-      page,
-    }),
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const detail = data?.detail;
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail.map((e) => `${(e.loc || []).join(".")}: ${e.msg || JSON.stringify(e)}`).join("; ")
-          : detail
-            ? JSON.stringify(detail)
-            : `AI request failed (${res.status})`;
-    throw new Error(message);
-  }
-  if (!data || typeof data.text !== "string" || !data.text.trim()) {
-    throw new Error("AI provider returned an empty response");
-  }
-  return data.text.trim();
+async function askClaude(system, userText, history = []) {
+  try {
+    const messages = [...(history || []), { role: "user", content: userText }];
+    const res = await fetch("/api/ai/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ messages: messages.map((m) => ({ role: m.role, content: m.content })), system: system || "" }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data && typeof data.text === "string") ? data.text : null;
+  } catch (e) { return null; }
 }
 
 const fmtUSD = (n) =>
@@ -535,7 +519,7 @@ const ASSISTANT = {
 };
 
 /* ---- Docked, minimizable, subject-aware assistant (on every page) ---- */
-function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot, backend }) {
+function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot }) {
   const cfg = ASSISTANT[route] || ASSISTANT.home;
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -612,32 +596,13 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot,
     setInput("");
     update(route, (c) => ({ ...c, msgs: [...c.msgs, { role: "user", text: q }] }));
     setBusy(true);
-    // Signed-in requests receive organization-scoped context from Postgres in
-    // /api/ai/chat. Do not resend the complete browser snapshot: it can exceed
-    // ChatIn.system's validation limit and is not the authoritative data source.
-    const screenCtx = (!backend && route === "thread" && typeof window !== "undefined" && window.__twDigitalThreadCtx && window.__twDigitalThreadCtx.combined) ? "\n\n" + window.__twDigitalThreadCtx.combined : "";
-    const wfCtx = (!backend && route === "workforce" && typeof window !== "undefined" && window.__twWorkforceCtx) ? "\n\n" + window.__twWorkforceCtx : "";
-    const liveGuard = backend
-      ? "\n\nSIGNED-IN MODE: Ignore sample/demo records embedded earlier. "
-        + "Use SERVER DATABASE CONTEXT and LIVE THREADWIRE DATA as authoritative. "
-        + "If the requested information is absent, say it is unavailable; do not invent it."
-      : "";
-    const clientSnapshot = !backend && snapshot ? "\n\n" + snapshot : "";
-    const sys = cfg.system + liveGuard + clientSnapshot + screenCtx + wfCtx;
-    let out;
-    let offline = false;
-    try {
-      out = await askClaude(sys, q, hist, route);
-    } catch (e) {
-      if (backend) {
-        out = `AI assistant unavailable: ${e?.message || "provider error"}`;
-      } else {
-        out = cfg.fallback(q, botCtx);
-        offline = true;
-      }
-    }
+    const screenCtx = (route === "thread" && typeof window !== "undefined" && window.__twDigitalThreadCtx && window.__twDigitalThreadCtx.combined) ? "\n\n" + window.__twDigitalThreadCtx.combined : "";
+    const wfCtx = (route === "workforce" && typeof window !== "undefined" && window.__twWorkforceCtx) ? "\n\n" + window.__twWorkforceCtx : "";
+    const sys = cfg.system + (snapshot ? "\n\n" + snapshot : "") + screenCtx + wfCtx;
+    const reply = await askClaude(sys, q, hist);
+    const out = reply || cfg.fallback(q, botCtx);
     update(route, (c) => ({
-      msgs: [...c.msgs, { role: "bot", text: out, offline }],
+      msgs: [...c.msgs, { role: "bot", text: out, offline: !reply }],
       hist: [...c.hist, { role: "user", content: q }, { role: "assistant", content: out }].slice(-8),
     }));
     setBusy(false);
@@ -729,7 +694,7 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot,
               background: m.role === "user" ? "var(--panel2)" : "var(--bg2)",
               border: "1px solid", borderColor: m.role === "user" ? "var(--line2)" : "var(--line)",
             }}>{m.text}</div>
-            {m.offline && <div className="tf-mono" style={{ fontSize: 9, color: "var(--faint)", marginTop: 3 }}>offline demo reasoning</div>}
+            {m.offline && <div className="tf-mono" style={{ fontSize: 9, color: "var(--faint)", marginTop: 3 }}>offline reasoning over sample data</div>}
           </div>
         ))}
         {busy && <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>thinking<span style={{ animation: "tfPulse 1s infinite" }}>…</span></div>}
@@ -3953,14 +3918,12 @@ export default function App({ user }) {
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "22px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <Workflow size={15} color="var(--amber)" />
           <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>{BRAND} — Manufacturing Delivery Control · {TAGLINE}</span>
-          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)", marginLeft: "auto" }}>
-            {backend ? "Signed in · organization-scoped data" : "Sample data · Connect your ERP to go live"}
-          </span>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)", marginLeft: "auto" }}>Sample data · Connect your ERP to go live</span>
         </div>
       </div>
 
       {/* subject-aware assistant, docked on every page */}
-      <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} snapshot={aiContext} backend={backend} />
+      <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} snapshot={aiContext} />
       {contactOpen && <ContactModal onClose={() => setContactOpen(false)} />}
       <ThreadModal stack={tStack} setStack={setTStack} />
       <ErrorBoundary

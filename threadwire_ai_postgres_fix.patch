@@ -1,0 +1,170 @@
+diff --git a/backend/app/main.py b/backend/app/main.py
+--- a/backend/app/main.py
++++ b/backend/app/main.py
+@@
+ class ChatIn(BaseModel):
+     system: Optional[str] = Field(default=None, max_length=120000)
+     messages: list[ChatMessage] = Field(min_length=1, max_length=16)
++    page: Optional[str] = Field(default=None, max_length=40)
+@@
+ async def _compliance_context(con, org_id, user_text: str) -> str:
+@@
+     return "\n".join(parts)
+
+
++PAGE_CONTEXT_TABLES = {
++    "visibility": ("sales_orders", "blockers"),
++    "blockers": ("blockers", "sales_orders", "work_orders"),
++    "finance": ("sales_orders", "blockers"),
++    "thread": ("parts", "boms", "work_orders", "sales_orders", "vendors", "vendor_parts"),
++    "directspend": ("parts", "boms", "vendors", "vendor_parts"),
++    "quotes": ("quotes",),
++    "compliance": ("lots", "inspections", "ncrs", "documents"),
++    "workforce": ("wf_people", "wf_projects", "wf_allocations", "wf_requests", "wf_baselines"),
++}
++
++
++async def _page_db_context(con, org_id, page: Optional[str]) -> str:
++    """Return bounded, organization-scoped rows for the active application page.
++
++    Table names come only from PAGE_CONTEXT_TABLES; never accept a table name
++    directly from the request.
++    """
++    tables = PAGE_CONTEXT_TABLES.get((page or "").strip().lower(), ())
++    if not tables:
++        return ""
++
++    sections = [
++        "SERVER DATABASE CONTEXT (Postgres, organization-scoped, authoritative). "
++        "This data overrides any sample/demo data embedded in the client prompt."
++    ]
++    for table in tables:
++        try:
++            rows = await con.fetch(
++                f"SELECT to_jsonb(t) - 'org_id' AS payload "
++                f"FROM {table} AS t WHERE org_id=$1 LIMIT 60",
++                org_id,
++            )
++        except Exception:
++            # Some optional modules/tables may not be installed for every tenant.
++            continue
++        if rows:
++            payload = [r["payload"] for r in rows]
++            sections.append(f"{table.upper()} = {json.dumps(payload, default=str)}")
++
++    # Keep the system prompt bounded even when rows contain verbose JSON fields.
++    return "\n".join(sections)[:60000] if len(sections) > 1 else ""
++
++
+ @app.post("/api/ai/chat")
+ async def ai_chat(body: ChatIn, user: dict = Depends(current_user)):
+     messages = [{"role": ("assistant" if m.role == "assistant" else "user"), "content": m.content}
+                 for m in body.messages]
+     system = body.system or ""
++    question = messages[-1]["content"] if messages else ""
+     unlimited = is_unlimited(user)
+     async with db.pool().acquire() as con:
+         if not unlimited:
+             used = await usage_today(con, user["user_id"])
+@@
+         try:
+-            csum = await _compliance_context(con, user["org_id"], messages[-1]["content"] if messages else "")
++            csum = await _compliance_context(con, user["org_id"], question)
+             if csum:
+                 system = (system + "\n\n" + csum) if system else csum
+         except Exception:
+             pass
+-        await bump_usage(con, user["user_id"], user["org_id"])
++        try:
++            page_context = await _page_db_context(con, user["org_id"], body.page)
++            if page_context:
++                system = (system + "\n\n" + page_context) if system else page_context
++        except Exception:
++            pass
++
+     text = await ai_complete(system, messages)
++    if not text:
++        # Do not silently turn provider/config/quota failures into a sample answer.
++        raise HTTPException(
++            status_code=503,
++            detail="AI provider returned no answer. Check AI_MODEL, provider API key, model name, billing/quota, and server logs.",
++        )
++
++    # Count only successful assistant responses.
++    async with db.pool().acquire() as con:
++        await bump_usage(con, user["user_id"], user["org_id"])
+     return {"text": text}
+diff --git a/frontend/src/ThreadWire.jsx b/frontend/src/ThreadWire.jsx
+--- a/frontend/src/ThreadWire.jsx
++++ b/frontend/src/ThreadWire.jsx
+@@
+-async function askClaude(system, userText, history = []) {
+-  try {
+-    const messages = [...(history || []), { role: "user", content: userText }];
+-    const res = await fetch("/api/ai/chat", {
+-      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+-      body: JSON.stringify({ messages: messages.map((m) => ({ role: m.role, content: m.content })), system: system || "" }),
+-    });
+-    if (!res.ok) return null;
+-    const data = await res.json();
+-    return (data && typeof data.text === "string") ? data.text : null;
+-  } catch (e) { return null; }
++async function askClaude(system, userText, history = [], page = "home") {
++  const messages = [...(history || []), { role: "user", content: userText }];
++  const res = await fetch("/api/ai/chat", {
++    method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
++    body: JSON.stringify({
++      messages: messages.map((m) => ({ role: m.role, content: m.content })),
++      system: system || "",
++      page,
++    }),
++  });
++  const data = await res.json().catch(() => ({}));
++  if (!res.ok) throw new Error(data?.detail || `AI request failed (${res.status})`);
++  if (!data || typeof data.text !== "string" || !data.text.trim()) {
++    throw new Error("AI provider returned an empty response");
++  }
++  return data.text.trim();
+ }
+@@
+-function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot }) {
++function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot, backend }) {
+@@
+-    const sys = cfg.system + (snapshot ? "\n\n" + snapshot : "") + screenCtx + wfCtx;
+-    const reply = await askClaude(sys, q, hist);
+-    const out = reply || cfg.fallback(q, botCtx);
++    const liveGuard = backend
++      ? "\n\nSIGNED-IN MODE: Ignore any sample/demo records embedded earlier. "
++        + "Use SERVER DATABASE CONTEXT and LIVE THREADWIRE DATA as authoritative. "
++        + "If the requested data is absent, say it is unavailable; do not invent it."
++      : "";
++    const sys = cfg.system + liveGuard + (snapshot ? "\n\n" + snapshot : "") + screenCtx + wfCtx;
++    let out;
++    let offline = false;
++    try {
++      out = await askClaude(sys, q, hist, route);
++    } catch (e) {
++      if (backend) {
++        out = `AI assistant unavailable: ${e?.message || "provider error"}`;
++      } else {
++        out = cfg.fallback(q, botCtx);
++        offline = true;
++      }
++    }
+     update(route, (c) => ({
+-      msgs: [...c.msgs, { role: "bot", text: out, offline: !reply }],
++      msgs: [...c.msgs, { role: "bot", text: out, offline }],
+       hist: [...c.hist, { role: "user", content: q }, { role: "assistant", content: out }].slice(-8),
+     }));
+@@
+-            {m.offline && <div className="tf-mono" style={{ fontSize: 9, color: "var(--faint)", marginTop: 3 }}>offline reasoning over sample data</div>}
++            {m.offline && <div className="tf-mono" style={{ fontSize: 9, color: "var(--faint)", marginTop: 3 }}>offline demo reasoning</div>}
+@@
+-          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)", marginLeft: "auto" }}>Sample data · Connect your ERP to go live</span>
++          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)", marginLeft: "auto" }}>
++            {backend ? "Signed in · organization-scoped data" : "Sample data · Connect your ERP to go live"}
++          </span>
+@@
+-      <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} snapshot={aiContext} />
++      <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} snapshot={aiContext} backend={backend} />
+
