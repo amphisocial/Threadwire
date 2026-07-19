@@ -738,15 +738,15 @@ function Home({ go, onContact }) {
       {/* HERO */}
       <div className="tf-grid-bg tf-fade" style={{ borderBottom: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "70px 22px 54px" }}>
-          <div className="tf-eyebrow" style={{ marginBottom: 18 }}>Operational intelligence for manufacturing &amp; hardware programs</div>
+          <div className="tf-eyebrow" style={{ marginBottom: 18 }}>ai-powered operational intelligence for engineering &amp; manufacturing</div>
           <h1 className="tf-disp" style={{ fontSize: "clamp(30px,4.8vw,56px)", fontWeight: 800, maxWidth: 960, margin: 0, lineHeight: 1.08 }}>
-            Dashboards tell you what happened. Threadwire tells you what won't ship — and who owns the fix.
+            One AI-powered thread connecting what you design, who builds it, and what ships.
           </h1>
           <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.65, maxWidth: 700, margin: "22px 0 10px" }}>
-            Threadwire overlays the systems you already run — ERP, MES, PLM, project plans — and turns their data into decisions: what's at risk of missing, why, what it costs, and who's accountable for recovery. Three products, one thread from order to part to work order to blocker to owner.
+            Threadwire overlays the systems you already run — ERP, MES, PLM, project plans — and turns their data into decisions: what's at risk of missing, why, what it costs, and who's accountable for recovery. Three products, one thread from order to part to work order to blocker to owner - using AI to predict risk, explain business impact, and recommend action before commitments slip.
           </p>
           <p style={{ color: "var(--faint)", fontSize: 15, lineHeight: 1.6, maxWidth: 700, margin: "0 0 32px" }}>
-            Run all three together and they share one thread, or license any one on its own. Every product opens on sample data with Thread — a page-aware AI assistant that runs the What-If for you.
+            Use all three products together for one connected operational view, or deploy any product independently. Every product includes a page-aware AI assistant for contextual What-If analysis.
           </p>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button className="tf-btn tf-btn-primary" onClick={() => { const el = document.getElementById("products"); el ? el.scrollIntoView({ behavior: "smooth" }) : go("visibility"); }}>
