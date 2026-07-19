@@ -74,6 +74,12 @@ export const updateSettings = (settings) => fetch("/api/admin/settings", { metho
 export const loadSampleDataset = (industry) => fetch("/api/admin/load_sample_dataset", opts("POST", { industry })).then(jsonOrThrow);
 export const sampleCsvUrl = (industry, entity) => "/api/admin/sample_dataset/" + industry + "/" + entity + ".csv";
 
+// Workforce Intelligence (member read; org-admin write). Persists the whole
+// dataset per organization so imports and manual records survive reloads.
+export const wfGetData = () => fetch("/api/workforce/data", { credentials: "include" }).then(jsonOrThrow);
+export const wfPutData = (dataset) => fetch("/api/workforce/data", opts("PUT", dataset)).then(jsonOrThrow);
+export const wfClear = () => fetch("/api/workforce/clear", opts("POST")).then(jsonOrThrow);
+
 // Case Studies (public read; site-admin CMS write)
 export const listCaseStudies = () => fetch("/api/case-studies", { credentials: "include" }).then(jsonOrThrow);
 export const getCaseStudy = (id) => fetch("/api/case-studies/" + id, { credentials: "include" }).then(jsonOrThrow);

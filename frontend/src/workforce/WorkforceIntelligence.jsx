@@ -13,7 +13,9 @@ import {
   pctIn, activeIn, liveMonths, rangeLabel, fteMonths, flatPcts, POLICY_MAX_DEFAULT,
   generateSampleData, emptyData, rollup, loadByMonth, outstandingDemand, requestState, pctOf,
   parseCSV, importUsersCSV, importProjectsCSV, parseMSProjectXML,
+  normalizeStore, fromServer, toServer,
 } from "./data.js";
+import { wfGetData, wfPutData, wfClear } from "../lib/api.js";
 
 /* =========================================================================
    Workforce Intelligence — a Threadwire module.
@@ -105,6 +107,17 @@ function Seniority({ level }) {
   );
 }
 
+/* connection / save status in the header */
+function StatusPill({ status, saveState, previewing, loaded }) {
+  let color = "var(--muted)", text = loaded ? "● Data loaded" : "○ No data";
+  if (previewing) { color = "var(--thread)"; text = "◐ Sample preview (local)"; }
+  else if (status === "connected") {
+    color = saveState === "error" ? "var(--red)" : "var(--green)";
+    text = saveState === "saving" ? "◐ Saving…" : saveState === "error" ? "⚠ Save failed" : "● Saved to workspace";
+  } else if (status === "readonly") { color = "var(--blue)"; text = "● Workspace · read-only"; }
+  return <span className="tf-chip" style={{ color }} title={status === "connected" ? "Changes are saved to your organisation's workspace" : status === "readonly" ? "You can view workspace data; an org admin makes changes" : "A local in-browser session"}>{text}</span>;
+}
+
 /* =========================================================================
    Main module
    ========================================================================= */
@@ -116,60 +129,132 @@ export default function WorkforceIntelligence() {
   const [toast, setToast] = useState(null);
   const flash = (m) => { setToast(m); setTimeout(() => setToast(null), 2800); };
 
-  const loadSample = () => { setData(generateSampleData()); setLoaded(true); flash("Sample demo data loaded — the full tool is live below."); };
-  const clearAll = () => { setData(emptyData()); setLoaded(false); flash("All workforce data cleared."); };
+  /* Persistence. When the visitor is signed in, the module reads and writes
+     the organisation's workforce dataset server-side, so imports and manually
+     created records survive reloads and are shared across the org. Org admins
+     write; other members read. Public visitors (or anyone offline) fall back
+     to a local in-browser session. The sample demo data is always a local
+     preview and is never persisted. */
+  const conn = useRef({ connected: false, canWrite: false });
+  const booted = useRef(false);
+  const skipSave = useRef(false);
+  const preview = useRef(false);
+  const saveTimer = useRef(null);
+  const [status, setStatus] = useState("local");     // local | connected | readonly
+  const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+  const [previewing, setPreviewing] = useState(false);
+  const canWrite = status !== "readonly";
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await wfGetData();
+        if (!alive) return;
+        conn.current = { connected: true, canWrite: !!res.canWrite };
+        const total = (res.people || []).length + (res.projects || []).length +
+          (res.allocations || []).length + (res.requests || []).length;
+        if (total > 0) { skipSave.current = true; setData(fromServer(res)); setLoaded(true); }
+        setStatus(res.canWrite ? "connected" : "readonly");
+      } catch {
+        conn.current = { connected: false, canWrite: false };
+        setStatus("local");
+      } finally { booted.current = true; }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!booted.current) return;
+    if (skipSave.current) { skipSave.current = false; return; }
+    if (preview.current) return;
+    if (!conn.current.connected || !conn.current.canWrite) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSaveState("saving");
+    saveTimer.current = setTimeout(() => {
+      wfPutData(toServer(data))
+        .then(() => setSaveState("saved"))
+        .catch((e) => { setSaveState("error"); flash(e.message || "Couldn't save to the workspace."); });
+    }, 500);
+  }, [data]);
+
+  const loadSample = () => {
+    preview.current = true; setPreviewing(true);
+    setData(generateSampleData()); setLoaded(true);
+    flash("Sample demo data loaded — a local preview, not saved to your workspace.");
+  };
+  const exitPreview = async () => {
+    preview.current = false; setPreviewing(false);
+    if (conn.current.connected) {
+      try {
+        const res = await wfGetData();
+        skipSave.current = true; setData(fromServer(res));
+        setLoaded(((res.people || []).length + (res.projects || []).length) > 0);
+      } catch { setData(emptyData()); setLoaded(false); }
+    } else { setData(emptyData()); setLoaded(false); }
+    flash("Left sample preview.");
+  };
+  const clearAll = async () => {
+    if (preview.current) { preview.current = false; setPreviewing(false); }
+    setData(emptyData()); setLoaded(false);
+    if (conn.current.connected && conn.current.canWrite) {
+      try { await wfClear(); flash("All workforce data cleared from the workspace."); }
+      catch (e) { flash(e.message || "Couldn't clear the workspace."); }
+    } else { flash("All workforce data cleared."); }
+  };
 
   const inProgress = month === CURRENT;
-  const roll = useMemo(() => rollup(data, month), [data, month]);
-  const load = useMemo(() => loadByMonth(data), [data]);
-  const out = useMemo(() => outstandingDemand(data), [data]);
-  const project = (id) => data.projects.find((p) => p.id === id) || {};
+  const store = useMemo(() => normalizeStore(data), [data]);
+  const roll = useMemo(() => rollup(store, month), [store, month]);
+  const load = useMemo(() => loadByMonth(store), [store]);
+  const out = useMemo(() => outstandingDemand(store), [store]);
+  const project = (id) => store.projects.find((p) => p.id === id) || {};
 
   /* month-by-month attainment trend, for the portfolio chart */
   const trend = useMemo(() => DATA_MONTHS.map((k) => {
     let c = 0, a = 0, b = 0;
-    (data.allocations || []).forEach((al) => {
+    (store.allocations || []).forEach((al) => {
       if (!activeIn(al, k)) return;
       c += (pctIn(al, k) / 100) * monthStd(k);
-      a += data.actuals[`${al.personId}|${al.projectId}|${k}`] ?? 0;
+      a += store.actuals[`${al.personId}|${al.projectId}|${k}`] ?? 0;
     });
-    Object.entries(data.budget).forEach(([kk, v]) => { if (kk.endsWith(k)) b += v; });
+    Object.entries(store.budget).forEach(([kk, v]) => { if (kk.endsWith(k)) b += v; });
     return { month: monthLabel(k), toPlan: +pctOf(a, b).toFixed(0), toCommit: +pctOf(a, c).toFixed(0) };
-  }), [data]);
+  }), [store]);
 
   /* publish a live snapshot for the docked assistant's What-If analysis */
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!loaded) { window.__twWorkforceCtx = null; return; }
-    const projLines = data.projects.map((p) => {
+    const projLines = store.projects.map((p) => {
       const r = roll.byProject[p.id] || { budget: 0, committed: 0, actual: 0 };
       const outH = out.byProject[p.id] || 0;
       return `${p.code} ${p.name} [${p.phase}] plan=${Math.round(r.budget)}h allocated=${Math.round(r.committed)}h openRequests=${Math.round(outH)}h actual=${Math.round(r.actual)}h`;
     }).join("\n");
     const discLines = DISCIPLINES.map((d) => {
-      const heads = data.people.filter((e) => e.disc === d.id).length;
+      const heads = store.people.filter((e) => e.disc === d.id).length;
       const loadM = load[month] || {};
-      const people = data.people.filter((e) => e.disc === d.id);
+      const people = store.people.filter((e) => e.disc === d.id);
       const avg = people.length ? people.reduce((t, e) => t + (loadM[e.id] || 0), 0) / people.length : 0;
       const free = people.filter((e) => (loadM[e.id] || 0) < 100).length;
       return `${d.name} (${d.id}): ${heads} people, avg load ${Math.round(avg)}%, ${free} with spare capacity, rate $${d.rate}/h`;
     }).join("\n");
-    const openReq = (data.requests || []).filter((r) => requestState(data, r).status !== "Filled" && r.status !== "Declined");
+    const openReq = (store.requests || []).filter((r) => requestState(store, r).status !== "Filled" && r.status !== "Declined");
     window.__twWorkforceCtx = [
       "LIVE WORKFORCE DATA — authoritative current state for What-If analysis. Period = " + monthLabel(month) + (inProgress ? " (in progress)" : "") + ". Hours are per-month; a person at 100% ≈ " + monthStd(month) + "h.",
-      `TOTALS this period: plan ${Math.round(roll.tot.budget)}h, allocated ${Math.round(roll.tot.committed)}h, actual ${Math.round(roll.tot.actual)}h. Headcount ${data.people.length}. Open/partial requests ${openReq.length}.`,
+      `TOTALS this period: plan ${Math.round(roll.tot.budget)}h, allocated ${Math.round(roll.tot.committed)}h, actual ${Math.round(roll.tot.actual)}h. Headcount ${store.people.length}. Open/partial requests ${openReq.length}.`,
       "PROJECTS:\n" + projLines,
       "DISCIPLINES:\n" + discLines,
-      "OPEN REQUESTS:\n" + openReq.map((r) => `${r.id} ${project(r.projectId).name} · ${discName(r.disc)} · needs ${monthLabel(r.need)} · ${requestState(data, r).status} · ${r.note}`).join("\n"),
+      "OPEN REQUESTS:\n" + openReq.map((r) => `${r.id} ${project(r.projectId).name} · ${discName(r.disc)} · needs ${monthLabel(r.need)} · ${requestState(store, r).status} · ${r.note}`).join("\n"),
     ].join("\n\n");
-  }, [data, month, roll, out, load, loaded, inProgress]);
+  }, [store, month, roll, out, load, loaded, inProgress]);
   useEffect(() => () => { if (typeof window !== "undefined") window.__twWorkforceCtx = null; }, []);
 
   const TABS = [
     { id: "portfolio", label: "Portfolio", icon: LayoutDashboard },
     { id: "projects", label: "Projects", icon: FolderKanban },
     { id: "people", label: "People", icon: Users2 },
-    { id: "requests", label: "Requests", icon: Inbox, badge: (data.requests || []).filter((r) => requestState(data, r).status !== "Filled" && r.status !== "Declined").length },
+    { id: "requests", label: "Requests", icon: Inbox, badge: (store.requests || []).filter((r) => requestState(store, r).status !== "Filled" && r.status !== "Declined").length },
     { id: "admin", label: "Data & Admin", icon: Database },
   ];
 
@@ -188,13 +273,23 @@ export default function WorkforceIntelligence() {
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-          <span className="tf-chip" style={{ color: loaded ? "var(--amber)" : "var(--muted)" }}>{loaded ? "● Data loaded" : "○ No data"}</span>
+          <StatusPill status={status} saveState={saveState} previewing={previewing} loaded={loaded} />
           {!loaded && <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }} onClick={loadSample}><Sparkles size={14} /> Load sample demo data</button>}
         </div>
       </div>
 
+      {previewing && (
+        <div className="tf-fade" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 14px", marginBottom: 14, borderRadius: 10, background: "rgba(62,111,224,.08)", border: "1px solid rgba(62,111,224,.25)" }}>
+          <Sparkles size={15} color="var(--thread)" />
+          <span style={{ fontSize: 13, color: "var(--muted)", flex: 1, minWidth: 220 }}>
+            You're viewing <b style={{ color: "var(--ink)" }}>sample data</b> — a local preview. Nothing here is saved to your workspace.
+          </span>
+          <button className="tf-btn tf-btn-ghost" style={{ padding: "6px 12px" }} onClick={exitPreview}>Exit preview</button>
+        </div>
+      )}
+
       {!loaded ? (
-        <EmptyState onLoad={loadSample} onImport={() => { setLoaded(true); setTab("admin"); }} />
+        <EmptyState onLoad={loadSample} onImport={() => { setLoaded(true); setTab("admin"); }} canWrite={canWrite} />
       ) : (
         <>
           {/* period + tabs */}
@@ -224,11 +319,11 @@ export default function WorkforceIntelligence() {
             )}
           </div>
 
-          {tab === "portfolio" && <Portfolio data={data} roll={roll} out={out} trend={trend} month={month} inProgress={inProgress} project={project} setTab={setTab} />}
-          {tab === "projects" && <Projects data={data} roll={roll} out={out} month={month} inProgress={inProgress} project={project} load={load} />}
-          {tab === "people" && <People data={data} load={load} month={month} />}
-          {tab === "requests" && <Requests data={data} setData={setData} month={month} project={project} load={load} flash={flash} />}
-          {tab === "admin" && <Admin data={data} setData={setData} flash={flash} loadSample={loadSample} clearAll={clearAll} />}
+          {tab === "portfolio" && <Portfolio data={store} roll={roll} out={out} trend={trend} month={month} inProgress={inProgress} project={project} setTab={setTab} />}
+          {tab === "projects" && <Projects data={store} setData={setData} roll={roll} out={out} month={month} inProgress={inProgress} project={project} load={load} flash={flash} canWrite={canWrite} />}
+          {tab === "people" && <People data={store} setData={setData} load={load} month={month} flash={flash} canWrite={canWrite} />}
+          {tab === "requests" && <Requests data={store} setData={setData} month={month} project={project} load={load} flash={flash} canWrite={canWrite} />}
+          {tab === "admin" && <Admin data={store} setData={setData} flash={flash} loadSample={loadSample} clearAll={clearAll} canWrite={canWrite} status={status} previewing={previewing} />}
         </>
       )}
 
@@ -242,7 +337,7 @@ export default function WorkforceIntelligence() {
 }
 
 /* ---------- empty state ------------------------------------------------- */
-function EmptyState({ onLoad, onImport }) {
+function EmptyState({ onLoad, onImport, canWrite }) {
   return (
     <div className="tf-panel tf-fade" style={{ padding: 34, textAlign: "center" }}>
       <div style={{ width: 60, height: 60, borderRadius: 16, background: "var(--panel2)", border: "1px solid var(--line2)", display: "grid", placeItems: "center", margin: "0 auto 16px" }}>
@@ -250,11 +345,13 @@ function EmptyState({ onLoad, onImport }) {
       </div>
       <h2 className="tf-disp" style={{ fontSize: 24, fontWeight: 800, margin: "0 0 8px" }}>Start with your workforce, or a live sample</h2>
       <p style={{ color: "var(--muted)", maxWidth: 520, margin: "0 auto 22px", lineHeight: 1.6 }}>
-        Load a seeded organisation to explore every view, or import your own people, projects and Microsoft Project baselines from the admin panel.
+        {canWrite
+          ? "Load a seeded organisation to explore every view, or import your own people, projects and Microsoft Project baselines from the admin panel."
+          : "No workforce data has been added to your workspace yet. Load a seeded organisation to explore every view — an org admin can import or create the real records."}
       </p>
       <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
         <button className="tf-btn tf-btn-primary" onClick={onLoad}><Sparkles size={15} /> Load sample demo data</button>
-        <button className="tf-btn" onClick={onImport}><Upload size={15} /> Import my data</button>
+        {canWrite && <button className="tf-btn" onClick={onImport}><Upload size={15} /> Import my data</button>}
       </div>
     </div>
   );
@@ -366,8 +463,9 @@ function Portfolio({ data, roll, out, trend, month, inProgress, project, setTab 
 /* =========================================================================
    Projects
    ========================================================================= */
-function Projects({ data, roll, out, month, inProgress, project, load }) {
+function Projects({ data, setData, roll, out, month, inProgress, project, load, flash, canWrite }) {
   const [sel, setSel] = useState(null);
+  const [creating, setCreating] = useState(false);
   const rows = data.projects.map((p) => ({ p, r: roll.byProject[p.id] || { budget: 0, committed: 0, actual: 0 }, o: out.byProject[p.id] || 0 }));
 
   if (sel) {
@@ -416,31 +514,38 @@ function Projects({ data, roll, out, month, inProgress, project, load }) {
   }
 
   return (
-    <div className="tf-panel tf-fade" style={{ padding: 0, overflow: "hidden" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead><tr style={{ textAlign: "left", color: "var(--faint)", fontSize: 11 }}>
-          {["Project", "Phase", "Customer", "Plan → allocated", "Attain", ""].map((h) => <th key={h} style={{ padding: "10px 16px", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em" }}>{h}</th>)}
-        </tr></thead>
-        <tbody>
-          {rows.map(({ p, r, o }) => {
-            const att = pctOf(r.actual, r.budget);
-            return (
-              <tr key={p.id} className="tf-row" style={{ borderTop: "1px solid var(--line)", cursor: "pointer" }} onClick={() => setSel(p.id)}>
-                <td style={{ padding: "11px 16px", fontWeight: 600 }}>{p.name}<div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>{p.code}</div></td>
-                <td style={{ padding: "11px 16px" }}><Chip tone="blue">{p.phase}</Chip></td>
-                <td style={{ padding: "11px 16px", color: "var(--muted)" }}>{p.customer}</td>
-                <td style={{ padding: "11px 16px", minWidth: 200 }}>
-                  <DemandBar budget={r.budget} committed={r.committed} outstanding={o} />
-                  <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{fmtH(r.committed)}{o > 0 ? ` +${fmtH(o)} open` : ""} / {fmtH(r.budget)}</div>
-                </td>
-                <td style={{ padding: "11px 16px" }}><span className="tf-mono" style={{ color: attColor(att, inProgress), fontWeight: 600 }}>{inProgress || !r.budget ? "—" : fmtPct(att)}</span></td>
-                <td style={{ padding: "11px 16px", color: "var(--faint)" }}><ArrowRight size={15} /></td>
-              </tr>
-            );
-          })}
-          {!rows.length && <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--faint)" }}>No projects yet — import a list or load sample data.</td></tr>}
-        </tbody>
-      </table>
+    <div className="tf-fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+        <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>{rows.length} project{rows.length === 1 ? "" : "s"}</div>
+        {canWrite && <button className="tf-btn tf-btn-primary" onClick={() => setCreating(true)}><Plus size={14} /> New project</button>}
+      </div>
+      <div className="tf-panel" style={{ padding: 0, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead><tr style={{ textAlign: "left", color: "var(--faint)", fontSize: 11 }}>
+            {["Project", "Phase", "Customer", "Plan → allocated", "Attain", ""].map((h) => <th key={h} style={{ padding: "10px 16px", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".06em" }}>{h}</th>)}
+          </tr></thead>
+          <tbody>
+            {rows.map(({ p, r, o }) => {
+              const att = pctOf(r.actual, r.budget);
+              return (
+                <tr key={p.id} className="tf-row" style={{ borderTop: "1px solid var(--line)", cursor: "pointer" }} onClick={() => setSel(p.id)}>
+                  <td style={{ padding: "11px 16px", fontWeight: 600 }}>{p.name}<div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>{p.code}</div></td>
+                  <td style={{ padding: "11px 16px" }}><Chip tone="blue">{p.phase}</Chip></td>
+                  <td style={{ padding: "11px 16px", color: "var(--muted)" }}>{p.customer}</td>
+                  <td style={{ padding: "11px 16px", minWidth: 200 }}>
+                    <DemandBar budget={r.budget} committed={r.committed} outstanding={o} />
+                    <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{fmtH(r.committed)}{o > 0 ? ` +${fmtH(o)} open` : ""} / {fmtH(r.budget)}</div>
+                  </td>
+                  <td style={{ padding: "11px 16px" }}><span className="tf-mono" style={{ color: attColor(att, inProgress), fontWeight: 600 }}>{inProgress || !r.budget ? "—" : fmtPct(att)}</span></td>
+                  <td style={{ padding: "11px 16px", color: "var(--faint)" }}><ArrowRight size={15} /></td>
+                </tr>
+              );
+            })}
+            {!rows.length && <tr><td colSpan={6} style={{ padding: 24, textAlign: "center", color: "var(--faint)" }}>No projects yet — add one, import a list, or load sample data.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {creating && <ProjectModal data={data} setData={setData} flash={flash} onClose={() => setCreating(false)} />}
     </div>
   );
 }
@@ -448,10 +553,11 @@ function Projects({ data, roll, out, month, inProgress, project, load }) {
 /* =========================================================================
    People
    ========================================================================= */
-function People({ data, load, month }) {
+function People({ data, setData, load, month, flash, canWrite }) {
   const [q, setQ] = useState("");
   const [disc, setDisc] = useState("all");
   const [avail, setAvail] = useState(false);
+  const [creating, setCreating] = useState(false);
   const loadM = load[month] || {};
   const rows = data.people
     .filter((e) => (disc === "all" || e.disc === disc) && (!q || e.name.toLowerCase().includes(q.toLowerCase())) && (!avail || (loadM[e.id] || 0) < 95))
@@ -471,6 +577,7 @@ function People({ data, load, month }) {
         <button className="tf-btn" onClick={() => setAvail((v) => !v)} style={{ borderColor: avail ? "var(--amber)" : undefined, color: avail ? "var(--amber)" : undefined }}>
           <Gauge size={14} /> Spare capacity only
         </button>
+        {canWrite && <button className="tf-btn tf-btn-primary" onClick={() => setCreating(true)}><Plus size={14} /> New person</button>}
       </div>
       <div className="tf-panel" style={{ padding: 0, overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -502,6 +609,7 @@ function People({ data, load, month }) {
         </table>
       </div>
       {rows.length > 120 && <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 8, textAlign: "center" }}>Showing first 120 of {rows.length}.</div>}
+      {creating && <PersonModal data={data} setData={setData} flash={flash} onClose={() => setCreating(false)} />}
     </div>
   );
 }
@@ -509,7 +617,7 @@ function People({ data, load, month }) {
 /* =========================================================================
    Requests — fill, decline, and create resource asks
    ========================================================================= */
-function Requests({ data, setData, month, project, load, flash }) {
+function Requests({ data, setData, month, project, load, flash, canWrite }) {
   const [fill, setFill] = useState(null);
   const [creating, setCreating] = useState(false);
   const open = (data.requests || []).filter((r) => r.status !== "Declined");
@@ -520,7 +628,7 @@ function Requests({ data, setData, month, project, load, flash }) {
     <div className="tf-fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
         <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>{open.filter((r) => requestState(data, r).status !== "Filled").length} open · {open.filter((r) => requestState(data, r).status === "Filled").length} filled</div>
-        <button className="tf-btn tf-btn-primary" onClick={() => setCreating(true)}><Plus size={14} /> New request</button>
+        {canWrite && <button className="tf-btn tf-btn-primary" onClick={() => setCreating(true)}><Plus size={14} /> New request</button>}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {open.map((r) => {
@@ -544,7 +652,7 @@ function Requests({ data, setData, month, project, load, flash }) {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, justifyContent: "center" }}>
                   <div className="tf-disp" style={{ fontSize: 20, fontWeight: 800, color: tone === "green" ? "var(--green)" : "var(--ink)" }}>{fmtPct(st.pct)}<span style={{ fontSize: 12, color: "var(--faint)" }}> covered</span></div>
-                  {st.status !== "Filled" && (
+                  {st.status !== "Filled" && canWrite && (
                     <div style={{ display: "flex", gap: 8 }}>
                       <button className="tf-btn tf-btn-ghost" style={{ padding: "6px 12px" }} onClick={() => decline(r.id)}>Decline</button>
                       <button className="tf-btn tf-btn-primary" style={{ padding: "6px 12px" }} onClick={() => setFill(r)}>Fill</button>
@@ -660,6 +768,118 @@ function CreateModal({ data, setData, project, flash, onClose }) {
   );
 }
 
+/* Manually add a person, with their engineering role (discipline). */
+function PersonModal({ data, setData, flash, onClose }) {
+  const [name, setName] = useState("");
+  const [disc, setDisc] = useState("SW");
+  const [loc, setLoc] = useState("REM");
+  const [seniority, setSeniority] = useState(2);
+
+  const nextId = () => {
+    let n = data.people.filter((e) => e.disc === disc).length + 1;
+    let id = `${disc}-${String(n).padStart(3, "0")}`;
+    const taken = new Set(data.people.map((e) => e.id));
+    while (taken.has(id)) { n += 1; id = `${disc}-${String(n).padStart(3, "0")}`; }
+    return id;
+  };
+
+  const submit = () => {
+    if (!name.trim()) { flash("Give the person a name."); return; }
+    const person = { id: nextId(), name: name.trim(), disc, loc, seniority: Number(seniority), rate: null, active: true };
+    setData((d) => ({ ...d, people: [...d.people, person] }));
+    flash(`${person.name} added to ${discName(disc)}.`);
+    onClose();
+  };
+
+  return (
+    <Modal title="New person" sub="Add an engineer or team member to the workforce" onClose={onClose}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <label><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Full name</div>
+          <input className="tf-input" value={name} placeholder="e.g. Priya Rao" autoFocus onChange={(e) => setName(e.target.value)} /></label>
+        <div style={{ display: "flex", gap: 10 }}>
+          <label style={{ flex: 1 }}><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Engineering role</div>
+            <select className="tf-input" value={disc} onChange={(e) => setDisc(e.target.value)}>{DISCIPLINES.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></label>
+          <label style={{ flex: 1 }}><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Location</div>
+            <select className="tf-input" value={loc} onChange={(e) => setLoc(e.target.value)}>{LOCATIONS.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>
+        </div>
+        <label><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Seniority</div>
+          <select className="tf-input" value={seniority} onChange={(e) => setSeniority(+e.target.value)}>
+            <option value={1}>Junior</option><option value={2}>Mid</option><option value={3}>Senior</option>
+          </select></label>
+        <button className="tf-btn tf-btn-primary" style={{ justifyContent: "center" }} onClick={submit}>Add person</button>
+      </div>
+    </Modal>
+  );
+}
+
+/* Manually add a project, with the resources it requires per discipline. */
+function ProjectModal({ data, setData, flash, onClose }) {
+  const PHASES = ["Concept", "Design", "Integration", "Qualification", "Production", "Sustaining"];
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [manager, setManager] = useState("");
+  const [lead, setLead] = useState("");
+  const [phase, setPhase] = useState("Design");
+  const [customer, setCustomer] = useState("");
+  const [required, setRequired] = useState({});   // disciplineCode -> FTE
+
+  const setReq = (disc, v) => setRequired((r) => { const n = { ...r }; const f = Math.max(0, +v || 0); if (f) n[disc] = f; else delete n[disc]; return n; });
+
+  const submit = () => {
+    if (!name.trim()) { flash("Give the project a name."); return; }
+    const n = data.projects.length + 1;
+    const id = `P${n}-${Date.now().toString(36).slice(-4)}`;
+    const project = {
+      id, code: code.trim() || `PRJ-${1000 + n}`, name: name.trim(),
+      manager: manager.trim() || "—", lead: lead.trim() || "—", phase,
+      customer: customer.trim() || "—", required,
+    };
+    setData((d) => ({ ...d, projects: [...d.projects, project] }));
+    const reqN = Object.keys(required).length;
+    flash(`${project.name} added${reqN ? ` · required set for ${reqN} discipline${reqN === 1 ? "" : "s"}` : ""}.`);
+    onClose();
+  };
+
+  return (
+    <Modal title="New project" sub="Required resources per discipline become the project's plan" onClose={onClose} wide>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", gap: 10 }}>
+          <label style={{ flex: 2 }}><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Project name</div>
+            <input className="tf-input" value={name} placeholder="e.g. Aurora" autoFocus onChange={(e) => setName(e.target.value)} /></label>
+          <label style={{ flex: 1 }}><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Code</div>
+            <input className="tf-input" value={code} placeholder="PRJ-1001" onChange={(e) => setCode(e.target.value)} /></label>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <label style={{ flex: 1 }}><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Program manager</div>
+            <input className="tf-input" value={manager} onChange={(e) => setManager(e.target.value)} /></label>
+          <label style={{ flex: 1 }}><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Engineering lead</div>
+            <input className="tf-input" value={lead} onChange={(e) => setLead(e.target.value)} /></label>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <label style={{ flex: 1 }}><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Phase</div>
+            <select className="tf-input" value={phase} onChange={(e) => setPhase(e.target.value)}>{PHASES.map((p) => <option key={p} value={p}>{p}</option>)}</select></label>
+          <label style={{ flex: 1 }}><div className="tf-eyebrow" style={{ marginBottom: 5 }}>Customer</div>
+            <input className="tf-input" value={customer} onChange={(e) => setCustomer(e.target.value)} /></label>
+        </div>
+        <div>
+          <div className="tf-eyebrow" style={{ marginBottom: 6 }}>Required resources — FTE per discipline</div>
+          <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginBottom: 8 }}>1.0 FTE ≈ one full-time person (≈{monthStd(CURRENT)}h/month). This sets the monthly plan the demand bars measure against.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 8 }}>
+            {DISCIPLINES.map((d) => (
+              <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--line)", borderRadius: 9, padding: "7px 10px" }}>
+                <span style={{ flex: 1, fontSize: 12.5 }}>{d.name} <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{d.id}</span></span>
+                <input className="tf-input" type="number" min={0} step={0.5} value={required[d.id] ?? ""} placeholder="0"
+                  style={{ width: 62, padding: "5px 7px", textAlign: "right" }} onChange={(e) => setReq(d.id, e.target.value)} />
+              </div>
+            ))}
+          </div>
+        </div>
+        <button className="tf-btn tf-btn-primary" style={{ justifyContent: "center" }} onClick={submit}>Add project</button>
+      </div>
+    </Modal>
+  );
+}
+
 /* =========================================================================
    Data & Admin — CSV users, CSV projects, MS Project XML baselines, sample
    ========================================================================= */
@@ -689,7 +909,7 @@ function ImportCard({ icon: Icon, title, desc, accept, hint, onFile, count }) {
   );
 }
 
-function Admin({ data, setData, flash, loadSample, clearAll }) {
+function Admin({ data, setData, flash, loadSample, clearAll, canWrite, status, previewing }) {
   const baselineCount = Object.keys(data.baselines || {}).length;
 
   const onUsers = (text) => {
@@ -734,20 +954,29 @@ function Admin({ data, setData, flash, loadSample, clearAll }) {
         <button className="tf-btn tf-btn-primary" onClick={loadSample}><Sparkles size={14} /> Load sample data</button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14, marginBottom: 16 }}>
-        <ImportCard icon={Users2} title="Import people" count={data.people.length || null}
-          desc="A CSV of your workforce. Each person becomes available to allocate to projects and requests."
-          hint={"CSV columns (header row):\nname, discipline, location, seniority\n\ne.g.  Priya Rao, Software, Austin, Senior"}
-          accept=".csv,text/csv" onFile={onUsers} />
-        <ImportCard icon={FolderKanban} title="Import projects" count={data.projects.length || null}
-          desc="A CSV of the projects people are allocated against, with manager, lead and phase."
-          hint={"CSV columns (header row):\ncode, name, manager, lead, phase, customer"}
-          accept=".csv,text/csv" onFile={onProjects} />
-        <ImportCard icon={FileSpreadsheet} title="Import project baseline" count={baselineCount || null}
-          desc="A Microsoft Project export (.xml / MSPDI). Task work is rolled into a monthly plan that becomes the budget track on each demand bar."
-          hint={"Microsoft Project → File → Save As → XML (*.xml)\nMatched to a project by name (created if new)."}
-          accept=".xml,application/xml,text/xml" onFile={onBaseline} />
-      </div>
+      {!canWrite && (
+        <div className="tf-panel" style={{ padding: 16, marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
+          <AlertTriangle size={16} color="var(--blue)" />
+          <div style={{ fontSize: 13, color: "var(--muted)" }}>You have read-only access to this workspace. Importing and creating records is done by an org admin. You can still load the sample data above as a local preview.</div>
+        </div>
+      )}
+
+      {canWrite && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14, marginBottom: 16 }}>
+          <ImportCard icon={Users2} title="Import people" count={data.people.length || null}
+            desc="A CSV of your workforce. Each person becomes available to allocate to projects and requests."
+            hint={"CSV columns (header row):\nname, discipline, location, seniority\n\ne.g.  Priya Rao, Software, Austin, Senior"}
+            accept=".csv,text/csv" onFile={onUsers} />
+          <ImportCard icon={FolderKanban} title="Import projects" count={data.projects.length || null}
+            desc="A CSV of the projects people are allocated against, with manager, lead and phase."
+            hint={"CSV columns (header row):\ncode, name, manager, lead, phase, customer"}
+            accept=".csv,text/csv" onFile={onProjects} />
+          <ImportCard icon={FileSpreadsheet} title="Import project baseline" count={baselineCount || null}
+            desc="A Microsoft Project export (.xml / MSPDI). Task work is rolled into a monthly plan that becomes the budget track on each demand bar."
+            hint={"Microsoft Project → File → Save As → XML (*.xml)\nMatched to a project by name (created if new)."}
+            accept=".xml,application/xml,text/xml" onFile={onBaseline} />
+        </div>
+      )}
 
       <div className="tf-panel" style={{ padding: 18 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
@@ -757,12 +986,20 @@ function Admin({ data, setData, flash, loadSample, clearAll }) {
               {data.people.length} people · {data.projects.length} projects · {data.allocations.length} allocations · {baselineCount} baselines · {(data.requests || []).length} requests
             </div>
           </div>
-          <button className="tf-btn tf-btn-ghost" style={{ color: "var(--red)", borderColor: "var(--line2)" }} onClick={clearAll}><Trash2 size={14} /> Clear all data</button>
+          {canWrite && <button className="tf-btn tf-btn-ghost" style={{ color: "var(--red)", borderColor: "var(--line2)" }} onClick={clearAll}><Trash2 size={14} /> Clear all data</button>}
         </div>
       </div>
 
       <div style={{ marginTop: 16, padding: 14, border: "1px dashed var(--line2)", borderRadius: 10, fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6 }}>
-        <b style={{ color: "var(--ink)" }}>Connected tier.</b> On a licensed workspace these imports run server-side with scheduled syncs from your HRIS, PSA and Microsoft Project Server, and allocations write back with an audit trail. In this preview everything stays in your browser session.
+        {status === "local" ? (
+          <><b style={{ color: "var(--ink)" }}>Local session.</b> You're not signed in, so imports and records stay in this browser. Sign in to a workspace and an org admin's imports and edits are saved to your organisation's database and shared with the team.</>
+        ) : previewing ? (
+          <><b style={{ color: "var(--ink)" }}>Sample preview.</b> These sample records are a local preview and are not written to your workspace. Exit the preview to return to your saved data; import a CSV or create records to populate the workspace for real.</>
+        ) : status === "readonly" ? (
+          <><b style={{ color: "var(--ink)" }}>Connected workspace.</b> You're viewing your organisation's saved workforce data. Changes are made by an org admin and are shared across the team.</>
+        ) : (
+          <><b style={{ color: "var(--ink)" }}>Connected workspace.</b> Imports and records you create here are saved to your organisation's database and shared with the team; every change is logged. On the full tier these imports also run on scheduled syncs from your HRIS, PSA and Microsoft Project Server.</>
+        )}
       </div>
     </div>
   );

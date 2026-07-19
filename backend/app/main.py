@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
-from . import agent, billing, case_studies, connectors_rest, db, emailer, importer, mfa, storage
+from . import agent, billing, case_studies, connectors_rest, db, emailer, importer, mfa, storage, workforce
 from .ai import ai_complete
 from .config import settings
 from .crypto import decrypt_bytes, encrypt_str
@@ -35,6 +35,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="ThreadWire API", lifespan=lifespan)
 app.include_router(case_studies.router)  # /api/case-studies (public read, site-admin write)
+app.include_router(workforce.router)     # /api/workforce (member read, org-admin write)
 
 
 # --------------------------------------------------------------------------- #
@@ -90,6 +91,9 @@ async def current_user(request: Request) -> dict:
     if row["mfa_enabled"] and not row["mfa_passed"]:
         raise HTTPException(401, "MFA required")
     return dict(row)
+
+
+workforce.wire_auth(current_user)  # give the workforce router the auth dependency
 
 
 def user_public(row) -> dict:

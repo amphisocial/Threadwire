@@ -271,6 +271,82 @@ export function emptyData() {
   return { projects: [], people: [], personById: {}, allocations: [], budget: {}, baselines: {}, actuals: {}, requests: [] };
 }
 
+/* -------------------------------------------------------------------------
+   Normalisation. personById is always rebuilt from people (authoritative).
+   The plan/budget track is derived from each project's per-discipline
+   `required` resources (FTE × month standard hours) for projects that don't
+   have an imported baseline; a project with a baseline uses that instead.
+   Any budget already present in the store (sample data, or baseline PM
+   buckets) wins on a per-key basis, so nothing is double-counted.
+   ------------------------------------------------------------------------- */
+export function deriveBudgetFromRequired(projects = [], baselines = {}) {
+  const budget = {};
+  projects.forEach((p) => {
+    if (baselines[p.id]) return;           // baseline is this project's plan
+    const req = p.required || {};
+    Object.entries(req).forEach(([disc, fte]) => {
+      const f = Number(fte) || 0;
+      if (f <= 0) return;
+      MONTHS.forEach((m) => { budget[`${p.id}|${disc}|${m.key}`] = Math.round(f * m.std); });
+    });
+  });
+  return budget;
+}
+
+export function normalizeStore(data) {
+  const people = data.people || [];
+  const projects = data.projects || [];
+  const baselines = data.baselines || {};
+  const personById = Object.fromEntries(people.map((e) => [e.id, e]));
+  const budget = { ...deriveBudgetFromRequired(projects, baselines), ...(data.budget || {}) };
+  return {
+    projects, people, personById,
+    allocations: data.allocations || [],
+    requests: data.requests || [],
+    baselines,
+    budget,
+    actuals: data.actuals || {},
+  };
+}
+
+/* Server payload (GET /api/workforce/data) -> in-browser store shape. */
+export function fromServer(payload) {
+  return normalizeStore({
+    people: payload.people || [],
+    projects: payload.projects || [],
+    allocations: payload.allocations || [],
+    requests: payload.requests || [],
+    baselines: payload.baselines || {},
+    budget: {},      // derived from required / baselines
+    actuals: {},     // populated by a timekeeping feed on the connected tier
+  });
+}
+
+/* In-browser store -> server payload (PUT /api/workforce/data). Only the
+   durable entities are sent; personById and budget are derived on read. */
+export function toServer(data) {
+  return {
+    people: (data.people || []).map((p) => ({
+      id: p.id, name: p.name, disc: p.disc || "SW", loc: p.loc || "REM",
+      seniority: Number(p.seniority) || 2, rate: p.rate ?? null, active: p.active !== false,
+    })),
+    projects: (data.projects || []).map((p) => ({
+      id: p.id, code: p.code || "", name: p.name, manager: p.manager || "",
+      lead: p.lead || "", phase: p.phase || "", customer: p.customer || "",
+      required: p.required || {},
+    })),
+    allocations: (data.allocations || []).map((a) => ({
+      id: a.id, personId: a.personId, projectId: a.projectId, pcts: a.pcts || {}, source: a.source || "",
+    })),
+    requests: (data.requests || []).map((r) => ({
+      id: r.id, projectId: r.projectId, disc: r.disc || "SW", ask: r.ask || {},
+      seniority: Number(r.seniority) || 2, need: r.need || "", note: r.note || "", status: r.status || "Open",
+    })),
+    baselines: Object.fromEntries(
+      Object.entries(data.baselines || {}).map(([pid, b]) => [pid, { source: b.source || "", planned: b.planned || {} }])),
+  };
+}
+
 /* =========================================================================
    Roll-up: everything a view reads for a given month, computed from a store
    ========================================================================= */

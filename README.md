@@ -24,9 +24,23 @@ contextual **What-If** analysis.
 - `frontend/src/workforce/WorkforceIntelligence.jsx` — the module UI
   (Portfolio · Projects · People · Requests · Data & Admin), built on
   Threadwire's design tokens.
-- It runs entirely in the browser session (no new backend endpoints or DB
-  migrations). Use **Load sample demo data** or the **Data & Admin** tab to
-  import your own. Import templates live in `samples/workforce/`.
+- **Persistence.** When a visitor is signed in, the module reads and writes the
+  organisation's dataset server-side, so CSV imports and manually created
+  people (with engineering roles) and projects (with required resources per
+  discipline) survive reloads and are shared across the org. Org admins write;
+  other members read. Public/anonymous visitors fall back to a local in-browser
+  session, and the **Load sample demo data** option is always a local preview
+  that is never persisted.
+  - Backend: `backend/app/workforce.py` — `GET/PUT /api/workforce/data`,
+    `POST /api/workforce/clear` (member read, org-admin write), wired in
+    `main.py`.
+  - Schema: `db/migrations/016_workforce.sql` (`wf_people`, `wf_projects` with a
+    per-discipline `required` map, `wf_allocations`, `wf_requests`,
+    `wf_baselines`), applied idempotently by `redeploy.sh`.
+  - The plan/budget track a project is measured against is derived from its
+    `required` resources per discipline (or an imported Microsoft Project
+    baseline when present).
+  - Import templates live in `samples/workforce/`.
 - The module publishes a live snapshot to `window.__twWorkforceCtx`, which the
   docked assistant appends to its prompt on the Workforce page so What-If
   questions reason over real numbers.
