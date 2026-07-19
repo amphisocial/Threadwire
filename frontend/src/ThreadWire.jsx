@@ -259,7 +259,7 @@ function TopNav({ route, go, tier, onContact, loggedIn, user }) {
        ["workforce", "Workforce"], ["requirements", "Requirements"], ["workbench", "AI Workbench"],
        ...(user?.compliance_enabled ? [["compliance", "Compliance"]] : []),
        ...(user?.quote_to_order ? [["quotes", "Quote-to-Order"]] : [])]
-    : [["home", "Home"], ["visibility", "Operational Intel"], ["workforce", "Workforce"], ["requirements", "Requirements"], ["roi", "ROI"]];
+    : [["home", "Home"], ["visibility", "Delivery"], ["workforce", "Workforce"], ["requirements", "Requirements"], ["roi", "ROI"]];
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(255,255,255,.82)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "14px 22px", display: "flex", alignItems: "center", gap: 20 }}>
@@ -726,37 +726,6 @@ function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot 
 
 /* ----------------------------- HOME ------------------------------------- */
 function Home({ go, onContact }) {
-  const [picked, setPicked] = useState([]);
-  const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
-
-  const PROBLEMS = [
-    { id: "late-discovery", icon: AlertTriangle, tone: "var(--red)",
-      q: "You discover a promise will be missed the day before — not weeks out, when recovery is still possible.",
-      sTitle: "Blocker-aware delivery calendar with live revenue exposure", route: "visibility",
-      s: "Every sales order is plotted by promise date. Open blockers surface a red band — with the dollar exposure, the assigned owner and the revised date — while recovery is still possible." },
-    { id: "blockers", icon: ClipboardList, tone: "var(--amber)",
-      q: "Your weekly delivery meeting runs in Excel. A planner spends hours building the slide. The conversation is about the slide, not the plan.",
-      sTitle: "Run the delivery meeting from Threadwire — not a spreadsheet", route: "blockers",
-      s: "Blockers are tied to their work order, parts and impacted sales-order lines. Each carries an owner, an action and a revised promise date. The meeting starts with a ranked list of what to fix — sorted by revenue at risk." },
-    { id: "finance", icon: DollarSign, tone: "var(--green)",
-      q: "Finance asks for committed vs at-risk shipment value. You give them a number. You're not certain it's right.",
-      sTitle: "Committed vs blocked revenue — a forecast operations and finance can share", route: "finance",
-      s: "Threadwire separates committed (no open blocker) from at-risk (blocked) shipment value by quarter and month, recomputed live as blockers open and close. The formulas are visible. The data is sourced." },
-    { id: "shortage", icon: PackageSearch, tone: "var(--thread)",
-      q: "A part shortage shuts down a line. Nobody knew the PO was delayed until the kit was pulled.",
-      sTitle: "Parts, work orders and sales orders — connected before it's too late", route: "thread",
-      s: "On-hand is netted against work-order demand across the BOM. A delayed PO flags the exact work orders and sales-order lines at risk — early enough to expedite or re-source." },
-    { id: "erp-gap", icon: Database, tone: "var(--blue)",
-      q: "Your ERP has the data. Your planners still use spreadsheets for the delivery meeting. That gap is where promises get missed.",
-      sTitle: "Overlay your ERP without replacing it", route: "thread",
-      s: "Threadwire ingests from Odoo, MRPeasy, JobBOSS, Sage, legacy SQL and Excel exports. A data-health score flags freshness and mapping gaps on every view." },
-    { id: "ai", icon: Bot, tone: "var(--yellow)",
-      q: "Someone asks: 'What are the top orders at risk this quarter and why?' It takes several reports and phone calls to answer.",
-      sTitle: "AI that answers operational questions — with source evidence", route: "blockers",
-      s: "Ask the AI on any page about revenue exposure, blocker owners or at-risk orders. Every answer cites the sales order, blocker and date behind it." },
-  ];
-  const chosen = PROBLEMS.filter((p) => picked.includes(p.id));
-
   const TIERS = [
     { key: "diagnostic", label: "Revenue at Risk\nDiagnostic", price: "$2,500", period: "one-time", note: "Credited toward pilot", included: ["ERP/CSV data extracts", "Exposure map — committed vs blocked", "Data-health score", "Top blocker list", "Pilot design session"], highlight: false, cta: "Request a diagnostic" },
     { key: "core", label: "Threadwire Core", price: "$24,000", period: "/ year", note: "+ onboarding fee", included: ["Single site", "Broad viewer access", "CSV / SFTP integration", "Delivery calendar & blocker workspace", "Standard dashboards"], highlight: false, cta: "Get in touch" },
@@ -769,24 +738,59 @@ function Home({ go, onContact }) {
       {/* HERO */}
       <div className="tf-grid-bg tf-fade" style={{ borderBottom: "1px solid var(--line)" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "70px 22px 54px" }}>
-          <div className="tf-eyebrow" style={{ marginBottom: 18 }}>The operational intelligence platform for engineering & manufacturing</div>
-          <h1 className="tf-disp" style={{ fontSize: "clamp(32px,5.2vw,60px)", fontWeight: 800, maxWidth: 940, margin: 0, lineHeight: 1.06 }}>
-            Three intelligence products. One thread across delivery, people and requirements.
+          <div className="tf-eyebrow" style={{ marginBottom: 18 }}>Operational intelligence for manufacturing &amp; hardware programs</div>
+          <h1 className="tf-disp" style={{ fontSize: "clamp(30px,4.8vw,56px)", fontWeight: 800, maxWidth: 960, margin: 0, lineHeight: 1.08 }}>
+            Dashboards tell you what happened. Threadwire tells you what won't ship — and who owns the fix.
           </h1>
-          <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.65, maxWidth: 680, margin: "22px 0 10px" }}>
-            Threadwire overlays your existing systems and turns operational data into decisions — what will not ship and its cash impact, who is over-allocated and where capacity is free, and which requirements are unverified.
+          <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.65, maxWidth: 700, margin: "22px 0 10px" }}>
+            Threadwire overlays the systems you already run — ERP, MES, PLM, project plans — and turns their data into decisions: what's at risk of missing, why, what it costs, and who's accountable for recovery. Three products, one thread from order to part to work order to blocker to owner.
           </p>
-          <p style={{ color: "var(--faint)", fontSize: 15, lineHeight: 1.6, maxWidth: 680, margin: "0 0 32px" }}>
-            Run all three together in one account, or license any one on its own. Every product ships with sample data and a page-aware AI assistant for What-If analysis.
+          <p style={{ color: "var(--faint)", fontSize: 15, lineHeight: 1.6, maxWidth: 700, margin: "0 0 32px" }}>
+            Run all three together and they share one thread, or license any one on its own. Every product opens on sample data with Thread — a page-aware AI assistant that runs the What-If for you.
           </p>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button className="tf-btn tf-btn-primary" onClick={() => { const el = document.getElementById("products"); el ? el.scrollIntoView({ behavior: "smooth" }) : go("visibility"); }}>
               Explore the products <ArrowRight size={16} />
             </button>
-            <button className="tf-btn" onClick={() => go("workforce")}>Try Workforce on sample data</button>
+            <button className="tf-btn" onClick={() => go("workforce")}>Try it on sample data</button>
             <button className="tf-btn tf-btn-ghost" onClick={onContact}>Get in touch</button>
           </div>
         </div>
+      </div>
+
+      {/* THE GAP + THE LOOP */}
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "56px 22px 0" }}>
+        <div className="tf-eyebrow" style={{ marginBottom: 8 }}>The gap we close</div>
+        <h2 className="tf-disp" style={{ fontSize: 30, fontWeight: 800, margin: "0 0 10px", maxWidth: 820 }}>Systems of record and dashboards — but no closed loop for execution risk and ownership.</h2>
+        <p style={{ color: "var(--muted)", fontSize: 15, lineHeight: 1.65, margin: "0 0 8px", maxWidth: 760 }}>
+          Reports tell you what happened; nobody owns what happens next. That's the white space Threadwire fills. We don't replace your data stack or your ERP — we sit above them and carry the work the last mile: from insight, to a prioritized action, to a named owner. Think Palantir-class execution outcomes, focused on a specific manufacturing problem — without the platform program.
+        </p>
+        <p style={{ color: "var(--faint)", fontSize: 14, lineHeight: 1.6, margin: "0 0 26px", maxWidth: 760 }}>
+          Operational intelligence is a loop, not a dashboard. Most tools stop at <b style={{ color: "var(--muted)" }}>Understand</b>. Threadwire carries it through <b style={{ color: "var(--amber)" }}>Recommend and Act</b> — with accountability.
+        </p>
+
+        <div className="tf-panel" style={{ padding: "20px 22px", marginBottom: 6, display: "flex", gap: 10, alignItems: "stretch", flexWrap: "wrap" }}>
+          {[
+            { n: "Observe", d: "Connect ERP / MES / PLM / order facts" },
+            { n: "Understand", d: "Map entities, blockers & dependencies" },
+            { n: "Predict", d: "Surface delivery & revenue risk" },
+            { n: "Recommend", d: "Prioritize actions and trade-offs", hot: true },
+            { n: "Act", d: "Assign owners, track recovery", hot: true },
+            { n: "Learn", d: "Improve playbooks & rules" },
+          ].map((s, i, arr) => (
+            <React.Fragment key={s.n}>
+              <div style={{ flex: "1 1 150px", minWidth: 140 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+                  <span className="tf-mono" style={{ width: 20, height: 20, borderRadius: 99, display: "grid", placeItems: "center", fontSize: 11, background: s.hot ? "var(--amber)" : "var(--bg2)", color: s.hot ? "#fff" : "var(--faint)", border: s.hot ? "none" : "1px solid var(--line2)", flexShrink: 0 }}>{i + 1}</span>
+                  <span className="tf-disp" style={{ fontSize: 14.5, fontWeight: 800, color: s.hot ? "var(--amber)" : "var(--ink)" }}>{s.n}</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.45 }}>{s.d}</div>
+              </div>
+              {i < arr.length - 1 && <ArrowRight size={15} color="var(--line2)" style={{ alignSelf: "center", flexShrink: 0 }} />}
+            </React.Fragment>
+          ))}
+        </div>
+        <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginBottom: 4 }}>The loop closes only when insight becomes ownership and action.</div>
       </div>
 
       {/* THREE PRODUCTS */}
@@ -800,24 +804,27 @@ function Home({ go, onContact }) {
         <div className="tf-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 16, marginBottom: 20 }}>
           {[
             {
-              key: "op", icon: Activity, tone: "var(--amber)", name: "Operational Intelligence",
-              tag: "Delivery Tracker",
-              line: "What will not ship — and the cash impact — before the customer does.",
-              points: ["Blocker-aware delivery calendar", "Committed vs at-risk revenue forecast", "Digital thread: work orders, BOM, ECO, POs"],
+              key: "op", icon: Activity, tone: "var(--amber)", name: "Delivery Intelligence",
+              tag: "Delivery Risk & Cash",
+              line: "Will it ship — and what does it cost if it doesn't?",
+              points: ["Blocker-aware delivery calendar", "Committed vs at-risk revenue, live", "Root cause and the owner on the hook"],
+              q: "What won't ship this quarter, and what's the cash impact?",
               route: "visibility", cta: "Open delivery calendar",
             },
             {
               key: "wf", icon: Users2, tone: "var(--thread)", name: "Workforce Intelligence",
               tag: "Allocation & Capacity",
-              line: "Who is on what, who is over-allocated, and where capacity is free.",
+              line: "Who's on what, and where the plan won't hold.",
               points: ["Allocation vs plan by project", "Per-person utilisation & spare capacity", "Import people, projects & MS Project baselines"],
+              q: "Do we have the people to hit the plan?",
               route: "workforce", cta: "Open workforce",
             },
             {
               key: "rq", icon: ClipboardList, tone: "var(--blue)", name: "Requirements Intelligence",
-              tag: "Trace & Coverage",
-              line: "Which requirements are unverified — and what breaks if one changes.",
+              tag: "Trace & Verification",
+              line: "What's specified, and what's still unverified.",
               points: ["AI-drafted parent/child requirement trees", "Coverage, conflicts & verification gaps", "Trace to tests, design and change"],
+              q: "Which requirements aren't verified yet — and what's blocking them?",
               route: "requirements", cta: "Open requirements",
             },
           ].map((p) => (
@@ -833,12 +840,16 @@ function Home({ go, onContact }) {
                 </div>
               </div>
               <p style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.5, margin: "0 0 14px", fontWeight: 500 }}>{p.line}</p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
                 {p.points.map((pt) => (
                   <div key={pt} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: "var(--muted)", lineHeight: 1.4 }}>
                     <CheckCircle2 size={14} color={p.tone} style={{ flexShrink: 0, marginTop: 1 }} /> {pt}
                   </div>
                 ))}
+              </div>
+              <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginBottom: 16 }}>
+                <div className="tf-mono" style={{ fontSize: 9.5, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 4 }}>Answers</div>
+                <div style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.45, fontStyle: "italic" }}>"{p.q}"</div>
               </div>
               <button className="tf-btn tf-btn-primary tf-tile-arrow" style={{ marginTop: "auto", justifyContent: "center" }} onClick={() => go(p.route)}>
                 {p.cta} <ArrowRight size={15} />
@@ -847,12 +858,45 @@ function Home({ go, onContact }) {
           ))}
         </div>
 
+        {/* THREAD — THE WHAT-IF ASSISTANT */}
+        <div className="tf-panel" style={{ padding: 0, marginBottom: 20, overflow: "hidden", border: "1px solid var(--line2)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(280px,1fr) minmax(280px,1.05fr)", gap: 0 }}>
+            <div style={{ padding: "26px 26px 24px", background: "linear-gradient(135deg,rgba(42,70,196,.06),rgba(62,111,224,.02))" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 11, background: "var(--bg2)", border: "1px solid var(--thread)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <Sparkles size={20} color="var(--thread)" />
+                </div>
+                <div className="tf-mono" style={{ fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--thread)" }}>The AI, built in</div>
+              </div>
+              <h2 className="tf-disp" style={{ fontSize: 24, fontWeight: 800, margin: "0 0 10px", lineHeight: 1.15 }}>Meet Thread — the What-If assistant in every product</h2>
+              <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6, margin: "0 0 12px" }}>
+                Thread is page-aware. It sees the same live data you do and reasons over it — your actual allocations, commitments, blockers and requirements — not a generic chatbot bolted on top. Ask a what-if and it makes the trade-offs explicit.
+              </p>
+              <p className="tf-mono" style={{ color: "var(--faint)", fontSize: 11.5, lineHeight: 1.55, margin: 0 }}>
+                Grounded in your data · every answer cites the order, blocker, person or requirement behind it.
+              </p>
+            </div>
+            <div style={{ padding: "24px 26px", display: "flex", flexDirection: "column", gap: 10, justifyContent: "center" }}>
+              {[
+                "Pull two engineers off Aurora — what slips, and who's now overloaded?",
+                "Push this order two weeks — what's the revenue impact and which commitments move?",
+                "Reassign this blocker — who owns recovery, and does the plan still hold?",
+              ].map((ex) => (
+                <div key={ex} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "11px 13px", borderRadius: 10, background: "var(--bg2)", border: "1px solid var(--line)" }}>
+                  <Sparkles size={14} color="var(--thread)" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <span style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.45 }}>{ex}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* bundle / separate */}
         <div className="tf-panel" style={{ padding: "18px 22px", marginBottom: 48, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", background: "linear-gradient(90deg,rgba(42,70,196,.05),rgba(62,111,224,.03))" }}>
           <Boxes size={18} color="var(--amber)" style={{ flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 280 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>One account, or three separate licences</div>
-            <div style={{ fontSize: 13.5, color: "var(--muted)" }}>Bundle all three for a connected thread — a delivery blocker can point straight at the workforce gap and the requirement behind it — or run a single product standalone and add the others later.</div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>Run them together, or one at a time</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)" }}>Run all three and they share one thread — the same customers, orders, parts, people and commitments — so a delivery risk, a capacity gap and an unverified requirement line up on the same screen. Or license any one on its own and add the others later.</div>
           </div>
           <button className="tf-btn" onClick={onContact} style={{ flexShrink: 0 }}>Discuss licensing <ArrowRight size={15} /></button>
         </div>
@@ -864,8 +908,8 @@ function Home({ go, onContact }) {
         <div className="tf-panel" style={{ padding: "18px 22px", marginBottom: 48, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", borderColor: "var(--line2)", background: "linear-gradient(90deg,rgba(72,214,200,.06),rgba(255,138,61,.04))" }}>
           <Plug size={18} color="var(--thread)" style={{ flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 280 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>Overlays your ERP — no replacement required</div>
-            <div style={{ fontSize: 13.5, color: "var(--muted)" }}>Threadwire ingests from Odoo, MRPeasy, JobBOSS, Sage, Epicor SMB, legacy SQL and Excel. Keep the ERP; add the delivery control layer.</div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>Complements your stack — doesn't replace it</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)" }}>Sit Threadwire above your ERP, MES, PLM or data platform. It ingests from Odoo, MRPeasy, JobBOSS, Sage, Epicor SMB, legacy SQL and Excel — adding the manufacturing operating model and execution workflow, not another platform to migrate to.</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {["Odoo", "MRPeasy", "JobBOSS", "Sage", "Epicor SMB", "Legacy SQL"].map((n) => (
@@ -873,50 +917,6 @@ function Home({ go, onContact }) {
             ))}
           </div>
         </div>
-
-        {/* PROBLEM CHOOSER */}
-        <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Start with your situation</div>
-        <h2 className="tf-disp" style={{ fontSize: 28, fontWeight: 800, margin: "0 0 6px" }}>Which of these sounds like your week?</h2>
-        <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 24px", maxWidth: 680 }}>Select the ones that fit. We'll show the delivery-control capability that addresses each one.</p>
-
-        <div className="tf-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(310px,1fr))", gap: 14, marginBottom: 48 }}>
-          {PROBLEMS.map((p) => {
-            const on = picked.includes(p.id);
-            return (
-              <button key={p.id} onClick={() => toggle(p.id)} className="tf-tile" style={{ textAlign: "left", padding: 18, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", border: on ? `1px solid ${p.tone}` : "1px solid var(--line)", background: on ? "var(--panel2)" : "var(--panel)" }}>
-                <div style={{ width: 40, height: 40, borderRadius: 11, background: "var(--bg2)", border: `1px solid ${on ? p.tone : "var(--line2)"}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                  <p.icon size={20} color={p.tone} />
-                </div>
-                <span style={{ flex: 1, fontSize: 14, color: "var(--ink)", lineHeight: 1.5, fontWeight: 500 }}>{p.q}</span>
-                {on
-                  ? <CheckCircle2 size={20} color={p.tone} style={{ flexShrink: 0, marginTop: 2 }} />
-                  : <span style={{ width: 18, height: 18, borderRadius: 99, border: "2px solid var(--line2)", flexShrink: 0, marginTop: 3 }} />}
-              </button>
-            );
-          })}
-        </div>
-
-        {chosen.length > 0 && (
-          <div className="tf-fade" style={{ marginBottom: 48 }}>
-            <div className="tf-eyebrow" style={{ marginBottom: 14 }}>How Threadwire addresses this</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {chosen.map((p) => (
-                <div key={p.id} className="tf-panel tf-fade" style={{ padding: 18, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--bg2)", border: `1px solid ${p.tone}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                    <p.icon size={22} color={p.tone} />
-                  </div>
-                  <div style={{ flex: "1 1 320px" }}>
-                    <div style={{ fontWeight: 700, fontSize: 16 }}>{p.sTitle}</div>
-                    <p style={{ color: "var(--muted)", fontSize: 13.5, lineHeight: 1.55, margin: "5px 0 0" }}>{p.s}</p>
-                  </div>
-                  <button className="tf-btn tf-btn-primary" onClick={() => go(p.route)} style={{ flexShrink: 0 }}>
-                    Open {{ finance: "Forecast", blockers: "Blockers", visibility: "Delivery calendar", thread: "Digital Thread" }[p.route] || "Digital Thread"} <ArrowRight size={16} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* HOW IT WORKS */}
         <div style={{ marginBottom: 56 }}>
@@ -1031,7 +1031,7 @@ function Home({ go, onContact }) {
           </div>
           <div style={{ display: "flex", gap: 40, flexWrap: "wrap", flex: 1 }}>
             {[
-              { heading: "Products", links: [["Operational Intelligence", "visibility"], ["Workforce Intelligence", "workforce"], ["Requirements Intelligence", "requirements"], ["Digital Thread", "thread"], ["ROI Calculator", "roi"]] },
+              { heading: "Products", links: [["Delivery Intelligence", "visibility"], ["Workforce Intelligence", "workforce"], ["Requirements Intelligence", "requirements"], ["Digital Thread", "thread"], ["ROI Calculator", "roi"]] },
               { heading: "Resources", links: [["Case studies", "@case-studies"]] },
               { heading: "Industries", links: [["Precision machining", null], ["Electronics / PCBA", null], ["Medical devices", null], ["Contract manufacturing", null]] },
               { heading: "Contact", links: [["Get in touch", null]] },
