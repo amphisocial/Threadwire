@@ -32,6 +32,16 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash  text NOT NULL,                       -- argon2id
     role           text NOT NULL DEFAULT 'member'
                        CHECK (role IN ('superadmin','org_admin','member')),
+    is_active      boolean NOT NULL DEFAULT true,
+    license_assigned boolean NOT NULL DEFAULT true,
+    workforce_role text NOT NULL DEFAULT 'viewer'
+                       CHECK (workforce_role IN (
+                           'viewer',
+                           'discipline_manager',
+                           'engineering_project_lead',
+                           'program_manager'
+                       )),
+    workforce_discipline text,
     mfa_secret     bytea,                                -- AES-GCM encrypted TOTP secret
     mfa_enabled    boolean NOT NULL DEFAULT false,
     created_at     timestamptz NOT NULL DEFAULT now()

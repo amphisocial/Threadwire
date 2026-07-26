@@ -18,6 +18,13 @@ from .security import hash_password, verify_password
 
 COOKIE = "tw_session"
 CONNECTOR_TYPES = {"jama", "jira", "doors", "jamf", "intune"}
+WORKFORCE_ROLES = {
+    "viewer",
+    "discipline_manager",
+    "engineering_project_lead",
+    "program_manager",
+}
+WORKFORCE_DISCIPLINES = {"SW", "FW", "EE", "ME", "SE", "TE", "CM", "PM"}
 
 # Starter list of US-registered companies for signup autocomplete.
 try:
@@ -74,6 +81,8 @@ async def load_session(request: Request):
             SELECT s.id AS session_id, s.mfa_passed,
                    u.id AS user_id, u.email, u.full_name, u.role, u.mfa_enabled, u.mfa_secret,
                    u.plan, u.stripe_customer_id,
+                   u.is_active, u.license_assigned,
+                   u.workforce_role, u.workforce_discipline,
                    o.id AS org_id, o.legal_name,
                    o.enterprise, o.stripe_customer_id AS org_stripe_customer_id,
                    o.quote_to_order, o.compliance_enabled
@@ -88,6 +97,10 @@ async def current_user(request: Request) -> dict:
     row = await load_session(request)
     if not row:
         raise HTTPException(401, "Not authenticated")
+    if not row["is_active"]:
+        raise HTTPException(403, "This Threadwire account is disabled")
+    if not row["license_assigned"]:
+        raise HTTPException(403, "No Threadwire license seat is assigned")
     if row["mfa_enabled"] and not row["mfa_passed"]:
         raise HTTPException(401, "MFA required")
     return dict(row)
@@ -97,8 +110,16 @@ workforce.wire_auth(current_user)  # give the workforce router the auth dependen
 
 
 def user_public(row) -> dict:
-    return {"email": row["email"], "full_name": row["full_name"],
-            "role": row["role"], "org": {"legal_name": row["legal_name"]}}
+    return {
+        "email": row["email"],
+        "full_name": row["full_name"],
+        "role": row["role"],
+        "is_active": bool(row["is_active"]),
+        "license_assigned": bool(row["license_assigned"]),
+        "workforce_role": row["workforce_role"] or "viewer",
+        "workforce_discipline": row["workforce_discipline"],
+        "org": {"legal_name": row["legal_name"]},
+    }
 
 
 def is_unlimited(user) -> bool:
@@ -279,11 +300,18 @@ async def mfa_verify(body: CodeIn, request: Request):
 async def login(body: LoginIn, resp: Response):
     async with db.pool().acquire() as con:
         row = await con.fetchrow(
-            "SELECT u.id, u.email, u.full_name, u.role, u.password_hash, u.mfa_enabled, o.legal_name "
-            "FROM users u JOIN organizations o ON o.id = u.org_id WHERE lower(u.email) = lower($1)",
+            "SELECT u.id, u.email, u.full_name, u.role, u.password_hash, u.mfa_enabled, "
+            "u.is_active, u.license_assigned, u.workforce_role, u.workforce_discipline, "
+            "o.legal_name "
+            "FROM users u JOIN organizations o ON o.id = u.org_id "
+            "WHERE lower(u.email) = lower($1)",
             body.email)
         if not row or not verify_password(row["password_hash"], body.password):
             raise HTTPException(401, "Invalid email or password")
+        if not row["is_active"]:
+            raise HTTPException(403, "This Threadwire account is disabled")
+        if not row["license_assigned"]:
+            raise HTTPException(403, "No Threadwire license seat is assigned")
         sid = await create_session(con, row["id"], mfa_passed=not row["mfa_enabled"])
 
     set_session_cookie(resp, sid)
@@ -883,39 +911,157 @@ async def admin_usage(user: dict = Depends(current_user)):
     async with db.pool().acquire() as con:
         rows = await con.fetch(
             "SELECT u.id, u.email, u.full_name, u.role, u.plan, u.is_active, "
+            "u.license_assigned, u.workforce_role, u.workforce_discipline, "
             "COALESCE(d.tokens,0) AS tokens_today "
-            "FROM users u LEFT JOIN usage_daily d ON d.user_id = u.id AND d.usage_date = CURRENT_DATE "
-            "WHERE u.org_id = $1 ORDER BY u.full_name NULLS LAST, u.email", user["org_id"])
+            "FROM users u LEFT JOIN usage_daily d "
+            "ON d.user_id = u.id AND d.usage_date = CURRENT_DATE "
+            "WHERE u.org_id = $1 "
+            "ORDER BY u.full_name NULLS LAST, u.email",
+            user["org_id"],
+        )
+        try:
+            workforce_people_count = await con.fetchval(
+                "SELECT count(*) FROM wf_people WHERE org_id=$1",
+                user["org_id"],
+            )
+        except Exception:
+            # Keep User Management usable even before the optional Workforce
+            # migration is installed.
+            workforce_people_count = 0
     ent = bool(user.get("enterprise"))
     members = []
     for r in rows:
         members.append({
-            "id": str(r["id"]), "email": r["email"], "full_name": r["full_name"],
-            "role": r["role"], "is_active": r["is_active"] if r["is_active"] is not None else True,
+            "id": str(r["id"]),
+            "email": r["email"],
+            "full_name": r["full_name"],
+            "role": r["role"],
+            "is_active": bool(r["is_active"]),
+            "license_assigned": bool(r["license_assigned"]),
+            "workforce_role": r["workforce_role"] or "viewer",
+            "workforce_discipline": r["workforce_discipline"],
             "plan": "enterprise" if ent else (r["plan"] or "free"),
             "tokens_today": r["tokens_today"],
-            "unlimited": ent or r["plan"] == "pro",
+            "unlimited": bool(r["license_assigned"]) and (
+                ent or r["plan"] == "pro"
+            ),
         })
-    return {"enterprise": ent, "free_limit": settings.free_daily_tokens, "members": members}
+    return {
+        "enterprise": ent,
+        "free_limit": settings.free_daily_tokens,
+        "members": members,
+        "account_count": len(members),
+        "active_account_count": sum(1 for m in members if m["is_active"]),
+        "licensed_count": sum(1 for m in members if m["license_assigned"]),
+        "workforce_people_count": int(workforce_people_count or 0),
+    }
 
 
 @app.patch("/api/admin/members/{member_id}")
-async def update_member(member_id: str, body: dict, user: dict = Depends(current_user)):
+async def update_member(
+    member_id: str,
+    body: dict,
+    user: dict = Depends(current_user),
+):
     if user["role"] not in ("org_admin", "superadmin"):
         raise HTTPException(403, "Admins only")
-    # Only allow toggling is_active for now
-    if "is_active" not in body:
+
+    allowed = {
+        "is_active",
+        "license_assigned",
+        "workforce_role",
+        "workforce_discipline",
+    }
+    unknown = set(body) - allowed
+    if unknown:
+        raise HTTPException(
+            400,
+            "Unsupported member fields: " + ", ".join(sorted(unknown)),
+        )
+    if not body:
         raise HTTPException(400, "Nothing to update")
+
+    try:
+        member_uuid = uuid.UUID(member_id)
+    except ValueError:
+        raise HTTPException(400, "Invalid member id")
+
     async with db.pool().acquire() as con:
-        row = await con.fetchrow(
-            "SELECT id FROM users WHERE id = $1 AND org_id = $2",
-            member_id, user["org_id"])
-        if not row:
-            raise HTTPException(404, "Member not found")
-        await con.execute(
-            "UPDATE users SET is_active = $1 WHERE id = $2",
-            bool(body["is_active"]), member_id)
-    return {"ok": True}
+        async with con.transaction():
+            target = await con.fetchrow(
+                "SELECT id, role, is_active, license_assigned, "
+                "workforce_role, workforce_discipline "
+                "FROM users WHERE id=$1 AND org_id=$2",
+                member_uuid,
+                user["org_id"],
+            )
+            if not target:
+                raise HTTPException(404, "Member not found")
+
+            is_active = (
+                bool(body["is_active"])
+                if "is_active" in body
+                else bool(target["is_active"])
+            )
+            license_assigned = (
+                bool(body["license_assigned"])
+                if "license_assigned" in body
+                else bool(target["license_assigned"])
+            )
+            workforce_role = (
+                str(body["workforce_role"]).strip().lower()
+                if "workforce_role" in body
+                else (target["workforce_role"] or "viewer")
+            )
+            if workforce_role not in WORKFORCE_ROLES:
+                raise HTTPException(400, "Unknown Workforce role")
+
+            raw_scope = (
+                body.get("workforce_discipline")
+                if "workforce_discipline" in body
+                else target["workforce_discipline"]
+            )
+            workforce_discipline = (
+                str(raw_scope).strip().upper()
+                if raw_scope not in (None, "")
+                else None
+            )
+            if workforce_discipline and workforce_discipline not in WORKFORCE_DISCIPLINES:
+                raise HTTPException(400, "Unknown Workforce discipline")
+            if workforce_role != "discipline_manager":
+                workforce_discipline = None
+
+            protected_admin = target["role"] in ("org_admin", "superadmin")
+            is_self = target["id"] == user["user_id"]
+            if (protected_admin or is_self) and not is_active:
+                raise HTTPException(400, "Administrators cannot disable this account")
+            if (protected_admin or is_self) and not license_assigned:
+                raise HTTPException(400, "Administrators must retain a license seat")
+
+            await con.execute(
+                "UPDATE users SET is_active=$1, license_assigned=$2, "
+                "workforce_role=$3, workforce_discipline=$4 WHERE id=$5",
+                is_active,
+                license_assigned,
+                workforce_role,
+                workforce_discipline,
+                member_uuid,
+            )
+
+            if not is_active or not license_assigned:
+                await con.execute(
+                    "DELETE FROM sessions WHERE user_id=$1",
+                    member_uuid,
+                )
+
+    return {
+        "ok": True,
+        "id": member_id,
+        "is_active": is_active,
+        "license_assigned": license_assigned,
+        "workforce_role": workforce_role,
+        "workforce_discipline": workforce_discipline,
+    }
 
 
 class SourceImportIn(BaseModel):

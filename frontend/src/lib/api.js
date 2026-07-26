@@ -79,6 +79,8 @@ export const sampleCsvUrl = (industry, entity) => "/api/admin/sample_dataset/" +
 export const wfGetData = () => fetch("/api/workforce/data", { credentials: "include" }).then(jsonOrThrow);
 export const wfPutData = (dataset) => fetch("/api/workforce/data", opts("PUT", dataset)).then(jsonOrThrow);
 export const wfClear = () => fetch("/api/workforce/clear", opts("POST")).then(jsonOrThrow);
+export const wfAllocateRequest = (requestId, body) =>
+  fetch("/api/workforce/requests/" + encodeURIComponent(requestId) + "/allocate", opts("POST", body)).then(jsonOrThrow);
 
 // Case Studies (public read; site-admin CMS write)
 export const listCaseStudies = () => fetch("/api/case-studies", { credentials: "include" }).then(jsonOrThrow);
