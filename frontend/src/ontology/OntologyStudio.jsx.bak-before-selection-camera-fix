@@ -60,16 +60,10 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
   const selectRef = useRef(onSelect);
   const moveRef = useRef(onMove);
   const viewApiRef = useRef(null);
-  const selectionApiRef = useRef(null);
-  const selectedKeyRef = useRef(selectedKey);
   const navModeRef = useRef("orbit");
   const [navMode, setNavMode] = useState("orbit");
   useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { moveRef.current = onMove; }, [onMove]);
-  useEffect(() => {
-    selectedKeyRef.current = selectedKey;
-    selectionApiRef.current?.(selectedKey);
-  }, [selectedKey]);
   useEffect(() => {
     navModeRef.current = navMode;
     viewApiRef.current?.setMode?.(navMode);
@@ -121,29 +115,17 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
       group.userData = { kind: "ontology-node", entityKey: entity.entityKey };
       const geom = new THREE.BoxGeometry(3.2, 1.25, 1.85);
       const mat = new THREE.MeshStandardMaterial({ color: entity.color || "#2A46C4", roughness: 0.42, metalness: 0.08 });
-      group.userData.nodeMaterial = mat;
       const mesh = new THREE.Mesh(geom, mat); mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.userData = { kind: "ontology-node", entityKey: entity.entityKey };
       group.add(mesh); disposable.push(geom, mat);
       const spriteMat = new THREE.SpriteMaterial({ map: labelTexture(entity.label, `${entity.count ?? 0} objects · ${entity.sourceKind === "core_table" ? entity.sourceTable : "custom"}`, entity.color), transparent: true, depthTest: false });
       const sprite = new THREE.Sprite(spriteMat); sprite.position.set(0, 1.28, 0); sprite.scale.set(4.5, 1.55, 1); group.add(sprite);
       disposable.push(spriteMat, spriteMat.map);
+      if (entity.entityKey === selectedKey) {
+        mat.emissive = new THREE.Color(0xffffff); mat.emissiveIntensity = 0.16;
+      }
       scene.add(group); nodeGroups.set(entity.entityKey, group);
     });
-
-    const applySelection = (entityKey) => {
-      nodeGroups.forEach((group, key) => {
-        const material = group.userData.nodeMaterial;
-        if (!material) return;
-        const selected = key === entityKey;
-        material.emissive.setHex(selected ? 0xffffff : 0x000000);
-        material.emissiveIntensity = selected ? 0.16 : 0;
-      });
-      const selectedGroup = nodeGroups.get(entityKey);
-      if (selectedGroup && navModeRef.current !== "pan") transform.attach(selectedGroup);
-    };
-    selectionApiRef.current = applySelection;
-    applySelection(selectedKeyRef.current);
 
     const updateEdges = () => {
       edgeRows.forEach(({ line, from, to, loop }) => {
@@ -204,12 +186,7 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
       orbit.mouseButtons.LEFT = pan ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
       orbit.mouseButtons.RIGHT = THREE.MOUSE.PAN;
       transform.enabled = !pan;
-      if (pan) {
-        transform.detach();
-      } else {
-        const selectedGroup = nodeGroups.get(selectedKeyRef.current);
-        if (selectedGroup) transform.attach(selectedGroup);
-      }
+      if (pan) transform.detach();
     };
 
     setMode(navModeRef.current);
@@ -252,11 +229,10 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
 
     return () => {
       viewApiRef.current = null;
-      selectionApiRef.current = null;
       cancelAnimationFrame(frame); observer.disconnect(); renderer.domElement.removeEventListener("pointerdown", pick);
       orbit.dispose(); transform.dispose(); disposable.forEach((x) => x?.dispose?.()); renderer.dispose(); host.replaceChildren();
     };
-  }, [entities, relationships]);
+  }, [entities, relationships, selectedKey]);
 
   return (
     <div>
