@@ -1,19 +1,9 @@
-"""Workforce Intelligence persistence.
+"""Workforce Intelligence persistence plus the additive Ontology Studio router.
 
-Org-scoped storage for the engineering resource-planning module. The browser
-holds the canonical shape of the dataset and parses CSV / Microsoft Project XML
-locally; this module gives that dataset a durable, multi-tenant home so imports
-and manually-created records survive reloads and are shared across everyone in
-the organization.
-
-Design: the frontend reads the whole dataset on load (`GET /data`) and writes
-it back transactionally whenever it changes from a real edit (`PUT /data`).
-Reads are available to any member; writes require an org admin. Public visitors
-never authenticate and so use the in-browser demo without touching these
-endpoints. The in-browser "sample demo data" is a local preview and is never
-persisted.
+Workforce remains org-scoped and transactionally persisted exactly as before.
+Ontology endpoints are included below `/api/workforce/ontology` so main.py does
+not need to change and the existing application route surface stays stable.
 """
-
 from __future__ import annotations
 
 from typing import Dict, List, Optional
@@ -21,9 +11,10 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from . import db
+from . import db, ontology
 
 router = APIRouter(prefix="/api/workforce", tags=["workforce"])
+router.include_router(ontology.router)
 
 # current_user lives in main.py; importing it there would be circular, so it is
 # injected at include time (see wire_auth, called from main.py).
@@ -33,6 +24,7 @@ _current_user = None
 def wire_auth(current_user_dep) -> None:
     global _current_user
     _current_user = current_user_dep
+    ontology.wire_auth(current_user_dep)
 
 
 async def _user(request: Request) -> dict:
@@ -59,9 +51,6 @@ async def _log(con, org_id, who, detail) -> None:
         pass
 
 
-# --------------------------------------------------------------------------- #
-# Wire models — permissive; unknown keys from the client are ignored.          #
-# --------------------------------------------------------------------------- #
 class Person(BaseModel):
     id: str
     name: str
@@ -95,7 +84,7 @@ class ResourceRequest(BaseModel):
     id: str
     projectId: str
     disc: str = "SW"
-    ask: Dict[str, float] = Field(default_factory=dict)   # per-month percentage map
+    ask: Dict[str, float] = Field(default_factory=dict)
     seniority: int = 2
     need: str = ""
     note: str = ""
@@ -112,12 +101,9 @@ class Dataset(BaseModel):
     projects: List[Project] = Field(default_factory=list)
     allocations: List[Allocation] = Field(default_factory=list)
     requests: List[ResourceRequest] = Field(default_factory=list)
-    baselines: Dict[str, Baseline] = Field(default_factory=dict)  # projectId -> baseline
+    baselines: Dict[str, Baseline] = Field(default_factory=dict)
 
 
-# --------------------------------------------------------------------------- #
-# Row mappers                                                                  #
-# --------------------------------------------------------------------------- #
 def _person_out(r) -> dict:
     return {"id": r["id"], "name": r["name"], "disc": r["discipline"], "loc": r["location"],
             "seniority": r["seniority"], "rate": float(r["rate"]) if r["rate"] is not None else None,
@@ -155,9 +141,6 @@ async def _load(con, org_id) -> dict:
     }
 
 
-# --------------------------------------------------------------------------- #
-# Endpoints                                                                    #
-# --------------------------------------------------------------------------- #
 @router.get("/data")
 async def get_data(request: Request):
     user = await _user(request)

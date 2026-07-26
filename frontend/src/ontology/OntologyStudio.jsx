@@ -1,0 +1,492 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
+import {
+  Activity, Bot, Boxes, Check, ChevronRight, Database, GitBranch,
+  Layers3, Link2, Loader2, Network, Plus, RefreshCw, Search, Send,
+  ShieldCheck, Sparkles, Trash2, X,
+} from "lucide-react";
+
+const api = async (url, options = {}) => {
+  const res = await fetch(url, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Request failed (${res.status})`);
+  return data;
+};
+
+const card = {
+  background: "#fff", border: "1px solid #DCE3EC", borderRadius: 14,
+  boxShadow: "0 1px 2px rgba(21,34,45,.04),0 4px 16px rgba(21,34,45,.04)",
+};
+const input = {
+  width: "100%", border: "1px solid #C6D2E0", borderRadius: 9, padding: "9px 11px",
+  background: "#fff", color: "#15222D", font: "13px 'IBM Plex Mono',monospace", outline: "none",
+};
+const button = (primary = false) => ({
+  border: primary ? "none" : "1px solid #C6D2E0", borderRadius: 9, padding: "9px 12px",
+  background: primary ? "linear-gradient(180deg,#2A46C4,#1B2E8C)" : "#fff",
+  color: primary ? "#fff" : "#29404E", cursor: "pointer", display: "inline-flex",
+  alignItems: "center", justifyContent: "center", gap: 7, font: "600 12px 'IBM Plex Mono',monospace",
+});
+
+function labelTexture(title, subtitle, color) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 640; canvas.height = 220;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "rgba(255,255,255,.97)";
+  ctx.strokeStyle = color || "#2A46C4";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") ctx.roundRect(8, 8, 624, 204, 26);
+  else ctx.rect(8, 8, 624, 204);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#15222D"; ctx.font = "700 42px Arial"; ctx.textAlign = "center";
+  ctx.fillText(String(title).slice(0, 30), 320, 94);
+  ctx.fillStyle = "#5B7180"; ctx.font = "28px monospace";
+  ctx.fillText(String(subtitle).slice(0, 38), 320, 151);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove }) {
+  const hostRef = useRef(null);
+  const selectRef = useRef(onSelect);
+  const moveRef = useRef(onMove);
+  useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { moveRef.current = onMove; }, [onMove]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !entities.length) return undefined;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf5f8fc);
+    scene.fog = new THREE.Fog(0xf5f8fc, 35, 72);
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
+    camera.position.set(16, 14, 20);
+    let renderer;
+    try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+    catch (_) { host.textContent = "3D rendering is unavailable in this browser. Use the Objects and Impact tabs instead."; return undefined; }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    host.replaceChildren(renderer.domElement);
+
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8aa0b8, 2.2));
+    const key = new THREE.DirectionalLight(0xffffff, 2.8);
+    key.position.set(12, 20, 10); key.castShadow = true; scene.add(key);
+    const grid = new THREE.GridHelper(44, 44, 0x9eb0bf, 0xd9e1e8);
+    grid.position.y = 0; scene.add(grid);
+
+    const orbit = new OrbitControls(camera, renderer.domElement);
+    orbit.enableDamping = true; orbit.dampingFactor = 0.08; orbit.minDistance = 8; orbit.maxDistance = 55;
+    orbit.target.set(0, 1.5, 0);
+
+    const transform = new TransformControls(camera, renderer.domElement);
+    transform.setMode("translate"); transform.setSpace("world"); transform.setTranslationSnap(0.25);
+    scene.add(transform.getHelper());
+    transform.addEventListener("dragging-changed", (e) => { orbit.enabled = !e.value; });
+
+    const nodeGroups = new Map();
+    const edgeRows = [];
+    const disposable = [];
+
+    entities.forEach((entity) => {
+      const group = new THREE.Group();
+      const p = entity.position || { x: 0, y: 1, z: 0 };
+      group.position.set(Number(p.x) || 0, Math.max(0.8, Number(p.y) || 1), Number(p.z) || 0);
+      group.userData = { kind: "ontology-node", entityKey: entity.entityKey };
+      const geom = new THREE.BoxGeometry(3.2, 1.25, 1.85);
+      const mat = new THREE.MeshStandardMaterial({ color: entity.color || "#2A46C4", roughness: 0.42, metalness: 0.08 });
+      const mesh = new THREE.Mesh(geom, mat); mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.userData = { kind: "ontology-node", entityKey: entity.entityKey };
+      group.add(mesh); disposable.push(geom, mat);
+      const spriteMat = new THREE.SpriteMaterial({ map: labelTexture(entity.label, `${entity.count ?? 0} objects · ${entity.sourceKind === "core_table" ? entity.sourceTable : "custom"}`, entity.color), transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(spriteMat); sprite.position.set(0, 1.28, 0); sprite.scale.set(4.5, 1.55, 1); group.add(sprite);
+      disposable.push(spriteMat, spriteMat.map);
+      if (entity.entityKey === selectedKey) {
+        mat.emissive = new THREE.Color(0xffffff); mat.emissiveIntensity = 0.16;
+      }
+      scene.add(group); nodeGroups.set(entity.entityKey, group);
+    });
+
+    const updateEdges = () => {
+      edgeRows.forEach(({ line, from, to, loop }) => {
+        const a = from.position, b = to.position;
+        const points = loop
+          ? [a.clone().add(new THREE.Vector3(0, .5, 0)), a.clone().add(new THREE.Vector3(3.2, 2.6, 0)), a.clone().add(new THREE.Vector3(0, .5, 2.8))]
+          : [a.clone().add(new THREE.Vector3(0, .3, 0)), b.clone().add(new THREE.Vector3(0, .3, 0))];
+        line.geometry.setFromPoints(points);
+        line.geometry.attributes.position.needsUpdate = true;
+      });
+    };
+
+    relationships.forEach((rel) => {
+      const from = nodeGroups.get(rel.fromEntityKey), to = nodeGroups.get(rel.toEntityKey);
+      if (!from || !to) return;
+      const geom = new THREE.BufferGeometry();
+      const mat = new THREE.LineBasicMaterial({ color: rel.sourceKind === "custom" ? 0xa25b9b : 0x71879a, transparent: true, opacity: .72 });
+      const line = new THREE.Line(geom, mat); scene.add(line); disposable.push(geom, mat);
+      edgeRows.push({ line, from, to, loop: from === to });
+    });
+    updateEdges();
+
+    transform.addEventListener("objectChange", updateEdges);
+    transform.addEventListener("mouseUp", () => {
+      const object = transform.object;
+      if (object?.userData?.entityKey) {
+        moveRef.current?.(object.userData.entityKey, { x: object.position.x, y: Math.max(.8, object.position.y), z: object.position.z });
+      }
+    });
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const pick = (event) => {
+      if (transform.dragging || transform.axis) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObjects([...nodeGroups.values()], true);
+      if (!hits.length) { transform.detach(); return; }
+      let obj = hits[0].object;
+      while (obj && !obj.userData?.entityKey) obj = obj.parent;
+      if (obj?.userData?.entityKey) {
+        transform.attach(obj); selectRef.current?.(obj.userData.entityKey);
+      }
+    };
+    renderer.domElement.addEventListener("pointerdown", pick);
+
+    const resize = () => {
+      const w = Math.max(320, host.clientWidth), h = Math.max(420, host.clientHeight);
+      renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    };
+    const observer = new ResizeObserver(resize); observer.observe(host); resize();
+    let frame;
+    const animate = () => { frame = requestAnimationFrame(animate); orbit.update(); renderer.render(scene, camera); };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(frame); observer.disconnect(); renderer.domElement.removeEventListener("pointerdown", pick);
+      orbit.dispose(); transform.dispose(); disposable.forEach((x) => x?.dispose?.()); renderer.dispose(); host.replaceChildren();
+    };
+  }, [entities, relationships, selectedKey]);
+
+  return <div ref={hostRef} style={{ width: "100%", height: "clamp(520px,70vh,760px)", borderRadius: 14, overflow: "hidden", border: "1px solid #DCE3EC" }} />;
+}
+
+function PropertyTable({ entity }) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ font: "600 11px 'IBM Plex Mono',monospace", letterSpacing: ".12em", color: "#687F8E", marginBottom: 7 }}>PROPERTIES & LINEAGE</div>
+      <div style={{ border: "1px solid #DCE3EC", borderRadius: 10, overflow: "hidden" }}>
+        {(entity?.properties || []).map((p) => (
+          <div key={p.propertyKey} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, padding: "8px 10px", borderBottom: "1px solid #EEF2F7", fontSize: 12 }}>
+            <div><b>{p.label}</b><div style={{ color: "#718695", font: "11px monospace" }}>{p.propertyKey} · {p.dataType}{p.isKey ? " · key" : ""}</div></div>
+            <div style={{ textAlign: "right", color: "#47606F", font: "10px monospace" }}>{p.sourceSystem}<br />{p.sourceColumn || "custom property"}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ImpactView({ impact, onPick }) {
+  if (!impact) return <div style={{ ...card, padding: 30, color: "#687F8E", textAlign: "center" }}>Choose an operational object and run impact analysis.</div>;
+  const root = impact.nodes.find((n) => n.id === impact.root);
+  const neighbors = impact.nodes.filter((n) => n.id !== impact.root);
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ ...card, padding: 18, borderColor: "#2A46C4" }}>
+        <div style={{ font: "700 17px 'Bricolage Grotesque',sans-serif" }}>{root?.label}</div>
+        <div style={{ color: "#687F8E", font: "11px monospace" }}>{root?.entityKey} · root object</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 10 }}>
+        {neighbors.map((n) => {
+          const links = impact.edges.filter((e) => e.from === n.id || e.to === n.id).map((e) => e.label).join(", ");
+          return <button key={n.id} onClick={() => onPick?.(n)} style={{ ...card, padding: 14, textAlign: "left", cursor: "pointer", color: "#15222D" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Network size={15} color="#2A46C4" /><b>{n.label}</b></div>
+            <div style={{ color: "#687F8E", font: "10px monospace", marginTop: 5 }}>{n.entityKey} · {links}</div>
+          </button>;
+        })}
+      </div>
+      {impact.truncated && <div style={{ color: "#B27C12", fontSize: 12 }}>Large impact graph was capped for browser performance.</div>}
+    </div>
+  );
+}
+
+export default function OntologyStudio({ user, onBack }) {
+  const [model, setModel] = useState(null);
+  const [mode, setMode] = useState("model");
+  const [selectedKey, setSelectedKey] = useState("");
+  const [objects, setObjects] = useState([]);
+  const [selectedObject, setSelectedObject] = useState(null);
+  const [impact, setImpact] = useState(null);
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newEntity, setNewEntity] = useState({ entity_key: "", label: "", description: "", color: "#2A46C4" });
+  const [newRel, setNewRel] = useState({ relationship_key: "", label: "", from_entity_key: "", to_entity_key: "", cardinality: "many-to-one" });
+  const [customObject, setCustomObject] = useState({ object_key: "", properties: "{\n  \"status\": \"Draft\"\n}" });
+  const [runs, setRuns] = useState([]);
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+
+  const loadModel = useCallback(async () => {
+    setBusy(true); setError("");
+    try {
+      const data = await api("/api/workforce/ontology/model");
+      setModel(data);
+      setSelectedKey((k) => k || data.entities?.[0]?.entityKey || "");
+    } catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  }, []);
+
+  useEffect(() => { loadModel(); }, [loadModel]);
+  const selectedEntity = model?.entities?.find((e) => e.entityKey === selectedKey) || null;
+
+  const loadObjects = useCallback(async () => {
+    if (!selectedKey) return;
+    try {
+      const data = await api(`/api/workforce/ontology/objects/${encodeURIComponent(selectedKey)}?limit=150&search=${encodeURIComponent(search)}`);
+      setObjects(data.objects || []);
+      setSelectedObject((old) => old && data.objects?.find((x) => x.objectKey === old.objectKey) ? old : null);
+    } catch (e) { setError(e.message); }
+  }, [selectedKey, search]);
+
+  useEffect(() => { if (mode === "objects" || mode === "impact" || mode === "actions" || mode === "ai") loadObjects(); }, [mode, loadObjects]);
+  useEffect(() => {
+    if (mode === "actions") api("/api/workforce/ontology/actions/runs").then(setRuns).catch((e) => setError(e.message));
+  }, [mode]);
+
+  const flash = (message) => { setNotice(message); window.setTimeout(() => setNotice(""), 2600); };
+  const patchEntity = async (key, patch, local = true) => {
+    if (local) setModel((m) => ({ ...m, entities: m.entities.map((e) => e.entityKey === key ? { ...e, ...patch } : e) }));
+    try { await api(`/api/workforce/ontology/entities/${encodeURIComponent(key)}`, { method: "PATCH", body: JSON.stringify(patch) }); }
+    catch (e) { setError(e.message); await loadModel(); }
+  };
+
+  const createEntity = async () => {
+    try {
+      await api("/api/workforce/ontology/entities", { method: "POST", body: JSON.stringify({ ...newEntity, position: { x: 0, y: 1, z: 0 } }) });
+      setShowCreate(false); setNewEntity({ entity_key: "", label: "", description: "", color: "#2A46C4" });
+      await loadModel(); flash("Custom entity created");
+    } catch (e) { setError(e.message); }
+  };
+
+  const createRelationship = async () => {
+    try {
+      await api("/api/workforce/ontology/relationships", { method: "POST", body: JSON.stringify(newRel) });
+      setNewRel({ relationship_key: "", label: "", from_entity_key: "", to_entity_key: "", cardinality: "many-to-one" });
+      await loadModel(); flash("Relationship created");
+    } catch (e) { setError(e.message); }
+  };
+
+  const createCustomObject = async () => {
+    try {
+      const properties = JSON.parse(customObject.properties || "{}");
+      await api(`/api/workforce/ontology/objects/${encodeURIComponent(selectedKey)}`, { method: "POST", body: JSON.stringify({ object_key: customObject.object_key, properties }) });
+      setCustomObject({ object_key: "", properties: "{\n  \"status\": \"Draft\"\n}" });
+      await loadObjects(); await loadModel(); flash("Object saved");
+    } catch (e) { setError(e.message); }
+  };
+
+  const runImpact = async (obj = selectedObject) => {
+    if (!obj) return;
+    setBusy(true); setError("");
+    try { setImpact(await api(`/api/workforce/ontology/impact/${encodeURIComponent(selectedKey)}/${encodeURIComponent(obj.objectKey)}`)); setMode("impact"); }
+    catch (e) { setError(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const runAction = async (action) => {
+    if (!selectedObject) return setError("Select an object first");
+    try {
+      await api("/api/workforce/ontology/actions/runs", { method: "POST", body: JSON.stringify({ action_key: action.actionKey, entity_key: selectedKey, object_key: selectedObject.objectKey, input: { source: "Ontology Studio" } }) });
+      setRuns(await api("/api/workforce/ontology/actions/runs")); flash(action.requiresApproval ? "Action submitted for approval" : "Action completed");
+    } catch (e) { setError(e.message); }
+  };
+
+  const decide = async (id, decision) => {
+    try {
+      await api(`/api/workforce/ontology/actions/runs/${id}/decision`, { method: "POST", body: JSON.stringify({ decision, note: "Reviewed in Ontology Studio" }) });
+      setRuns(await api("/api/workforce/ontology/actions/runs"));
+    } catch (e) { setError(e.message); }
+  };
+
+  const ontologyContext = useMemo(() => {
+    if (!model) return "";
+    const entities = model.entities.map((e) => `${e.entityKey} (${e.label}): ${e.count} objects; source=${e.sourceKind}:${e.sourceTable || "custom"}; properties=${e.properties.map((p) => p.propertyKey).join(",")}`).join("\n");
+    const rels = model.relationships.map((r) => `${r.fromEntityKey} -[${r.label}]-> ${r.toEntityKey} (${r.cardinality})`).join("\n");
+    return `THREADWIRE ONTOLOGY FOR ORGANIZATION ${model.tenant?.legalName || "current tenant"}\nENTITIES\n${entities}\nRELATIONSHIPS\n${rels}\nSELECTED OBJECT\n${JSON.stringify(selectedObject || null)}\nCURRENT IMPACT GRAPH\n${JSON.stringify(impact || null)}`;
+  }, [model, selectedObject, impact]);
+
+  const askAi = async (question = aiQuestion) => {
+    const q = question.trim(); if (!q) return;
+    setAiQuestion(q); setAiBusy(true); setAiAnswer(""); setError("");
+    try {
+      const data = await api("/api/ai/chat", { method: "POST", body: JSON.stringify({
+        page: "ontology",
+        system: "You are Threadwire's ontology-aware manufacturing operations assistant. Use only the supplied tenant-scoped ontology, selected object and impact graph. Distinguish schema facts from operational object facts. Never infer another customer's data. Explain lineage and relationships plainly, quantify impacts when values are supplied, and propose governed actions rather than claiming actions were executed.\n\n" + ontologyContext,
+        messages: [{ role: "user", content: q }],
+      }) });
+      setAiAnswer(data.text || "No answer returned.");
+    } catch (e) { setError(e.message); }
+    finally { setAiBusy(false); }
+  };
+
+  const tabs = [
+    ["model", "3D Model", Layers3], ["objects", "Objects", Database], ["impact", "Impact", Network],
+    ["actions", "Actions", ShieldCheck], ["ai", "Ontology AI", Bot],
+  ];
+
+  if (!model && busy) return <div style={{ minHeight: "100vh", display: "grid", placeItems: "center", background: "#F4F6FA", color: "#47606F" }}><Loader2 className="spin" /> Loading ontology…</div>;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#F4F6FA", color: "#15222D", fontFamily: "Inter,Arial,sans-serif" }}>
+      <style>{`@keyframes ontSpin{to{transform:rotate(360deg)}} .spin{animation:ontSpin 1s linear infinite}`}</style>
+      <header style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(255,255,255,.96)", backdropFilter: "blur(12px)", borderBottom: "1px solid #DCE3EC" }}>
+        <div style={{ maxWidth: 1500, margin: "0 auto", padding: "12px 20px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button onClick={onBack} style={button()}><ChevronRight size={15} style={{ transform: "rotate(180deg)" }} /> Operations</button>
+          <div style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", color: "#fff", background: "linear-gradient(180deg,#2A46C4,#1B2E8C)" }}><Boxes size={19} /></div>
+          <div><div style={{ font: "800 19px 'Bricolage Grotesque',sans-serif" }}>Ontology Studio</div><div style={{ color: "#687F8E", font: "10px monospace" }}>{model?.tenant?.legalName} · organization-scoped semantic layer</div></div>
+          <nav style={{ marginLeft: "auto", display: "flex", gap: 5, flexWrap: "wrap" }}>
+            {tabs.map(([key, label, Icon]) => <button key={key} onClick={() => setMode(key)} style={{ ...button(mode === key), padding: "8px 10px" }}><Icon size={14} />{label}</button>)}
+          </nav>
+        </div>
+      </header>
+
+      {(error || notice) && <div style={{ maxWidth: 1500, margin: "12px auto 0", padding: "0 20px" }}>
+        <div style={{ ...card, padding: "10px 12px", color: error ? "#AC3247" : "#12784E", display: "flex", alignItems: "center", gap: 8 }}>
+          {error ? <X size={16} /> : <Check size={16} />} {error || notice}<button onClick={() => { setError(""); setNotice(""); }} style={{ marginLeft: "auto", border: 0, background: "none", cursor: "pointer" }}><X size={14} /></button>
+        </div>
+      </div>}
+
+      <main style={{ maxWidth: 1500, margin: "0 auto", padding: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "250px minmax(0,1fr)", gap: 16, alignItems: "start" }}>
+          <aside style={{ ...card, padding: 14, position: "sticky", top: 82 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><GitBranch size={16} color="#2A46C4" /><b>Business objects</b><span style={{ marginLeft: "auto", font: "10px monospace", color: "#687F8E" }}>{model?.entities?.length || 0}</span></div>
+            <div style={{ display: "grid", gap: 5, maxHeight: "58vh", overflow: "auto" }}>
+              {model?.entities?.map((e) => <button key={e.entityKey} onClick={() => { setSelectedKey(e.entityKey); setSelectedObject(null); setImpact(null); }} style={{ border: selectedKey === e.entityKey ? `1px solid ${e.color}` : "1px solid transparent", background: selectedKey === e.entityKey ? "#EEF2FF" : "transparent", borderRadius: 9, padding: "9px", cursor: "pointer", textAlign: "left", color: "#15222D" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 9, height: 9, borderRadius: 99, background: e.color }} /><b style={{ fontSize: 12 }}>{e.label}</b><span style={{ marginLeft: "auto", font: "10px monospace", color: "#687F8E" }}>{e.count}</span></div>
+                <div style={{ marginLeft: 17, color: "#7B8E9A", font: "9px monospace" }}>{e.sourceKind === "core_table" ? e.sourceTable : "custom object store"}</div>
+              </button>)}
+            </div>
+            {model?.canWrite && <button onClick={() => setShowCreate((v) => !v)} style={{ ...button(), width: "100%", marginTop: 10 }}><Plus size={14} />New entity</button>}
+            {showCreate && <div style={{ display: "grid", gap: 7, marginTop: 10, paddingTop: 10, borderTop: "1px solid #EEF2F7" }}>
+              <input style={input} placeholder="entity_key" value={newEntity.entity_key} onChange={(e) => setNewEntity({ ...newEntity, entity_key: e.target.value.toLowerCase().replace(/\W+/g, "_") })} />
+              <input style={input} placeholder="Entity label" value={newEntity.label} onChange={(e) => setNewEntity({ ...newEntity, label: e.target.value })} />
+              <textarea style={{ ...input, minHeight: 65 }} placeholder="Description" value={newEntity.description} onChange={(e) => setNewEntity({ ...newEntity, description: e.target.value })} />
+              <button onClick={createEntity} disabled={!newEntity.entity_key || !newEntity.label} style={button(true)}>Create</button>
+            </div>}
+          </aside>
+
+          <section style={{ minWidth: 0 }}>
+            {mode === "model" && <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 330px", gap: 16 }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <div style={{ color: "#47606F", fontSize: 12 }}>Drag the XYZ gizmo to move an entity. Orbit on empty space; scroll to zoom.</div>
+                  <button onClick={async () => { await api("/api/workforce/ontology/bootstrap", { method: "POST", body: "{}" }); await loadModel(); flash("Ontology refreshed from the current Threadwire schema"); }} disabled={!model?.canWrite} style={{ ...button(), marginLeft: "auto" }}><RefreshCw size={14} />Refresh schema</button>
+                </div>
+                <OntologyCanvas entities={model?.entities || []} relationships={model?.relationships || []} selectedKey={selectedKey} onSelect={setSelectedKey} onMove={(key, position) => patchEntity(key, { position })} />
+              </div>
+              <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
+                {selectedEntity && <div style={{ ...card, padding: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ width: 12, height: 12, borderRadius: 99, background: selectedEntity.color }} /><b>{selectedEntity.label}</b><span style={{ marginLeft: "auto", color: "#687F8E", font: "10px monospace" }}>{selectedEntity.count} objects</span></div>
+                  <div style={{ margin: "8px 0 12px", color: "#687F8E", fontSize: 12 }}>{selectedEntity.description}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 90px", gap: 7 }}>
+                    <input style={input} value={selectedEntity.label} disabled={!model.canWrite} onChange={(e) => setModel((m) => ({ ...m, entities: m.entities.map((x) => x.entityKey === selectedKey ? { ...x, label: e.target.value } : x) }))} onBlur={() => patchEntity(selectedKey, { label: selectedEntity.label }, false)} />
+                    <input type="color" value={selectedEntity.color} disabled={!model.canWrite} onChange={(e) => patchEntity(selectedKey, { color: e.target.value })} style={{ ...input, padding: 4 }} />
+                  </div>
+                  <div style={{ marginTop: 10, padding: 10, borderRadius: 9, background: "#F5F8FC", font: "10px monospace", color: "#47606F" }}>
+                    Authority: {selectedEntity.sourceKind === "core_table" ? `existing ${selectedEntity.sourceTable} table filtered by org_id` : "ontology_custom_objects filtered by org_id"}<br />
+                    Key: {(selectedEntity.keyFields || []).join(" + ")}<br />Source system: {selectedEntity.sourceSystem}
+                  </div>
+                  <PropertyTable entity={selectedEntity} />
+                </div>}
+                {model?.canWrite && <div style={{ ...card, padding: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}><Link2 size={15} color="#2A46C4" /><b>Create relationship</b></div>
+                  <div style={{ display: "grid", gap: 7 }}>
+                    <input style={input} placeholder="relationship_key" value={newRel.relationship_key} onChange={(e) => setNewRel({ ...newRel, relationship_key: e.target.value.toLowerCase().replace(/\W+/g, "_") })} />
+                    <input style={input} placeholder="Label, e.g. depends on" value={newRel.label} onChange={(e) => setNewRel({ ...newRel, label: e.target.value })} />
+                    <select style={input} value={newRel.from_entity_key} onChange={(e) => setNewRel({ ...newRel, from_entity_key: e.target.value })}><option value="">From entity</option>{model.entities.map((e) => <option key={e.entityKey} value={e.entityKey}>{e.label}</option>)}</select>
+                    <select style={input} value={newRel.to_entity_key} onChange={(e) => setNewRel({ ...newRel, to_entity_key: e.target.value })}><option value="">To entity</option>{model.entities.map((e) => <option key={e.entityKey} value={e.entityKey}>{e.label}</option>)}</select>
+                    <select style={input} value={newRel.cardinality} onChange={(e) => setNewRel({ ...newRel, cardinality: e.target.value })}><option>one-to-one</option><option>one-to-many</option><option>many-to-one</option><option>many-to-many</option></select>
+                    <button onClick={createRelationship} disabled={!newRel.relationship_key || !newRel.label || !newRel.from_entity_key || !newRel.to_entity_key} style={button(true)}>Connect entities</button>
+                  </div>
+                </div>}
+              </div>
+            </div>}
+
+            {mode === "objects" && <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ ...card, padding: 14, display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap" }}>
+                <Search size={16} color="#2A46C4" /><input style={{ ...input, flex: 1, minWidth: 220 }} placeholder={`Search ${selectedEntity?.label || "objects"}`} value={search} onChange={(e) => setSearch(e.target.value)} />
+                <button onClick={loadObjects} style={button()}><RefreshCw size={14} />Refresh</button>
+              </div>
+              {selectedEntity?.sourceKind === "custom" && model.canWrite && <div style={{ ...card, padding: 16 }}>
+                <b>Create or update {selectedEntity.label}</b><div style={{ display: "grid", gridTemplateColumns: "240px minmax(0,1fr) auto", gap: 8, marginTop: 10 }}>
+                  <input style={input} placeholder="Object key" value={customObject.object_key} onChange={(e) => setCustomObject({ ...customObject, object_key: e.target.value })} />
+                  <textarea style={{ ...input, minHeight: 88 }} value={customObject.properties} onChange={(e) => setCustomObject({ ...customObject, properties: e.target.value })} />
+                  <button onClick={createCustomObject} style={button(true)}>Save object</button>
+                </div>
+              </div>}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 10 }}>
+                {objects.map((obj) => <button key={obj.objectKey} onClick={() => setSelectedObject(obj)} style={{ ...card, padding: 14, textAlign: "left", cursor: "pointer", borderColor: selectedObject?.objectKey === obj.objectKey ? "#2A46C4" : "#DCE3EC", color: "#15222D" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Database size={15} color={selectedEntity?.color || "#2A46C4"} /><b>{obj.objectKey}</b></div>
+                  <div style={{ marginTop: 8, color: "#687F8E", font: "10px monospace", whiteSpace: "pre-wrap", maxHeight: 92, overflow: "hidden" }}>{JSON.stringify(obj.properties, null, 2)}</div>
+                  <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}><span style={{ font: "10px monospace", color: "#7B8E9A" }}>{selectedEntity?.sourceKind === "core_table" ? "read from existing table" : "custom ontology object"}</span><span onClick={(e) => { e.stopPropagation(); setSelectedObject(obj); runImpact(obj); }} style={{ color: "#2A46C4", font: "11px monospace" }}>Impact →</span></div>
+                </button>)}
+              </div>
+              {!objects.length && <div style={{ ...card, padding: 30, textAlign: "center", color: "#687F8E" }}>No objects found for this organization.</div>}
+            </div>}
+
+            {mode === "impact" && <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ ...card, padding: 14, display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+                <Network size={16} color="#2A46C4" /><b>Impact analysis</b>
+                <select style={{ ...input, width: 260, marginLeft: "auto" }} value={selectedObject?.objectKey || ""} onChange={(e) => setSelectedObject(objects.find((o) => o.objectKey === e.target.value) || null)}><option value="">Select {selectedEntity?.label}</option>{objects.map((o) => <option key={o.objectKey}>{o.objectKey}</option>)}</select>
+                <button onClick={() => runImpact()} disabled={!selectedObject || busy} style={button(true)}>{busy ? <Loader2 size={14} className="spin" /> : <Activity size={14} />}Trace impact</button>
+              </div>
+              <ImpactView impact={impact} onPick={(n) => { setSelectedKey(n.entityKey); setSelectedObject({ objectKey: n.objectKey, properties: n.properties }); }} />
+            </div>}
+
+            {mode === "actions" && <div style={{ display: "grid", gap: 14 }}>
+              <div style={{ ...card, padding: 16 }}><b>Governed actions</b><p style={{ color: "#687F8E", margin: "6px 0 12px", fontSize: 13 }}>Actions create an auditable request first. Core operational tables are not mutated by this module.</p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{model.actions.filter((a) => a.entityKey === "*" || a.entityKey === selectedKey).map((a) => <button key={a.actionKey} onClick={() => runAction(a)} style={button(true)}><ShieldCheck size={14} />{a.label}{a.requiresApproval ? " · approval" : ""}</button>)}</div>
+              </div>
+              <div style={{ ...card, overflow: "hidden" }}>
+                <div style={{ padding: 14, borderBottom: "1px solid #DCE3EC" }}><b>Action history</b></div>
+                {runs.map((r) => <div key={r.id} style={{ padding: 13, borderBottom: "1px solid #EEF2F7", display: "grid", gridTemplateColumns: "1fr auto", gap: 10 }}>
+                  <div><b>{r.action_key}</b> <span style={{ color: "#687F8E" }}>on {r.entity_key}:{r.object_key}</span><div style={{ font: "10px monospace", color: "#7B8E9A" }}>{r.requested_by} · {r.requested_at}</div></div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ padding: "3px 8px", borderRadius: 999, background: r.status === "completed" ? "#E7F5EE" : r.status === "rejected" ? "#FBECEF" : "#FFF4D8", color: r.status === "completed" ? "#12784E" : r.status === "rejected" ? "#AC3247" : "#8B6817", font: "10px monospace" }}>{r.status}</span>{r.status === "pending" && model.canWrite && <><button onClick={() => decide(r.id, "approved")} style={button(true)}>Approve</button><button onClick={() => decide(r.id, "rejected")} style={button()}>Reject</button></>}</div>
+                </div>)}
+              </div>
+            </div>}
+
+            {mode === "ai" && <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 320px", gap: 14 }}>
+              <div style={{ ...card, padding: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}><Sparkles size={18} color="#2A46C4" /><b>Ontology-aware AI</b></div>
+                <p style={{ color: "#687F8E", fontSize: 13 }}>The assistant receives this organization’s ontology, lineage, selected object and current impact graph. Existing AI metering and provider configuration remain in force.</p>
+                <textarea style={{ ...input, minHeight: 110, marginTop: 8 }} placeholder="Ask what depends on this part, where a field came from, or what action should be reviewed…" value={aiQuestion} onChange={(e) => setAiQuestion(e.target.value)} />
+                <button onClick={() => askAi()} disabled={aiBusy || !aiQuestion.trim()} style={{ ...button(true), marginTop: 9 }}>{aiBusy ? <Loader2 size={14} className="spin" /> : <Send size={14} />}Ask Ontology AI</button>
+                {aiAnswer && <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: "#F5F8FC", border: "1px solid #DCE3EC", whiteSpace: "pre-wrap", lineHeight: 1.6, fontSize: 13 }}>{aiAnswer}</div>}
+              </div>
+              <div style={{ ...card, padding: 16 }}><b>Grounding scope</b>
+                <div style={{ display: "grid", gap: 8, marginTop: 10, color: "#47606F", fontSize: 12 }}><div><b>Tenant</b><br />{model.tenant?.legalName}</div><div><b>Selected entity</b><br />{selectedEntity?.label || "None"}</div><div><b>Selected object</b><br />{selectedObject?.objectKey || "None"}</div><div><b>Impact graph</b><br />{impact ? `${impact.nodes.length} nodes / ${impact.edges.length} links` : "Not loaded"}</div></div>
+                <div style={{ display: "grid", gap: 7, marginTop: 14 }}>{["Explain this object's upstream and downstream impact", "Which properties come from PostgreSQL and which are custom?", "What governed action should be reviewed next?"].map((q) => <button key={q} onClick={() => askAi(q)} style={{ ...button(), textAlign: "left", justifyContent: "flex-start" }}>{q}</button>)}</div>
+              </div>
+            </div>}
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}

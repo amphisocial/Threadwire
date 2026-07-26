@@ -25,9 +25,13 @@ echo -n "  health: "; curl -s localhost:8000/api/health; echo
 
 echo "== frontend build =="
 sudo cp -r "$SRC/frontend/src/." "$APP/frontend/src/"
+sudo cp "$SRC/frontend/package.json" "$APP/frontend/package.json"
 sudo chown -R ec2-user:ec2-user "$APP/frontend"
 cd "$APP/frontend"
 export NODE_OPTIONS=--max-old-space-size=900
+# Keep dependencies aligned with package.json. This is required when additive
+# modules introduce a browser library such as Three.js.
+npm install --no-audit --no-fund
 npm run build
 sudo cp -r dist/* /var/www/threadwire/dist/
 sudo chown -R nginx:nginx /var/www/threadwire
