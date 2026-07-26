@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 
 from . import db, ontology
 
-router = APIRouter(prefix="/api/workforce/ontology/explorer", tags=["ontology-explorer"])
+router = APIRouter(prefix="/ontology/explorer", tags=["ontology-explorer"])
 _current_user = None
 _schema_ready = False
 
