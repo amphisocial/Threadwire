@@ -61,8 +61,6 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
   const moveRef = useRef(onMove);
   const viewApiRef = useRef(null);
   const selectionApiRef = useRef(null);
-  const positionApiRef = useRef(null);
-  const cameraStateRef = useRef(null);
   const selectedKeyRef = useRef(selectedKey);
   const navModeRef = useRef("orbit");
   const [navMode, setNavMode] = useState("orbit");
@@ -76,22 +74,6 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
     navModeRef.current = navMode;
     viewApiRef.current?.setMode?.(navMode);
   }, [navMode]);
-
-  const sceneKey = useMemo(() => JSON.stringify({
-    entities: entities.map((entity) => [
-      entity.entityKey, entity.label, entity.color, entity.count,
-      entity.sourceKind, entity.sourceTable,
-    ]),
-    relationships: relationships.map((relationship) => [
-      relationship.relationshipKey, relationship.fromEntityKey,
-      relationship.toEntityKey, relationship.label,
-      relationship.cardinality, relationship.sourceKind,
-    ]),
-  }), [entities, relationships]);
-
-  useEffect(() => {
-    positionApiRef.current?.(entities);
-  }, [entities]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -122,19 +104,6 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
     orbit.maxDistance = 140;
     orbit.screenSpacePanning = true;
     orbit.target.set(0, 1.5, 0);
-
-    const savedView = cameraStateRef.current;
-    if (savedView) {
-      camera.position.fromArray(savedView.position);
-      orbit.target.fromArray(savedView.target);
-    }
-    const rememberView = () => {
-      cameraStateRef.current = {
-        position: camera.position.toArray(),
-        target: orbit.target.toArray(),
-      };
-    };
-    orbit.addEventListener("change", rememberView);
 
     const transform = new TransformControls(camera, renderer.domElement);
     transform.setMode("translate"); transform.setSpace("world"); transform.setTranslationSnap(0.25);
@@ -187,25 +156,6 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
       });
     };
 
-    positionApiRef.current = (nextEntities) => {
-      nextEntities.forEach((entity) => {
-        const group = nodeGroups.get(entity.entityKey);
-        if (!group) return;
-        const p = entity.position || { x: 0, y: 1, z: 0 };
-        const nextX = Number(p.x) || 0;
-        const nextY = Math.max(0.8, Number(p.y) || 1);
-        const nextZ = Number(p.z) || 0;
-        if (
-          Math.abs(group.position.x - nextX) > 0.0001 ||
-          Math.abs(group.position.y - nextY) > 0.0001 ||
-          Math.abs(group.position.z - nextZ) > 0.0001
-        ) {
-          group.position.set(nextX, nextY, nextZ);
-        }
-      });
-      updateEdges();
-    };
-
     relationships.forEach((rel) => {
       const from = nodeGroups.get(rel.fromEntityKey), to = nodeGroups.get(rel.toEntityKey);
       if (!from || !to) return;
@@ -239,7 +189,6 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
       scene.fog.near = Math.max(35, distance * 1.25);
       scene.fog.far = Math.max(90, distance * 3.5);
       orbit.update();
-      rememberView();
     };
 
     const zoomBy = (factor) => {
@@ -248,7 +197,6 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
       const next = THREE.MathUtils.clamp(current * factor, orbit.minDistance, orbit.maxDistance);
       if (current > 0.001) camera.position.copy(orbit.target).add(offset.setLength(next));
       orbit.update();
-      rememberView();
     };
 
     const setMode = (mode) => {
@@ -303,15 +251,12 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
     animate();
 
     return () => {
-      rememberView();
-      orbit.removeEventListener("change", rememberView);
       viewApiRef.current = null;
       selectionApiRef.current = null;
-      positionApiRef.current = null;
       cancelAnimationFrame(frame); observer.disconnect(); renderer.domElement.removeEventListener("pointerdown", pick);
       orbit.dispose(); transform.dispose(); disposable.forEach((x) => x?.dispose?.()); renderer.dispose(); host.replaceChildren();
     };
-  }, [sceneKey]);
+  }, [entities, relationships]);
 
   return (
     <div>
