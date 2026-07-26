@@ -15,7 +15,7 @@ import {
   parseCSV, importUsersCSV, importProjectsCSV, parseMSProjectXML,
   normalizeStore, fromServer, toServer,
 } from "./data.js";
-import { wfGetData, wfPutData, wfClear } from "../lib/api.js";
+import { wfGetData, wfPutData, wfClear, wfAllocateRequest } from "../lib/api.js";
 
 /* =========================================================================
    Workforce Intelligence — a Threadwire module.
@@ -114,14 +114,27 @@ function StatusPill({ status, saveState, previewing, loaded }) {
   else if (status === "connected") {
     color = saveState === "error" ? "var(--red)" : "var(--green)";
     text = saveState === "saving" ? "◐ Saving…" : saveState === "error" ? "⚠ Save failed" : "● Saved to workspace";
-  } else if (status === "readonly") { color = "var(--blue)"; text = "● Workspace · read-only"; }
-  return <span className="tf-chip" style={{ color }} title={status === "connected" ? "Changes are saved to your organisation's workspace" : status === "readonly" ? "You can view workspace data; an org admin makes changes" : "A local in-browser session"}>{text}</span>;
+  } else if (status === "allocator") {
+    color = "var(--amber)";
+    text = "● Workspace · allocation access";
+  } else if (status === "readonly") {
+    color = "var(--blue)";
+    text = "● Workspace · read-only";
+  }
+  const title = status === "connected"
+    ? "Changes are saved to your organisation's workspace"
+    : status === "allocator"
+      ? "You may fill resource requests with named people; org admins manage imports and master data"
+      : status === "readonly"
+        ? "You can view workspace data; an org admin or Discipline Manager makes changes"
+        : "A local in-browser session";
+  return <span className="tf-chip" style={{ color }} title={title}>{text}</span>;
 }
 
 /* =========================================================================
    Main module
    ========================================================================= */
-export default function WorkforceIntelligence() {
+export default function WorkforceIntelligence({ user }) {
   const [data, setData] = useState(emptyData);
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState("portfolio");
@@ -135,15 +148,23 @@ export default function WorkforceIntelligence() {
      write; other members read. Public visitors (or anyone offline) fall back
      to a local in-browser session. The sample demo data is always a local
      preview and is never persisted. */
-  const conn = useRef({ connected: false, canWrite: false });
+  const conn = useRef({ connected: false, canWrite: false, canAllocate: false });
   const booted = useRef(false);
   const skipSave = useRef(false);
   const preview = useRef(false);
   const saveTimer = useRef(null);
-  const [status, setStatus] = useState("local");     // local | connected | readonly
+  const [status, setStatus] = useState("local");     // local | connected | allocator | readonly
   const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
   const [previewing, setPreviewing] = useState(false);
-  const canWrite = status !== "readonly";
+  const [permissions, setPermissions] = useState({
+    canAdminister: false,
+    canAllocate: false,
+    workforceRole: "viewer",
+    discipline: null,
+    allocationCeiling: POLICY_MAX_DEFAULT,
+  });
+  const canWrite = status === "local" || permissions.canAdminister;
+  const canAllocate = status === "local" || permissions.canAllocate;
 
   useEffect(() => {
     let alive = true;
@@ -151,13 +172,32 @@ export default function WorkforceIntelligence() {
       try {
         const res = await wfGetData();
         if (!alive) return;
-        conn.current = { connected: true, canWrite: !!res.canWrite };
+        const perms = res.permissions || {
+          canAdminister: !!res.canWrite,
+          canAllocate: !!res.canWrite,
+          workforceRole: res.canWrite ? "org_admin" : "viewer",
+          discipline: null,
+          allocationCeiling: POLICY_MAX_DEFAULT,
+        };
+        conn.current = {
+          connected: true,
+          canWrite: !!perms.canAdminister,
+          canAllocate: !!perms.canAllocate,
+        };
+        setPermissions(perms);
         const total = (res.people || []).length + (res.projects || []).length +
           (res.allocations || []).length + (res.requests || []).length;
         if (total > 0) { skipSave.current = true; setData(fromServer(res)); setLoaded(true); }
-        setStatus(res.canWrite ? "connected" : "readonly");
+        setStatus(perms.canAdminister ? "connected" : perms.canAllocate ? "allocator" : "readonly");
       } catch {
-        conn.current = { connected: false, canWrite: false };
+        conn.current = { connected: false, canWrite: false, canAllocate: false };
+        setPermissions({
+          canAdminister: false,
+          canAllocate: false,
+          workforceRole: "viewer",
+          discipline: null,
+          allocationCeiling: POLICY_MAX_DEFAULT,
+        });
         setStatus("local");
       } finally { booted.current = true; }
     })();
@@ -209,6 +249,28 @@ export default function WorkforceIntelligence() {
   const load = useMemo(() => loadByMonth(store), [store]);
   const out = useMemo(() => outstandingDemand(store), [store]);
   const project = (id) => store.projects.find((p) => p.id === id) || {};
+
+  const allocateRequest = async (req, personId, pcts) => {
+    if (conn.current.connected && !preview.current) {
+      const res = await wfAllocateRequest(req.id, { personId, pcts });
+      skipSave.current = true;
+      setData(fromServer(res));
+      setLoaded(true);
+      flash(`${personId} added to ${req.id}.`);
+      return res;
+    }
+
+    const id = `A-${Date.now().toString(36)}`;
+    setData((d) => ({
+      ...d,
+      allocations: [
+        ...(d.allocations || []),
+        { id, personId, projectId: req.projectId, pcts, source: req.id },
+      ],
+    }));
+    flash(`${personId} added to ${req.id} in this local preview.`);
+    return { ok: true, local: true };
+  };
 
   /* month-by-month attainment trend, for the portfolio chart */
   const trend = useMemo(() => DATA_MONTHS.map((k) => {
@@ -274,6 +336,19 @@ export default function WorkforceIntelligence() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
           <StatusPill status={status} saveState={saveState} previewing={previewing} loaded={loaded} />
+          {status !== "local" && (
+            <Chip tone={permissions.canAllocate ? "yellow" : "muted"}>
+              {permissions.workforceRole === "discipline_manager"
+                ? `Discipline Manager${permissions.discipline ? ` · ${permissions.discipline}` : ""}`
+                : permissions.workforceRole === "engineering_project_lead"
+                  ? "Engineering Project Lead"
+                  : permissions.workforceRole === "program_manager"
+                    ? "Program Manager"
+                    : user?.role === "org_admin"
+                      ? "Org Admin"
+                      : "Viewer"}
+            </Chip>
+          )}
           {!loaded && <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }} onClick={loadSample}><Sparkles size={14} /> Load sample demo data</button>}
         </div>
       </div>
@@ -322,7 +397,7 @@ export default function WorkforceIntelligence() {
           {tab === "portfolio" && <Portfolio data={store} roll={roll} out={out} trend={trend} month={month} inProgress={inProgress} project={project} setTab={setTab} />}
           {tab === "projects" && <Projects data={store} setData={setData} roll={roll} out={out} month={month} inProgress={inProgress} project={project} load={load} flash={flash} canWrite={canWrite} />}
           {tab === "people" && <People data={store} setData={setData} load={load} month={month} flash={flash} canWrite={canWrite} />}
-          {tab === "requests" && <Requests data={store} setData={setData} month={month} project={project} load={load} flash={flash} canWrite={canWrite} />}
+          {tab === "requests" && <Requests data={store} setData={setData} month={month} project={project} load={load} flash={flash} canWrite={canWrite} canAllocate={canAllocate} disciplineScope={permissions.discipline} allocateRequest={allocateRequest} />}
           {tab === "admin" && <Admin data={store} setData={setData} flash={flash} loadSample={loadSample} clearAll={clearAll} canWrite={canWrite} status={status} previewing={previewing} />}
         </>
       )}
@@ -617,26 +692,37 @@ function People({ data, setData, load, month, flash, canWrite }) {
 /* =========================================================================
    Requests — fill, decline, and create resource asks
    ========================================================================= */
-function Requests({ data, setData, month, project, load, flash, canWrite }) {
+function Requests({ data, setData, month, project, load, flash, canWrite, canAllocate, disciplineScope, allocateRequest }) {
   const [fill, setFill] = useState(null);
   const [creating, setCreating] = useState(false);
   const open = (data.requests || []).filter((r) => r.status !== "Declined");
 
-  const decline = (id) => { setData((d) => ({ ...d, requests: d.requests.map((r) => r.id === id ? { ...r, status: "Declined" } : r) })); flash(`${id} declined.`); };
+  const decline = (id) => {
+    setData((d) => ({ ...d, requests: d.requests.map((r) => r.id === id ? { ...r, status: "Declined" } : r) }));
+    flash(`${id} declined.`);
+  };
 
   return (
     <div className="tf-fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
-        <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>{open.filter((r) => requestState(data, r).status !== "Filled").length} open · {open.filter((r) => requestState(data, r).status === "Filled").length} filled</div>
+        <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>
+          {open.filter((r) => requestState(data, r).status !== "Filled").length} open · {open.filter((r) => requestState(data, r).status === "Filled").length} filled
+          {canAllocate && !canWrite && <span style={{ marginLeft: 8, color: "var(--amber)" }}>· Discipline Manager allocation access</span>}
+        </div>
         {canWrite && <button className="tf-btn tf-btn-primary" onClick={() => setCreating(true)}><Plus size={14} /> New request</button>}
       </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {open.map((r) => {
           const st = requestState(data, r);
           const p = project(r.projectId);
           const tone = st.status === "Filled" ? "green" : st.status === "Partially filled" ? "yellow" : "red";
+          const canFill = st.status !== "Filled" && (canWrite || (canAllocate && (!disciplineScope || disciplineScope === r.disc)));
           return (
-            <div key={r.id} className="tf-panel" style={{ padding: 16 }}>
+            <div key={r.id} className="tf-panel"
+              onDoubleClick={() => canFill && setFill(r)}
+              title={canFill ? "Double-click to name an engineer" : undefined}
+              style={{ padding: 16, cursor: canFill ? "default" : undefined }}>
               <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 240 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -650,12 +736,23 @@ function Requests({ data, setData, month, project, load, flash, canWrite }) {
                     Ask {rangeLabel(r)} · needs {monthLabel(r.need)} · {st.months.map((m) => `${m.label} ${m.ask}%`).join(" · ")}
                   </div>
                 </div>
+
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, justifyContent: "center" }}>
-                  <div className="tf-disp" style={{ fontSize: 20, fontWeight: 800, color: tone === "green" ? "var(--green)" : "var(--ink)" }}>{fmtPct(st.pct)}<span style={{ fontSize: 12, color: "var(--faint)" }}> covered</span></div>
-                  {st.status !== "Filled" && canWrite && (
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button className="tf-btn tf-btn-ghost" style={{ padding: "6px 12px" }} onClick={() => decline(r.id)}>Decline</button>
-                      <button className="tf-btn tf-btn-primary" style={{ padding: "6px 12px" }} onClick={() => setFill(r)}>Fill</button>
+                  <div className="tf-disp" style={{ fontSize: 20, fontWeight: 800, color: tone === "green" ? "var(--green)" : "var(--ink)" }}>
+                    {fmtPct(st.pct)}<span style={{ fontSize: 12, color: "var(--faint)" }}> covered</span>
+                  </div>
+                  {st.status !== "Filled" && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {canWrite && <button className="tf-btn tf-btn-ghost" style={{ padding: "6px 12px" }} onClick={() => decline(r.id)}>Decline</button>}
+                      {canFill
+                        ? <button className="tf-btn tf-btn-primary" style={{ padding: "6px 12px" }} onClick={() => setFill(r)}>
+                            {st.status === "Partially filled" ? "Add engineer" : "Name an engineer"}
+                          </button>
+                        : <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", maxWidth: 220, textAlign: "right" }}>
+                            {canAllocate && disciplineScope && disciplineScope !== r.disc
+                              ? `Assigned to the ${discName(r.disc)} Discipline Manager`
+                              : "Read-only"}
+                          </span>}
                     </div>
                   )}
                 </div>
@@ -666,7 +763,7 @@ function Requests({ data, setData, month, project, load, flash, canWrite }) {
         {!open.length && <div className="tf-panel" style={{ padding: 24, textAlign: "center", color: "var(--faint)" }}>No open requests.</div>}
       </div>
 
-      {fill && <FillModal data={data} setData={setData} req={fill} load={load} project={project} flash={flash} onClose={() => setFill(null)} />}
+      {fill && <FillModal data={data} req={fill} load={load} project={project} flash={flash} onAllocate={allocateRequest} onClose={() => setFill(null)} />}
       {creating && <CreateModal data={data} setData={setData} project={project} flash={flash} onClose={() => setCreating(false)} />}
     </div>
   );
@@ -686,42 +783,206 @@ function Modal({ title, sub, onClose, children, wide }) {
   );
 }
 
-function FillModal({ data, setData, req, load, project, flash, onClose }) {
-  const st = requestState(data, req);
-  const need = liveMonths(req);
-  const candidates = data.people.filter((e) => e.disc === req.disc)
-    .map((e) => {
-      const room = need.reduce((min, m) => Math.min(min, POLICY_MAX_DEFAULT - ((load[m.key] || {})[e.id] || 0)), 999);
-      return { e, room };
-    })
-    .filter((c) => c.room > 0)
-    .sort((a, b) => b.room - a.room);
+function EngineerBookOfWork({ person, data, load, add, project, ceiling }) {
+  const mine = (data.allocations || []).filter((a) => a.personId === person.id);
+  const rows = MONTHS.map((m) => {
+    const now = ((load[m.key] || {})[person.id] || 0);
+    const plus = (add && add[m.key]) || 0;
+    return { ...m, now, plus, total: now + plus };
+  }).filter((m) => !m.planning || m.now > 0 || m.plus > 0);
+  const peak = rows.reduce((best, row) => row.total > best.total ? row : best, rows[0] || { total: 0, label: "—" });
+  const breach = rows.some((r) => r.total > ceiling);
+  const over100 = rows.some((r) => r.total > 100);
+  const profile = (a) => liveMonths(a).map((m) => `${monthLabel(m.key)} ${pctIn(a, m.key)}%`).join(" · ") || "—";
 
-  const assign = (e) => {
-    const pcts = {};
-    st.months.forEach((m) => {
-      const room = POLICY_MAX_DEFAULT - ((load[m.key] || {})[e.id] || 0);
-      const take = Math.min(m.short, Math.max(0, room));
-      if (take > 0) pcts[m.key] = take;
+  return (
+    <div style={{ marginTop: 16, border: "1px solid var(--line)", borderRadius: 10, background: "var(--panel2)", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 12px", borderBottom: "1px solid var(--line)" }}>
+        <span className="tf-eyebrow">Current book of work</span>
+        <span style={{ fontWeight: 700 }}>{person.name}</span>
+        <Seniority level={person.seniority} />
+        <Chip tone="blue">{person.loc}</Chip>
+        <span className="tf-mono" style={{ marginLeft: "auto", fontSize: 10.5, color: breach ? "var(--red)" : over100 ? "var(--amber)" : "var(--faint)" }}>
+          Peak if allocated: {Math.round(peak.total)}% in {peak.label} · ceiling {ceiling}%
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(96px,1fr))", gap: 7, padding: 10 }}>
+        {rows.map((r) => (
+          <div key={r.key} style={{ textAlign: "center", border: `1px solid ${r.plus ? "var(--ink)" : "var(--line)"}`, borderRadius: 8, background: r.plus ? "var(--panel)" : "transparent", padding: "6px 5px" }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 3 }}>{r.label}</div>
+            <div className="tf-mono" style={{ fontSize: 11, color: "var(--muted)" }}>{Math.round(r.now)}%</div>
+            <div className="tf-mono" style={{ fontSize: 11, color: r.plus ? "var(--thread)" : "var(--faint)" }}>{r.plus ? `+${Math.round(r.plus)}%` : "—"}</div>
+            <div style={{ height: 7, borderRadius: 99, background: "var(--inset)", overflow: "hidden", margin: "5px 2px" }}>
+              <div style={{ height: "100%", width: `${Math.min(100, (r.total / Math.max(ceiling, r.total, 1)) * 100)}%`, background: r.total > ceiling ? "var(--red)" : r.total > 100 ? "var(--amber)" : "var(--thread)" }} />
+            </div>
+            <div className="tf-disp" style={{ fontSize: 16, fontWeight: 800, color: r.total > ceiling ? "var(--red)" : r.total > 100 ? "var(--amber)" : "var(--ink)" }}>{Math.round(r.total)}%</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding: "0 12px 10px" }}>
+        <div className="tf-eyebrow" style={{ marginBottom: 5 }}>Allocated to</div>
+        {!mine.length && <div style={{ fontSize: 12, color: "var(--faint)" }}>Nothing on the books — fully available.</div>}
+        {mine.map((a) => {
+          const p = project(a.projectId);
+          return (
+            <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0", fontSize: 12 }}>
+              <span className="tf-mono" style={{ color: "var(--thread)" }}>{p.code || a.projectId}</span>
+              <span>{p.name || a.projectId}</span>
+              <span className="tf-mono" style={{ marginLeft: "auto", color: "var(--muted)", textAlign: "right" }}>{profile(a)}</span>
+              <span className="tf-mono" style={{ color: "var(--faint)", minWidth: 100, textAlign: "right" }}>{rangeLabel(a)}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FillModal({ data, req, load, project, flash, onAllocate, onClose }) {
+  const st = requestState(data, req);
+  const ceiling = POLICY_MAX_DEFAULT;
+  const needed = st.months.filter((m) => m.short > 0);
+  const [q, setQ] = useState("");
+  const [exact, setExact] = useState(true);
+  const [sel, setSel] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [pcts, setPcts] = useState(() => Object.fromEntries(needed.map((m) => [m.key, m.short])));
+
+  const freeOf = (personId, monthKey) => ceiling - (((load[monthKey] || {})[personId]) || 0);
+  const candidates = data.people
+    .filter((e) => e.active !== false && e.disc === req.disc)
+    .filter((e) => exact ? e.seniority === req.seniority : e.seniority >= req.seniority)
+    .filter((e) => e.name.toLowerCase().includes(q.trim().toLowerCase()))
+    .map((e) => {
+      const positive = needed.filter((m) => freeOf(e.id, m.key) > 0);
+      const fullyCovers = needed.every((m) => freeOf(e.id, m.key) >= m.short);
+      const tightest = needed.length ? Math.min(...needed.map((m) => freeOf(e.id, m.key))) : 0;
+      const programs = [...new Set((data.allocations || []).filter((a) => a.personId === e.id).map((a) => project(a.projectId).name || a.projectId))];
+      return { ...e, canCover: positive.length, fullyCovers, tightest, programs };
+    })
+    .filter((e) => e.canCover > 0)
+    .sort((a, b) => Number(b.fullyCovers) - Number(a.fullyCovers) || b.tightest - a.tightest);
+
+  const selected = candidates.find((e) => e.id === sel) || data.people.find((e) => e.id === sel);
+  const capFor = (personId, monthKey) => {
+    const short = needed.find((m) => m.key === monthKey)?.short || 0;
+    return Math.max(0, Math.min(short, freeOf(personId, monthKey)));
+  };
+
+  const choose = (person) => {
+    setSel(person.id);
+    const next = {};
+    needed.forEach((m) => {
+      const value = capFor(person.id, m.key);
+      if (value > 0) next[m.key] = value;
     });
-    if (!Object.keys(pcts).length) { flash(`${e.name} has no spare capacity in the needed months.`); return; }
-    const alloc = { id: `A${data.allocations.length}`, personId: e.id, projectId: req.projectId, pcts, source: req.id };
-    setData((d) => ({ ...d, allocations: [...d.allocations, alloc] }));
-    flash(`${e.name} added to ${req.id}.`);
-    onClose();
+    setPcts(next);
+  };
+
+  const setMonth = (monthKey, raw) => {
+    if (!selected) return;
+    const value = Math.max(0, Math.min(capFor(selected.id, monthKey), Number(raw) || 0));
+    setPcts((prev) => {
+      const next = { ...prev };
+      if (value <= 0) delete next[monthKey]; else next[monthKey] = value;
+      return next;
+    });
+  };
+
+  const remaining = needed.map((m) => ({ ...m, left: Math.max(0, m.short - (pcts[m.key] || 0)) }));
+  const closes = remaining.every((m) => m.left === 0);
+  const invalid = !selected || !Object.keys(pcts).length || needed.some((m) => (pcts[m.key] || 0) > capFor(selected?.id, m.key) + 0.0001);
+
+  const submit = async () => {
+    if (invalid || busy) return;
+    setBusy(true);
+    try {
+      await onAllocate(req, selected.id, pcts);
+      onClose();
+    } catch (e) {
+      flash(e.message || "Could not allocate the engineer.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <Modal title={`Fill ${req.id}`} sub={`${project(req.projectId).name} · ${discName(req.disc)} · short ${st.months.filter((m) => m.short > 0).map((m) => `${m.label} ${m.short}%`).join(", ") || "—"}`} onClose={onClose} wide>
-      <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>People in {discName(req.disc)} with room in the needed months. Assigning fills each month up to the remaining ask, capped at the {POLICY_MAX_DEFAULT}% ceiling.</p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 360, overflowY: "auto" }} className="tf-scroll">
-        {candidates.slice(0, 30).map(({ e, room }) => (
-          <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 9 }}>
-            <div><div style={{ fontWeight: 500, fontSize: 13 }}>{e.name} <Seniority level={e.seniority} /></div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>{locName(e.loc)} · {Math.round(room)}% free</div></div>
-            <button className="tf-btn tf-btn-primary" style={{ padding: "6px 12px" }} onClick={() => assign(e)}>Assign</button>
-          </div>
-        ))}
-        {!candidates.length && <div style={{ color: "var(--faint)", fontSize: 13, textAlign: "center", padding: 16 }}>No one in this discipline has spare capacity.</div>}
+    <Modal title="Name an engineer" sub={`${req.id} · ${project(req.projectId).name} · ${discName(req.disc)} · level ${req.seniority}`} onClose={onClose} wide>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+          <Search size={14} color="var(--faint)" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+          <input className="tf-input" style={{ paddingLeft: 31 }} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the workforce roster" />
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "var(--muted)" }}>
+          <input type="checkbox" checked={exact} onChange={(e) => setExact(e.target.checked)} />
+          Level {req.seniority} only
+        </label>
+      </div>
+
+      <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 9 }} className="tf-scroll">
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+          <thead style={{ position: "sticky", top: 0, background: "var(--panel2)", zIndex: 1 }}>
+            <tr style={{ textAlign: "left", color: "var(--faint)", fontSize: 10.5 }}>
+              {["Engineer", "Site", "Level", "Programs worked", "Free (tightest)"].map((h) => <th key={h} style={{ padding: "8px 10px", textTransform: "uppercase", letterSpacing: ".05em" }}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {candidates.slice(0, 60).map((e) => (
+              <tr key={e.id} className="tf-row" onClick={() => choose(e)}
+                style={{ borderTop: "1px solid var(--line)", cursor: "pointer", background: sel === e.id ? "rgba(62,111,224,.08)" : "transparent" }}>
+                <td style={{ padding: "9px 10px" }}>
+                  <span style={{ fontWeight: 600 }}>{e.name}</span> <span className="tf-mono" style={{ color: "var(--faint)" }}>{e.id}</span>
+                  {!e.fullyCovers && <span style={{ color: "var(--amber)", marginLeft: 5 }}>part only</span>}
+                </td>
+                <td style={{ padding: "9px 10px" }}><Chip tone="blue">{e.loc}</Chip></td>
+                <td style={{ padding: "9px 10px" }}><Seniority level={e.seniority} /></td>
+                <td style={{ padding: "9px 10px", color: "var(--muted)", maxWidth: 250 }}>{e.programs.slice(0, 2).join(", ") || "—"}{e.programs.length > 2 ? ` +${e.programs.length - 2}` : ""}</td>
+                <td style={{ padding: "9px 10px", textAlign: "right" }}><span className="tf-mono" style={{ color: e.fullyCovers ? "var(--green)" : "var(--amber)", fontWeight: 700 }}>{Math.round(e.tightest)}%</span></td>
+              </tr>
+            ))}
+            {!candidates.length && <tr><td colSpan={5} style={{ padding: 18, textAlign: "center", color: "var(--faint)" }}>No matching person has capacity in the months still short.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <div className="tf-eyebrow" style={{ marginBottom: 7 }}>{selected ? `${selected.name}'s share of the ask` : "Pick an engineer first"}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(125px,1fr))", gap: 8 }}>
+          {needed.map((m) => {
+            const cap = selected ? capFor(selected.id, m.key) : 0;
+            const value = pcts[m.key] || 0;
+            return (
+              <div key={m.key} style={{ border: `1px solid ${value ? "var(--ink)" : "var(--line)"}`, borderRadius: 9, padding: 9, background: value ? "var(--panel2)" : "transparent" }}>
+                <div className="tf-eyebrow" style={{ marginBottom: 4 }}>{m.label}</div>
+                <div className="tf-disp" style={{ fontSize: 20, fontWeight: 800, textAlign: "center" }}>{Math.round(value)}%</div>
+                <input type="range" min={0} max={Math.max(0, cap)} step={5} value={Math.min(value, cap)} disabled={!selected}
+                  onChange={(e) => setMonth(m.key, e.target.value)} style={{ width: "100%" }} />
+                <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", textAlign: "center" }}>max {Math.round(cap)}% · outstanding {Math.round(m.short)}%</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 6 }}>
+          Capped at what remains outstanding and at this person's free capacity in each month. Leave a month short and the request stays open for another engineer.
+        </div>
+      </div>
+
+      {selected && <EngineerBookOfWork person={selected} data={data} load={load} add={pcts} project={project} ceiling={ceiling} />}
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 14 }}>
+        <div style={{ fontSize: 12, color: closes ? "var(--green)" : "var(--muted)" }}>
+          {!selected ? "Pick an engineer." : closes
+            ? "This completes the ask — the request will read as filled."
+            : `Still short after this: ${remaining.filter((m) => m.left > 0).map((m) => `${m.label} −${Math.round(m.left)}%`).join(", ")}`}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="tf-btn tf-btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="tf-btn tf-btn-primary" disabled={invalid || busy} onClick={submit}>
+            {busy ? "Saving…" : closes ? "Fill request" : "Add engineer"}
+          </button>
+        </div>
       </div>
     </Modal>
   );

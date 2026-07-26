@@ -332,18 +332,42 @@ function DataImportTab({ isAdmin }) {
 }
 
 /* =================== TAB 2: USER MANAGEMENT =================== */
+const WORKFORCE_ROLES = [
+  ["viewer", "Viewer"],
+  ["discipline_manager", "Discipline Manager"],
+  ["engineering_project_lead", "Engineering Project Lead"],
+  ["program_manager", "Program Manager"],
+];
+const WORKFORCE_DISCIPLINES = [
+  ["SW", "Software"], ["FW", "Firmware"], ["EE", "Electrical"],
+  ["ME", "Mechanical"], ["SE", "Systems"], ["TE", "Test"],
+  ["CM", "Configuration Mgmt"], ["PM", "Program / Project Mgmt"],
+];
+
 function UserManagementTab({ isAdmin }) {
   const [data, setData] = useState(null);
   const [invites, setInvites] = useState([]);
   const [email, setEmail] = useState("");
   const [inviteMsg, setInviteMsg] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [toggling, setToggling] = useState({});
+  const [saving, setSaving] = useState({});
+  const [error, setError] = useState("");
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!isAdmin) return;
-    adminUsage().then(setData).catch(() => {});
-    listInvites().then(setInvites).catch(() => {});
+    setError("");
+    try {
+      const usage = await adminUsage();
+      setData(usage);
+    } catch (e) {
+      setError(e.message || "Could not load licensed users.");
+      setData(null);
+    }
+    try {
+      setInvites(await listInvites());
+    } catch (e) {
+      setError((prev) => prev || e.message || "Could not load invitations.");
+    }
   }, [isAdmin]);
   useEffect(() => { load(); }, [load]);
 
@@ -357,23 +381,33 @@ function UserManagementTab({ isAdmin }) {
     finally { setBusy(false); }
   };
 
-  const toggleActive = async (member) => {
-    setToggling((t) => ({ ...t, [member.id]: true }));
+  const saveMember = async (member, patch) => {
+    setSaving((s) => ({ ...s, [member.id]: true }));
+    setError("");
     try {
-      await updateMember(member.id, { is_active: !member.is_active });
-      load();
-    } catch (e) { alert(e.message); }
-    finally { setToggling((t) => ({ ...t, [member.id]: false })); }
+      await updateMember(member.id, patch);
+      await load();
+    } catch (e) {
+      setError(e.message || "Could not update the member.");
+    } finally {
+      setSaving((s) => ({ ...s, [member.id]: false }));
+    }
   };
 
   if (!isAdmin) return <div style={{ color: C.faint, fontSize: 13 }}>Admin access required to manage users.</div>;
 
+  const licensed = data?.licensed_count ?? data?.members?.filter((m) => m.license_assigned !== false).length ?? 0;
+  const active = data?.active_account_count ?? data?.members?.filter((m) => m.is_active !== false).length ?? 0;
+  const workforcePeople = data?.workforce_people_count ?? 0;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-
-      {/* Invite */}
       <div style={card}>
-        <div style={eyebrow}>Invite a team member</div>
+        <div style={eyebrow}>Invite a licensed user</div>
+        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12, lineHeight: 1.55 }}>
+          Invitations create Threadwire login accounts and consume a license seat once accepted.
+          Workforce roster imports are separate and never consume seats.
+        </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: inviteMsg ? 0 : undefined }}>
           <input style={{ ...inp, flex: 1, minWidth: 220 }} type="email" placeholder="colleague@company.com"
             value={email} onChange={(e) => setEmail(e.target.value)}
@@ -394,47 +428,83 @@ function UserManagementTab({ isAdmin }) {
           : <div style={{ marginTop: 12, fontSize: 12.5, color: C.red }}>✕ {inviteMsg.msg}</div>)}
       </div>
 
-      {/* Team roster */}
       <div style={{ ...card, padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={eyebrow}>Team members</span>
+        <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={eyebrow}>Licensed users</span>
           <span style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginLeft: "auto" }}>
-            {data ? `${data.members.filter(m => m.is_active !== false).length} active` : "Loading…"}
+            {data ? `${licensed} licensed · ${active} active accounts · ${workforcePeople.toLocaleString()} workforce records` : "Loading…"}
           </span>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 100px", padding: "8px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>
-          <span>MEMBER</span><span>ROLE</span><span>STATUS</span><span style={{ textAlign: "right" }}>ACTION</span>
+        <div style={{ padding: "10px 18px", background: C.bg2, borderBottom: `1px solid ${C.line}`, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+          <b style={{ color: C.ink }}>License seat</b> controls application access.
+          <b style={{ color: C.ink }}> Workforce role</b> controls what that licensed user can do in Workforce.
+          The employee/engineer roster lives in <span style={{ fontFamily: mono }}>wf_people</span> and is not listed here.
         </div>
-        {!data && <div style={{ padding: 18, color: C.faint, fontSize: 13 }}>Loading…</div>}
-        {data?.members.map((m, i) => {
-          const active = m.is_active !== false;
-          return (
-            <div key={m.id || i} style={{ display: "grid", gridTemplateColumns: "1fr 90px 90px 100px", alignItems: "center",
-              padding: "12px 18px", borderBottom: i < data.members.length - 1 ? `1px solid ${C.line}` : "none",
-              background: !active ? "rgba(242,98,73,.04)" : "transparent" }}>
-              <div>
-                <div style={{ fontSize: 13.5, color: active ? C.ink : C.faint }}>
-                  {m.full_name || m.email}
-                  {m.role === "org_admin" && <span style={{ fontFamily: mono, fontSize: 10, color: C.amber, marginLeft: 6 }}>admin</span>}
-                </div>
-                <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{m.email}</div>
-              </div>
-              <div><Tag tone={m.plan === "enterprise" ? "thread" : m.plan === "pro" ? "amber" : "muted"}>{m.plan || "free"}</Tag></div>
-              <div><Tag tone={active ? "green" : "red"}>{active ? "Active" : "Inactive"}</Tag></div>
-              <div style={{ textAlign: "right" }}>
-                {m.role !== "org_admin" && (
-                  <button style={{ ...btn, padding: "5px 10px", fontSize: 11.5, color: active ? C.red : C.green, borderColor: active ? C.red : C.green }}
-                    disabled={!!toggling[m.id]} onClick={() => toggleActive(m)}>
-                    {toggling[m.id] ? "…" : active ? "Deactivate" : "Activate"}
-                  </button>
-                )}
-              </div>
+        {error && <div style={{ padding: "10px 18px", color: C.red, fontSize: 12.5, borderBottom: `1px solid ${C.line}` }}>✕ {error}</div>}
+        <div style={{ overflowX: "auto" }}>
+          <div style={{ minWidth: 980 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(240px,1fr) 120px 230px 170px 110px", padding: "8px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>
+              <span>ACCOUNT</span><span>LICENSE</span><span>WORKFORCE ROLE</span><span>DISCIPLINE SCOPE</span><span style={{ textAlign: "right" }}>STATUS</span>
             </div>
-          );
-        })}
+            {!data && !error && <div style={{ padding: 18, color: C.faint, fontSize: 13 }}>Loading…</div>}
+            {data?.members.map((m, i) => {
+              const accountActive = m.is_active !== false;
+              const hasLicense = m.license_assigned !== false;
+              const protectedAdmin = m.role === "org_admin" || m.role === "superadmin";
+              const isSaving = !!saving[m.id];
+              return (
+                <div key={m.id || i} style={{ display: "grid", gridTemplateColumns: "minmax(240px,1fr) 120px 230px 170px 110px", alignItems: "center",
+                  padding: "12px 18px", borderBottom: i < data.members.length - 1 ? `1px solid ${C.line}` : "none",
+                  background: !accountActive || !hasLicense ? "rgba(242,98,73,.035)" : "transparent", gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 13.5, color: accountActive && hasLicense ? C.ink : C.faint }}>
+                      {m.full_name || m.email}
+                      <span style={{ fontFamily: mono, fontSize: 10, color: m.role === "org_admin" ? C.amber : C.faint, marginLeft: 6 }}>
+                        {m.role === "org_admin" ? "org admin" : m.role === "superadmin" ? "site admin" : "member"}
+                      </span>
+                    </div>
+                    <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{m.email}</div>
+                  </div>
+
+                  <button style={{ ...btn, padding: "6px 9px", fontSize: 11, justifyContent: "center",
+                    color: hasLicense ? C.green : C.faint, borderColor: hasLicense ? C.green : C.line2 }}
+                    disabled={protectedAdmin || isSaving}
+                    title={protectedAdmin ? "Administrators must retain a license" : "Assign or release a Threadwire license seat"}
+                    onClick={() => saveMember(m, { license_assigned: !hasLicense })}>
+                    {hasLicense ? "Licensed" : "No seat"}
+                  </button>
+
+                  <select style={{ ...inp, padding: "7px 9px", fontSize: 11.5 }} value={m.workforce_role || "viewer"}
+                    disabled={isSaving}
+                    onChange={(e) => saveMember(m, { workforce_role: e.target.value })}>
+                    {WORKFORCE_ROLES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+
+                  {(m.workforce_role || "viewer") === "discipline_manager"
+                    ? <select style={{ ...inp, padding: "7px 9px", fontSize: 11.5 }} value={m.workforce_discipline || ""}
+                        disabled={isSaving}
+                        onChange={(e) => saveMember(m, { workforce_discipline: e.target.value || null })}>
+                        <option value="">All disciplines</option>
+                        {WORKFORCE_DISCIPLINES.map(([value, label]) => <option key={value} value={value}>{value} · {label}</option>)}
+                      </select>
+                    : <span style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>—</span>}
+
+                  <div style={{ textAlign: "right" }}>
+                    <button style={{ ...btn, padding: "6px 9px", fontSize: 11,
+                      color: accountActive ? C.green : C.red, borderColor: accountActive ? C.green : C.red }}
+                      disabled={protectedAdmin || isSaving}
+                      title={protectedAdmin ? "Administrators cannot be disabled" : "Enable or disable this login account"}
+                      onClick={() => saveMember(m, { is_active: !accountActive })}>
+                      {isSaving ? "…" : accountActive ? "Active" : "Disabled"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      {/* Pending invites */}
       {invites.length > 0 && (
         <div style={{ ...card, padding: 0, overflow: "hidden" }}>
           <div style={{ padding: "12px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>PENDING INVITES</div>
@@ -490,7 +560,7 @@ function LicenseTab({ isAdmin }) {
               </div>
               <Tag tone={data.enterprise ? "thread" : "amber"}>{data.enterprise ? "Active" : "Active"}</Tag>
               <div style={{ marginLeft: "auto", fontFamily: mono, fontSize: 12, color: C.faint }}>
-                {data.members.filter(m => m.is_active !== false).length} active users · {data.free_limit} AI messages / user / day
+                {data.licensed_count ?? data.members.filter(m => m.license_assigned !== false).length} licensed users · {data.workforce_people_count ?? 0} workforce records · {data.free_limit} AI messages / licensed user / day
               </div>
             </div>
         }

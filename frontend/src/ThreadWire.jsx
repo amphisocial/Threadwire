@@ -4025,7 +4025,7 @@ export default function App({ user }) {
       {route === "assets" && <AssetsPage tier={tier.assets} setTier={setT("assets")} stage={assetStage} setStage={setAssetStage} />}
       {route === "contracts" && <ContractsPage tier={tier.contracts} setTier={setT("contracts")} />}
       {route === "requirements" && <RequirementsPage tier={tier.requirements} setTier={setT("requirements")} />}
-      {route === "workforce" && <WorkforceIntelligence />}
+      {route === "workforce" && <WorkforceIntelligence user={user} />}
       {route === "thread" && <ThreadPage tier={tier.thread} setTier={setT("thread")} />}
       {route === "compliance" && user && user.compliance_enabled && <Compliance user={user} embedded />}
       {route === "quotes" && user && user.quote_to_order && <QuotesPage />}
