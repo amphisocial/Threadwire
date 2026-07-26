@@ -18,11 +18,10 @@ import uuid
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from . import db, ontology, ontology_explorer
+from . import db, ontology
 
 router = APIRouter(prefix="/api/workforce", tags=["workforce"])
 router.include_router(ontology.router)
-router.include_router(ontology_explorer.router)
 
 _current_user = None
 WORKFORCE_ALLOCATION_CEILING = 110
@@ -32,7 +31,6 @@ def wire_auth(current_user_dep) -> None:
     global _current_user
     _current_user = current_user_dep
     ontology.wire_auth(current_user_dep)
-    ontology_explorer.wire_auth(current_user_dep)
 
 
 async def _user(request: Request) -> dict:

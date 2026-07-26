@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import AdvancedObjectExplorer from "./AdvancedObjectExplorer";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
@@ -1044,13 +1043,11 @@ export default function OntologyStudio({ user, onBack }) {
           </section>
         </div>
       </main>
-      {objectExplorerOpen && <AdvancedObjectExplorer
+      {objectExplorerOpen && <ObjectExplorerModal
         entity={selectedEntity}
-        entities={model?.entities || []}
         objects={objects}
         selectedObject={selectedObject}
         onSelect={setSelectedObject}
-        onNavigateEntity={(entityKey, object) => { setSelectedKey(entityKey); setSelectedObject(object); }}
         onClose={() => setObjectExplorerOpen(false)}
         loading={objectExplorerLoading}
         relationships={model?.relationships || []}
