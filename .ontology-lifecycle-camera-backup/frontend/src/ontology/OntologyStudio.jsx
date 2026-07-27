@@ -56,7 +56,7 @@ function labelTexture(title, subtitle, color) {
   return texture;
 }
 
-function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove, storageKey }) {
+function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove }) {
   const hostRef = useRef(null);
   const selectRef = useRef(onSelect);
   const moveRef = useRef(onMove);
@@ -66,11 +66,7 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
   const cameraStateRef = useRef(null);
   const selectedKeyRef = useRef(selectedKey);
   const navModeRef = useRef("orbit");
-  const [navMode, setNavMode] = useState(() => {
-    if (!storageKey) return "orbit";
-    try { return sessionStorage.getItem(`${storageKey}:mode`) || "orbit"; }
-    catch (_) { return "orbit"; }
-  });
+  const [navMode, setNavMode] = useState("orbit");
   useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
   useEffect(() => { moveRef.current = onMove; }, [onMove]);
   useEffect(() => {
@@ -80,10 +76,7 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
   useEffect(() => {
     navModeRef.current = navMode;
     viewApiRef.current?.setMode?.(navMode);
-    if (storageKey) {
-      try { sessionStorage.setItem(`${storageKey}:mode`, navMode); } catch (_) {}
-    }
-  }, [navMode, storageKey]);
+  }, [navMode]);
 
   const sceneKey = useMemo(() => JSON.stringify({
     entities: entities.map((entity) => [
@@ -131,14 +124,8 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
     orbit.screenSpacePanning = true;
     orbit.target.set(0, 1.5, 0);
 
-    let savedView = cameraStateRef.current;
-    if (!savedView && storageKey) {
-      try {
-        savedView = JSON.parse(sessionStorage.getItem(storageKey) || "null");
-        cameraStateRef.current = savedView;
-      } catch (_) {}
-    }
-    if (savedView?.position?.length === 3 && savedView?.target?.length === 3) {
+    const savedView = cameraStateRef.current;
+    if (savedView) {
       camera.position.fromArray(savedView.position);
       orbit.target.fromArray(savedView.target);
     }
@@ -148,15 +135,7 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
         target: orbit.target.toArray(),
       };
     };
-    const persistView = () => {
-      rememberView();
-      if (storageKey) {
-        try { sessionStorage.setItem(storageKey, JSON.stringify(cameraStateRef.current)); }
-        catch (_) {}
-      }
-    };
     orbit.addEventListener("change", rememberView);
-    orbit.addEventListener("end", persistView);
 
     const transform = new TransformControls(camera, renderer.domElement);
     transform.setMode("translate"); transform.setSpace("world"); transform.setTranslationSnap(0.25);
@@ -261,7 +240,7 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
       scene.fog.near = Math.max(35, distance * 1.25);
       scene.fog.far = Math.max(90, distance * 3.5);
       orbit.update();
-      persistView();
+      rememberView();
     };
 
     const zoomBy = (factor) => {
@@ -270,7 +249,7 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
       const next = THREE.MathUtils.clamp(current * factor, orbit.minDistance, orbit.maxDistance);
       if (current > 0.001) camera.position.copy(orbit.target).add(offset.setLength(next));
       orbit.update();
-      persistView();
+      rememberView();
     };
 
     const setMode = (mode) => {
@@ -325,16 +304,15 @@ function OntologyCanvas({ entities, relationships, selectedKey, onSelect, onMove
     animate();
 
     return () => {
-      persistView();
+      rememberView();
       orbit.removeEventListener("change", rememberView);
-      orbit.removeEventListener("end", persistView);
       viewApiRef.current = null;
       selectionApiRef.current = null;
       positionApiRef.current = null;
       cancelAnimationFrame(frame); observer.disconnect(); renderer.domElement.removeEventListener("pointerdown", pick);
       orbit.dispose(); transform.dispose(); disposable.forEach((x) => x?.dispose?.()); renderer.dispose(); host.replaceChildren();
     };
-  }, [sceneKey, storageKey]);
+  }, [sceneKey]);
 
   return (
     <div>
@@ -753,10 +731,7 @@ export default function OntologyStudio({ user, onBack }) {
   const [showCreate, setShowCreate] = useState(false);
   const [newEntity, setNewEntity] = useState({ entity_key: "", label: "", description: "", color: "#2A46C4", position: { x: 0, y: 1, z: 0 } });
   const [creatingEntity, setCreatingEntity] = useState(false);
-  const [newRel, setNewRel] = useState({
-    relationship_key: "", label: "", from_entity_key: "", to_entity_key: "",
-    cardinality: "many-to-one", from_property: "objectKey", to_property: "objectKey",
-  });
+  const [newRel, setNewRel] = useState({ relationship_key: "", label: "", from_entity_key: "", to_entity_key: "", cardinality: "many-to-one" });
   const [customObject, setCustomObject] = useState({ object_key: "", properties: "{\n  \"status\": \"Draft\"\n}" });
   const [runs, setRuns] = useState([]);
   const [aiQuestion, setAiQuestion] = useState("");
@@ -768,38 +743,13 @@ export default function OntologyStudio({ user, onBack }) {
     try {
       const data = await api("/api/workforce/ontology/model");
       setModel(data);
-      setSelectedKey((current) =>
-        data.entities?.some((entity) => entity.entityKey === current)
-          ? current
-          : data.entities?.[0]?.entityKey || ""
-      );
+      setSelectedKey((k) => k || data.entities?.[0]?.entityKey || "");
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }, []);
 
   useEffect(() => { loadModel(); }, [loadModel]);
   const selectedEntity = model?.entities?.find((e) => e.entityKey === selectedKey) || null;
-  const relationshipFromEntity = model?.entities?.find((e) => e.entityKey === newRel.from_entity_key) || null;
-  const relationshipToEntity = model?.entities?.find((e) => e.entityKey === newRel.to_entity_key) || null;
-  const selectedRelationships = (model?.relationships || []).filter(
-    (relationship) =>
-      relationship.fromEntityKey === selectedKey ||
-      relationship.toEntityKey === selectedKey
-  );
-
-  const defaultRelationshipProperty = (entity) =>
-    entity?.keyFields?.[0] ||
-    entity?.properties?.find((property) => property.isKey)?.propertyKey ||
-    "objectKey";
-
-  const chooseRelationshipEntity = (side, entityKey) => {
-    const entity = model?.entities?.find((item) => item.entityKey === entityKey);
-    setNewRel((current) => ({
-      ...current,
-      [`${side}_entity_key`]: entityKey,
-      [`${side}_property`]: defaultRelationshipProperty(entity),
-    }));
-  };
 
   const openObjectExplorer = async (entity) => {
     if (!entity) return;
@@ -883,11 +833,6 @@ export default function OntologyStudio({ user, onBack }) {
       setNewEntity({ entity_key: "", label: "", description: "", color: "#2A46C4", position: { x: 0, y: 1, z: 0 } });
       await loadModel();
       setSelectedKey(createdKey);
-      setNewRel((current) => ({
-        ...current,
-        from_entity_key: createdKey,
-        from_property: "objectKey",
-      }));
       setMode("model");
       flash(`Custom entity created at X ${position.x}, Y ${position.y}, Z ${position.z}`);
     } catch (e) { setError(e.message); }
@@ -896,50 +841,9 @@ export default function OntologyStudio({ user, onBack }) {
 
   const createRelationship = async () => {
     try {
-      await api("/api/workforce/ontology/relationships", {
-        method: "POST", body: JSON.stringify(newRel),
-      });
-      setNewRel({
-        relationship_key: "", label: "", from_entity_key: "", to_entity_key: "",
-        cardinality: "many-to-one", from_property: "objectKey", to_property: "objectKey",
-      });
-      await loadModel();
-      flash(
-        `Relationship created: ${newRel.from_entity_key}.${newRel.from_property} → ` +
-        `${newRel.to_entity_key}.${newRel.to_property}`
-      );
-    } catch (e) { setError(e.message); }
-  };
-
-  const deleteRelationship = async (relationship) => {
-    if (!window.confirm(`Delete relationship "${relationship.label}"?`)) return;
-    try {
-      await api(
-        `/api/workforce/ontology/relationships/${encodeURIComponent(relationship.relationshipKey)}`,
-        { method: "DELETE" }
-      );
-      await loadModel(); flash("Relationship deleted");
-    } catch (e) { setError(e.message); }
-  };
-
-  const deleteSelectedEntity = async () => {
-    if (!selectedEntity || selectedEntity.isSystem) return;
-    if (Number(selectedEntity.count || 0) > 0) {
-      setError(
-        `Delete the ${selectedEntity.count} ${selectedEntity.label} object` +
-        `${selectedEntity.count === 1 ? "" : "s"} first`
-      );
-      return;
-    }
-    if (!window.confirm(
-      `Delete the empty custom entity "${selectedEntity.label}" and its relationship definitions?`
-    )) return;
-    try {
-      await api(
-        `/api/workforce/ontology/entities/${encodeURIComponent(selectedEntity.entityKey)}`,
-        { method: "DELETE" }
-      );
-      await loadModel(); flash("Custom entity deleted");
+      await api("/api/workforce/ontology/relationships", { method: "POST", body: JSON.stringify(newRel) });
+      setNewRel({ relationship_key: "", label: "", from_entity_key: "", to_entity_key: "", cardinality: "many-to-one" });
+      await loadModel(); flash("Relationship created");
     } catch (e) { setError(e.message); }
   };
 
@@ -1046,14 +950,7 @@ export default function OntologyStudio({ user, onBack }) {
                   <div style={{ color: "#47606F", fontSize: 12 }}>Select an entity to move it with the XYZ gizmo. Use the view controls below to pan, zoom or fit the entire model.</div>
                   <button onClick={async () => { await api("/api/workforce/ontology/bootstrap", { method: "POST", body: "{}" }); await loadModel(); flash("Ontology refreshed from the current Threadwire schema"); }} disabled={!model?.canWrite} style={{ ...button(), marginLeft: "auto" }}><RefreshCw size={14} />Refresh schema</button>
                 </div>
-                <OntologyCanvas
-                  entities={model?.entities || []}
-                  relationships={model?.relationships || []}
-                  selectedKey={selectedKey}
-                  onSelect={setSelectedKey}
-                  onMove={(key, position) => patchEntity(key, { position })}
-                  storageKey={`threadwire:ontology-camera:${model?.tenant?.orgId || "default"}`}
-                />
+                <OntologyCanvas entities={model?.entities || []} relationships={model?.relationships || []} selectedKey={selectedKey} onSelect={setSelectedKey} onMove={(key, position) => patchEntity(key, { position })} />
               </div>
               <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
                 {selectedEntity && <div style={{ ...card, padding: 16 }}>
@@ -1072,72 +969,17 @@ export default function OntologyStudio({ user, onBack }) {
                     Key: {(selectedEntity.keyFields || []).join(" + ")}<br />Source system: {selectedEntity.sourceSystem}
                   </div>
                   <PropertyTable entity={selectedEntity} />
-                  {model.canWrite && !selectedEntity.isSystem && <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #E3E9F0" }}>
-                    <div style={{ color: "#687F8E", fontSize: 11, marginBottom: 8 }}>
-                      Custom entity lifecycle: delete its object records first. The entity type can be removed only when its count is zero.
-                    </div>
-                    <button
-                      type="button"
-                      disabled={Number(selectedEntity.count || 0) > 0}
-                      onClick={deleteSelectedEntity}
-                      title={selectedEntity.count ? `Delete ${selectedEntity.count} objects first` : "Delete this empty custom entity"}
-                      style={{
-                        ...button(), color: "#AC3247",
-                        opacity: selectedEntity.count ? .55 : 1,
-                        cursor: selectedEntity.count ? "not-allowed" : "pointer",
-                      }}
-                    ><Trash2 size={14} />{selectedEntity.count ? `Delete ${selectedEntity.count} objects first` : "Delete empty entity"}</button>
-                  </div>}
                 </div>}
                 {model?.canWrite && <div style={{ ...card, padding: 16 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
-                    <Link2 size={15} color="#2A46C4" /><b>Create mapped relationship</b>
-                    {selectedEntity && <button type="button" onClick={() => chooseRelationshipEntity("from", selectedEntity.entityKey)} style={{ ...button(), marginLeft: "auto", padding: "6px 8px" }}>Use selected as From</button>}
-                  </div>
-                  <div style={{ color: "#687F8E", fontSize: 11, lineHeight: 1.45, marginBottom: 10 }}>
-                    Objects become linked when the configured property values match. Example:
-                    <span style={{ font: "10px monospace", color: "#29404E" }}> Machine.part_number → Part.part_number</span>.
-                    JSON arrays are supported for many-to-many links.
-                  </div>
-                  <div style={{ display: "grid", gap: 8 }}>
-                    <input style={input} placeholder="relationship_key, e.g. machine_builds_part" value={newRel.relationship_key} onChange={(e) => setNewRel({ ...newRel, relationship_key: e.target.value.toLowerCase().replace(/\W+/g, "_") })} />
-                    <input style={input} placeholder="Relationship label, e.g. builds" value={newRel.label} onChange={(e) => setNewRel({ ...newRel, label: e.target.value })} />
-                    <div style={{ padding: 10, border: "1px solid #DCE3EC", borderRadius: 10, background: "#F8FAFD" }}>
-                      <div style={{ color: "#687F8E", font: "10px monospace", marginBottom: 6 }}>FROM OBJECT PROPERTY</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-                        <select style={input} value={newRel.from_entity_key} onChange={(e) => chooseRelationshipEntity("from", e.target.value)}>
-                          <option value="">From entity</option>{model.entities.map((entity) => <option key={entity.entityKey} value={entity.entityKey}>{entity.label}</option>)}
-                        </select>
-                        <input list="ontology-from-properties" style={input} placeholder="Property, e.g. part_number" value={newRel.from_property} onChange={(e) => setNewRel({ ...newRel, from_property: e.target.value })} />
-                        <datalist id="ontology-from-properties"><option value="objectKey" />{(relationshipFromEntity?.properties || []).map((property) => <option key={property.propertyKey} value={property.propertyKey}>{property.label}</option>)}</datalist>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "center", color: "#2A46C4", font: "700 15px monospace" }}>↓ matches ↓</div>
-                    <div style={{ padding: 10, border: "1px solid #DCE3EC", borderRadius: 10, background: "#F8FAFD" }}>
-                      <div style={{ color: "#687F8E", font: "10px monospace", marginBottom: 6 }}>TO OBJECT PROPERTY</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7 }}>
-                        <select style={input} value={newRel.to_entity_key} onChange={(e) => chooseRelationshipEntity("to", e.target.value)}>
-                          <option value="">To entity</option>{model.entities.map((entity) => <option key={entity.entityKey} value={entity.entityKey}>{entity.label}</option>)}
-                        </select>
-                        <input list="ontology-to-properties" style={input} placeholder="Property, e.g. part_number" value={newRel.to_property} onChange={(e) => setNewRel({ ...newRel, to_property: e.target.value })} />
-                        <datalist id="ontology-to-properties"><option value="objectKey" />{(relationshipToEntity?.properties || []).map((property) => <option key={property.propertyKey} value={property.propertyKey}>{property.label}</option>)}</datalist>
-                      </div>
-                    </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}><Link2 size={15} color="#2A46C4" /><b>Create relationship</b></div>
+                  <div style={{ display: "grid", gap: 7 }}>
+                    <input style={input} placeholder="relationship_key" value={newRel.relationship_key} onChange={(e) => setNewRel({ ...newRel, relationship_key: e.target.value.toLowerCase().replace(/\W+/g, "_") })} />
+                    <input style={input} placeholder="Label, e.g. depends on" value={newRel.label} onChange={(e) => setNewRel({ ...newRel, label: e.target.value })} />
+                    <select style={input} value={newRel.from_entity_key} onChange={(e) => setNewRel({ ...newRel, from_entity_key: e.target.value })}><option value="">From entity</option>{model.entities.map((e) => <option key={e.entityKey} value={e.entityKey}>{e.label}</option>)}</select>
+                    <select style={input} value={newRel.to_entity_key} onChange={(e) => setNewRel({ ...newRel, to_entity_key: e.target.value })}><option value="">To entity</option>{model.entities.map((e) => <option key={e.entityKey} value={e.entityKey}>{e.label}</option>)}</select>
                     <select style={input} value={newRel.cardinality} onChange={(e) => setNewRel({ ...newRel, cardinality: e.target.value })}><option>one-to-one</option><option>one-to-many</option><option>many-to-one</option><option>many-to-many</option></select>
-                    {newRel.from_entity_key && newRel.to_entity_key && <div style={{ padding: 9, borderRadius: 9, background: "#EEF2FF", color: "#29404E", font: "10px monospace", overflowWrap: "anywhere" }}>
-                      {newRel.from_entity_key}.{newRel.from_property || "objectKey"} → {newRel.to_entity_key}.{newRel.to_property || "objectKey"}
-                    </div>}
-                    <button onClick={createRelationship} disabled={!newRel.relationship_key || !newRel.label || !newRel.from_entity_key || !newRel.to_entity_key || !newRel.from_property || !newRel.to_property} style={button(true)}>Create mapped relationship</button>
+                    <button onClick={createRelationship} disabled={!newRel.relationship_key || !newRel.label || !newRel.from_entity_key || !newRel.to_entity_key} style={button(true)}>Connect entities</button>
                   </div>
-                  {!!selectedRelationships.length && <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid #E3E9F0" }}>
-                    <div style={{ color: "#687F8E", font: "10px monospace", marginBottom: 7 }}>RELATIONSHIPS FOR {selectedEntity?.label?.toUpperCase()}</div>
-                    <div style={{ display: "grid", gap: 6 }}>
-                      {selectedRelationships.map((relationship) => <div key={relationship.relationshipKey} style={{ padding: 8, border: "1px solid #E3E9F0", borderRadius: 8, display: "grid", gridTemplateColumns: "1fr auto", gap: 7 }}>
-                        <div><b style={{ fontSize: 11 }}>{relationship.label}</b><div style={{ color: "#718695", font: "9px monospace", overflowWrap: "anywhere" }}>{relationship.fromEntityKey}.{relationship.fromProperty || "objectKey"} → {relationship.toEntityKey}.{relationship.toProperty || "objectKey"} · {relationship.cardinality}</div></div>
-                        {relationship.sourceKind === "custom" && <button type="button" onClick={() => deleteRelationship(relationship)} title="Delete custom relationship" style={{ border: 0, background: "none", cursor: "pointer", color: "#AC3247" }}><Trash2 size={14} /></button>}
-                      </div>)}
-                    </div>
-                  </div>}
                 </div>}
               </div>
             </div>}
@@ -1216,15 +1058,6 @@ export default function OntologyStudio({ user, onBack }) {
         onOpenObjects={() => { setObjectExplorerOpen(false); setSearch(""); setMode("objects"); }}
         onTraceImpact={(object) => { setObjectExplorerOpen(false); setSelectedObject(object); runImpact(object); }}
         onRunAction={runAction}
-        canWrite={model?.canWrite}
-        onObjectDeleted={(entityKey, deletedKeys) => {
-          const deleted = new Set(deletedKeys || []);
-          if (entityKey === selectedKey) {
-            setObjects((current) => current.filter((object) => !deleted.has(object.objectKey)));
-            setSelectedObject((current) => current && deleted.has(current.objectKey) ? null : current);
-          }
-          loadModel();
-        }}
       />}
       {showCreate && <div role="dialog" aria-modal="true" aria-labelledby="ontology-create-title" onMouseDown={(e) => { if (e.target === e.currentTarget && !creatingEntity) setShowCreate(false); }} style={{ position: "fixed", inset: 0, zIndex: 120, display: "grid", placeItems: "center", padding: 20, background: "rgba(21,34,45,.58)", backdropFilter: "blur(5px)" }}>
         <div style={{ width: "min(620px,100%)", maxHeight: "calc(100vh - 40px)", overflow: "auto", background: "#fff", border: "1px solid #C6D2E0", borderRadius: 18, boxShadow: "0 30px 90px rgba(21,34,45,.32)" }}>

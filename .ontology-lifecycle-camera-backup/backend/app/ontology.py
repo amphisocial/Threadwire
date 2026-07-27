@@ -156,8 +156,8 @@ class RelationshipCreate(BaseModel):
     from_entity_key: str = Field(min_length=2, max_length=80)
     to_entity_key: str = Field(min_length=2, max_length=80)
     cardinality: str = Field(default="many-to-one", max_length=30)
-    from_property: str = Field(default="objectKey", min_length=1, max_length=80)
-    to_property: str = Field(default="objectKey", min_length=1, max_length=80)
+    from_property: str = Field(default="", max_length=80)
+    to_property: str = Field(default="", max_length=80)
 
 
 class CustomObjectIn(BaseModel):
@@ -285,23 +285,12 @@ async def _load_model(con, org_id) -> dict:
     rels = await con.fetch("SELECT * FROM ontology_relationship_types WHERE org_id=$1 ORDER BY label", org_id)
     actions = await con.fetch("SELECT * FROM ontology_action_types WHERE org_id=$1 AND active ORDER BY label", org_id)
     counts: Dict[str, int] = {}
-    for entity in entities:
-        entity_key = entity["entity_key"]
-        if entity["source_kind"] == "custom":
-            counts[entity_key] = await con.fetchval(
-                "SELECT count(*) FROM ontology_custom_objects WHERE org_id=$1 AND entity_key=$2",
-                org_id, entity_key,
-            )
+    for spec in CORE_ENTITIES:
+        if spec.get("custom"):
+            counts[spec["key"]] = await con.fetchval(
+                "SELECT count(*) FROM ontology_custom_objects WHERE org_id=$1 AND entity_key=$2", org_id, spec["key"])
         else:
-            spec = OBJECT_SPECS.get(entity_key)
-            counts[entity_key] = (
-                await con.fetchval(
-                    f"SELECT count(*) FROM {spec['table']} WHERE org_id=$1",
-                    org_id,
-                )
-                if spec
-                else 0
-            )
+            counts[spec["key"]] = await con.fetchval(f"SELECT count(*) FROM {spec['table']} WHERE org_id=$1", org_id)
     prop_map: Dict[str, list] = {}
     for p in props:
         prop_map.setdefault(p["entity_key"], []).append({
@@ -488,70 +477,6 @@ async def _impact(con, org_id, entity_key: str, object_key: str) -> dict:
             nid = add_node("part", str(pn), obj["properties"] if obj else {"part_number": pn})
             add_edge(root_id, nid, "changes")
 
-    # Resolve organization-defined relationship mappings generically. A custom
-    # relationship becomes a live object link when the configured from/to
-    # property values match. Scalar and JSON-array values are both supported.
-    def relationship_value(obj_key: str, properties: dict, property_key: str):
-        return obj_key if property_key in ("objectKey", "object_key") else properties.get(property_key)
-
-    def relationship_tokens(value) -> set:
-        if value is None or value == "":
-            return set()
-        if isinstance(value, dict):
-            values = value.values()
-        elif isinstance(value, (list, tuple, set)):
-            values = value
-        else:
-            values = [value]
-        return {
-            str(item).strip().lower()
-            for item in values
-            if item is not None and str(item).strip()
-        }
-
-    custom_relationships = await con.fetch(
-        """SELECT relationship_key,label,from_entity_key,to_entity_key,
-                  from_property,to_property
-           FROM ontology_relationship_types
-           WHERE org_id=$1 AND source_kind='custom'
-             AND (from_entity_key=$2 OR to_entity_key=$2)""",
-        org_id, entity_key,
-    )
-    for rel in custom_relationships:
-        outbound = rel["from_entity_key"] == entity_key
-        root_property = rel["from_property"] if outbound else rel["to_property"]
-        other_property = rel["to_property"] if outbound else rel["from_property"]
-        other_entity = rel["to_entity_key"] if outbound else rel["from_entity_key"]
-        root_tokens = relationship_tokens(
-            relationship_value(object_key, p, root_property or "objectKey")
-        )
-        if not root_tokens:
-            continue
-        candidates = await _object_rows(con, org_id, other_entity, 500)
-        for candidate in candidates:
-            if len(nodes) >= 80:
-                break
-            if other_entity == entity_key and candidate["objectKey"] == object_key:
-                continue
-            candidate_tokens = relationship_tokens(
-                relationship_value(
-                    candidate["objectKey"],
-                    candidate.get("properties") or {},
-                    other_property or "objectKey",
-                )
-            )
-            if not root_tokens.intersection(candidate_tokens):
-                continue
-            nid = add_node(
-                other_entity,
-                candidate["objectKey"],
-                candidate.get("properties") or {},
-            )
-            if outbound:
-                add_edge(root_id, nid, rel["label"])
-            else:
-                add_edge(nid, root_id, rel["label"])
-
     return {"root": root_id, "nodes": list(nodes.values())[:80], "edges": edges[:120], "truncated": len(nodes) > 80 or len(edges) > 120}
 
 
@@ -618,95 +543,37 @@ async def patch_entity(entity_key: str, body: EntityPatch, request: Request):
 async def delete_entity(entity_key: str, request: Request):
     user = await _user(request); _require_admin(user)
     async with db.pool().acquire() as con:
-        row = await con.fetchrow(
-            "SELECT is_system,label,source_kind FROM ontology_entity_types "
-            "WHERE org_id=$1 AND entity_key=$2",
-            user["org_id"], entity_key,
-        )
+        row = await con.fetchrow("SELECT is_system FROM ontology_entity_types WHERE org_id=$1 AND entity_key=$2", user["org_id"], entity_key)
         if not row:
             raise HTTPException(404, "Entity not found")
         if row["is_system"]:
-            raise HTTPException(
-                409,
-                "Core Threadwire entities cannot be deleted; hide or relabel them instead",
-            )
-        object_count = await con.fetchval(
-            "SELECT count(*) FROM ontology_custom_objects "
-            "WHERE org_id=$1 AND entity_key=$2",
-            user["org_id"], entity_key,
-        )
-        if object_count:
-            raise HTTPException(
-                409,
-                f"Delete the {object_count} {row['label']} object"
-                f"{'s' if object_count != 1 else ''} before deleting this entity type",
-            )
+            raise HTTPException(409, "Core Threadwire entities cannot be deleted; hide or relabel them instead")
         async with con.transaction():
-            await con.execute(
-                "DELETE FROM ontology_relationship_types "
-                "WHERE org_id=$1 AND (from_entity_key=$2 OR to_entity_key=$2)",
-                user["org_id"], entity_key,
-            )
-            await con.execute(
-                "DELETE FROM ontology_entity_types WHERE org_id=$1 AND entity_key=$2",
-                user["org_id"], entity_key,
-            )
-    return {"ok": True, "entityKey": entity_key}
+            await con.execute("DELETE FROM ontology_relationship_types WHERE org_id=$1 AND (from_entity_key=$2 OR to_entity_key=$2)", user["org_id"], entity_key)
+            await con.execute("DELETE FROM ontology_custom_objects WHERE org_id=$1 AND entity_key=$2", user["org_id"], entity_key)
+            await con.execute("DELETE FROM ontology_entity_types WHERE org_id=$1 AND entity_key=$2", user["org_id"], entity_key)
+    return {"ok": True}
 
 
 @router.post("/relationships")
 async def create_relationship(body: RelationshipCreate, request: Request):
     user = await _user(request); _require_admin(user)
-    from_property = body.from_property.strip() or "objectKey"
-    to_property = body.to_property.strip() or "objectKey"
     async with db.pool().acquire() as con:
-        entity_rows = await con.fetch(
-            "SELECT entity_key,source_kind FROM ontology_entity_types "
-            "WHERE org_id=$1 AND entity_key=ANY($2::text[])",
-            user["org_id"], [body.from_entity_key, body.to_entity_key],
-        )
-        entity_map = {row["entity_key"]: row for row in entity_rows}
-        if len(entity_map) != len({body.from_entity_key, body.to_entity_key}):
+        keys = await con.fetch("SELECT entity_key FROM ontology_entity_types WHERE org_id=$1 AND entity_key=ANY($2::text[])", user["org_id"], [body.from_entity_key, body.to_entity_key])
+        if len({r["entity_key"] for r in keys}) != len({body.from_entity_key, body.to_entity_key}):
             raise HTTPException(400, "Both entities must exist")
-
-        for entity_key, property_key in (
-            (body.from_entity_key, from_property),
-            (body.to_entity_key, to_property),
-        ):
-            entity = entity_map[entity_key]
-            if entity["source_kind"] == "core_table" and property_key != "objectKey":
-                exists = await con.fetchval(
-                    """SELECT 1
-                       FROM ontology_properties p
-                       JOIN ontology_entity_types e ON e.id=p.entity_type_id
-                       WHERE p.org_id=$1 AND e.entity_key=$2 AND p.property_key=$3""",
-                    user["org_id"], entity_key, property_key,
-                )
-                if not exists:
-                    raise HTTPException(
-                        400,
-                        f"{entity_key}.{property_key} is not a mapped ontology property",
-                    )
         try:
             row = await con.fetchrow(
                 """INSERT INTO ontology_relationship_types
-                   (org_id,relationship_key,label,from_entity_key,to_entity_key,
-                    cardinality,from_property,to_property,source_kind)
+                   (org_id,relationship_key,label,from_entity_key,to_entity_key,cardinality,from_property,to_property,source_kind)
                    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'custom') RETURNING *""",
-                user["org_id"], body.relationship_key, body.label,
-                body.from_entity_key, body.to_entity_key, body.cardinality,
-                from_property, to_property,
-            )
+                user["org_id"], body.relationship_key, body.label, body.from_entity_key,
+                body.to_entity_key, body.cardinality, body.from_property, body.to_property)
         except Exception as e:
             if "unique" in str(e).lower():
                 raise HTTPException(409, "That relationship key already exists")
             raise
-    return {
-        "id": str(row["id"]),
-        "relationshipKey": row["relationship_key"],
-        "fromProperty": row["from_property"],
-        "toProperty": row["to_property"],
-    }
+    return {"id": str(row["id"]), "relationshipKey": row["relationship_key"]}
 
 
 @router.delete("/relationships/{relationship_key}")
@@ -754,26 +621,10 @@ async def create_object(entity_key: str, body: CustomObjectIn, request: Request)
 async def delete_object(entity_key: str, object_key: str, request: Request):
     user = await _user(request); _require_admin(user)
     async with db.pool().acquire() as con:
-        entity = await con.fetchrow(
-            "SELECT source_kind FROM ontology_entity_types "
-            "WHERE org_id=$1 AND entity_key=$2",
-            user["org_id"], entity_key,
-        )
-        if not entity:
-            raise HTTPException(404, "Entity not found")
-        if entity["source_kind"] != "custom":
-            raise HTTPException(
-                409,
-                "Core operational objects must be deleted through their existing Threadwire workflow",
-            )
-        result = await con.execute(
-            "DELETE FROM ontology_custom_objects "
-            "WHERE org_id=$1 AND entity_key=$2 AND object_key=$3",
-            user["org_id"], entity_key, object_key,
-        )
+        result = await con.execute("DELETE FROM ontology_custom_objects WHERE org_id=$1 AND entity_key=$2 AND object_key=$3", user["org_id"], entity_key, object_key)
     if result.endswith("0"):
         raise HTTPException(404, "Custom object not found")
-    return {"ok": True, "entityKey": entity_key, "objectKey": object_key}
+    return {"ok": True}
 
 
 @router.get("/impact/{entity_key}/{object_key}")

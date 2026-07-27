@@ -99,7 +99,6 @@ function ArtifactPanel({ saved, onLoadExploration, onLoadList, onDelete, onClose
 export default function AdvancedObjectExplorer({
   entity, entities = [], objects = [], selectedObject, onSelect, onNavigateEntity, onClose,
   onOpenObjects, relationships = [], actions = [], loading = false,
-  canWrite = false, onObjectDeleted,
 }) {
   const [activeEntity, setActiveEntity] = useState(entity);
   const [rows, setRows] = useState(objects);
@@ -387,42 +386,6 @@ export default function AdvancedObjectExplorer({
     } catch (event) { setError(event.message); }
   };
 
-  const deleteCustomObjects = async (keys) => {
-    const uniqueKeys = [...new Set((keys || []).filter(Boolean))];
-    if (!canWrite || activeEntity?.sourceKind !== "custom" || !uniqueKeys.length) return;
-    if (!window.confirm(
-      `Delete ${uniqueKeys.length} ${activeEntity.label} object` +
-      `${uniqueKeys.length === 1 ? "" : "s"}? This cannot be undone.`
-    )) return;
-    setBusy(true); setError("");
-    try {
-      for (let offset = 0; offset < uniqueKeys.length; offset += 10) {
-        const chunk = uniqueKeys.slice(offset, offset + 10);
-        await Promise.all(chunk.map((key) => api(
-          `/api/workforce/ontology/objects/${encodeURIComponent(activeEntity.entityKey)}/${encodeURIComponent(key)}`,
-          { method: "DELETE" }
-        )));
-      }
-      const deleted = new Set(uniqueKeys);
-      const remaining = rows.filter((row) => !deleted.has(row.objectKey));
-      const nextIndex = Math.max(0, Math.min(currentIndex, remaining.length - 1));
-      const nextObject = remaining[nextIndex] || null;
-      setRows(remaining);
-      setActiveObject(nextObject);
-      setSelectedKeys(new Set());
-      setMeta((current) => ({
-        ...current,
-        returned: Math.max(0, Number(current.returned ?? rows.length) - uniqueKeys.length),
-        matched: Math.max(0, Number(current.matched ?? rows.length) - uniqueKeys.length),
-        total: Math.max(0, Number(current.total ?? activeEntity.count ?? rows.length) - uniqueKeys.length),
-      }));
-      onSelect?.(nextObject);
-      onObjectDeleted?.(activeEntity.entityKey, uniqueKeys);
-      setNotice(`${uniqueKeys.length} custom object${uniqueKeys.length === 1 ? "" : "s"} deleted`);
-    } catch (event) { setError(event.message); }
-    finally { setBusy(false); }
-  };
-
   const relationshipRows = relationships.filter(
     (relationship) =>
       relationship.fromEntityKey === activeEntity?.entityKey ||
@@ -587,7 +550,7 @@ export default function AdvancedObjectExplorer({
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 7, marginBottom: 12 }}>
                     {[["Authority", activeEntity.sourceKind === "core_table" ? activeEntity.sourceTable : "ontology_custom_objects"], ["Source", activeEntity.sourceSystem], ["Tenant", "org_id enforced"], ["Mode", activeEntity.sourceKind === "custom" ? "Editable custom object" : "Governed read-only"]].map(([label, value]) => <div key={label} style={{ padding: 9, borderRadius: 9, background: "#F5F8FC" }}><div style={{ color: "#8093A0", font: "9px monospace" }}>{label.toUpperCase()}</div><b style={{ fontSize: 11 }}>{value}</b></div>)}
                   </div>
-                  {activeEntity.sourceKind === "custom" && canWrite && <div style={{ marginBottom: 10, display: "flex", justifyContent: "flex-end", gap: 7 }}>{editMode ? <><button onClick={() => setEditMode(false)} style={button()}>Cancel</button><button onClick={saveCustomObject} style={button(true)}><Save size={14} />Save custom properties</button></> : <><button onClick={startEdit} style={button()}><Pencil size={14} />Edit custom object</button><button onClick={() => deleteCustomObjects([activeObject.objectKey])} style={{ ...button(), color: "#AC3247" }}><Trash2 size={14} />Delete object</button></>}</div>}
+                  {activeEntity.sourceKind === "custom" && <div style={{ marginBottom: 10, display: "flex", justifyContent: "flex-end" }}>{editMode ? <><button onClick={() => setEditMode(false)} style={button()}>Cancel</button><button onClick={saveCustomObject} style={{ ...button(true), marginLeft: 7 }}><Save size={14} />Save custom properties</button></> : <button onClick={startEdit} style={button()}><Pencil size={14} />Edit custom object</button>}</div>}
                   {editMode ? <textarea value={editJson} onChange={(event) => setEditJson(event.target.value)} style={{ ...input, minHeight: 360, fontSize: 12 }} /> :
                   <div className="oe-props">{propertyDefinitions.map((property) => <div key={property.propertyKey} style={{ ...card, padding: 11 }}>
                     <div style={{ display: "flex", gap: 7 }}><b style={{ fontSize: 12 }}>{property.label}</b>{property.isKey && <span style={{ marginLeft: "auto", color: "#2A46C4", font: "9px monospace" }}>KEY</span>}</div>
@@ -628,7 +591,6 @@ export default function AdvancedObjectExplorer({
         {selectedKeys.size > 0 && <footer style={{ padding: "10px 14px", borderTop: "1px solid #DCE3EC", background: "#15222D", color: "#fff", display: "flex", alignItems: "center", gap: 9 }}>
           <CheckSquare size={16} /><b>{selectedKeys.size} selected</b>
           <button onClick={() => setSelectedKeys(new Set())} style={{ ...button(), marginLeft: 5 }}>Clear</button>
-          {activeEntity.sourceKind === "custom" && canWrite && <button onClick={() => deleteCustomObjects([...selectedKeys])} style={{ ...button(), color: "#AC3247" }}><Trash2 size={14} />Delete selected</button>}
           <select value={actionKey} onChange={(event) => setActionKey(event.target.value)} style={{ ...input, width: 260, marginLeft: "auto" }}><option value="">Choose governed action</option>{entityActions.map((action) => <option key={action.actionKey} value={action.actionKey}>{action.label}{action.requiresApproval ? " · approval" : ""}</option>)}</select>
           <button disabled={!actionKey || busy} onClick={() => runBulkAction()} style={button(true)}>{busy ? <Loader2 size={14} className="spin" /> : <ShieldCheck size={14} />}Run on selected</button>
         </footer>}
