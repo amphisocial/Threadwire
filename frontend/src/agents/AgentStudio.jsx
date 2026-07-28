@@ -725,8 +725,19 @@ function Welcome({ onNew, count }) {
 function StudioCss() {
   return (
     <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
     .as-root{position:fixed;inset:0;z-index:60;display:flex;background:var(--bg);color:var(--ink);
-      font-family:var(--body);--r:12px}
+      font-family:var(--body);--r:12px;
+      /* self-contained tokens — Studio can render while ThreadWire (.tf) is unmounted */
+      --bg:#F4F6FA; --bg2:#EEF2F7; --panel:#FFFFFF; --panel2:#F5F8FC;
+      --line:#DCE3EC; --line2:#C6D2E0;
+      --ink:#15222D; --muted:#47606F; --faint:#8093A0; --inset:#EEF2F7;
+      --amber:#2A46C4; --amber-d:#1B2E8C;
+      --thread:#3E6FE0; --thread-d:#1B2E8C;
+      --green:#12784E; --red:#AC3247; --yellow:#B27C12; --blue:#2A46C4;
+      --disp:'Bricolage Grotesque',sans-serif;
+      --body:'Inter',sans-serif;
+      --mono:'IBM Plex Mono',monospace}
     .as-root *{box-sizing:border-box}
     .as-scroll{overflow:auto}.as-scroll::-webkit-scrollbar{width:9px;height:9px}
     .as-scroll::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
