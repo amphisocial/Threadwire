@@ -26,7 +26,7 @@ const NODE_TYPES = {
   web: { label: "Web query", icon: Globe, color: "#2D7C6D",
     blurb: "Fetch external data to merge", defaults: { label: "Fetch web", url: "https://", outputKey: "web" } },
   ai: { label: "AI decision", icon: Sparkles, color: "#7A4BB7",
-    blurb: "Let the model decide", defaults: { label: "Decide", prompt: "Given {{data}}, decide…", outputKey: "decision" } },
+    blurb: "Write a prompt / instruction", defaults: { label: "Decide", prompt: "Given {{data}}, decide…", outputKey: "decision" } },
   assign: { label: "Assign to person", icon: UserCheck, color: "var(--red)",
     blurb: "Human in the loop", defaults: { label: "Assign", assignee: "", kind: "approval", title: "Action required", detail: "", pause: true } },
   output: { label: "Output", icon: Flag, color: "var(--green)",
@@ -529,9 +529,9 @@ function NodeConfig({ node, catalog, patchGraph }) {
 
       {node.type === "ai" && (
         <>
-          <label className="as-field"><span>Instruction</span>
-            <textarea className="as-input as-textarea" rows={5} value={c.prompt || ""} onChange={(e) => set("prompt", e.target.value)} />
-            <span className="as-hint">Insert data with {"{{data}}"}. Ask for one clear decision to branch on.</span>
+          <label className="as-field"><span>Prompt / instruction to the AI</span>
+            <textarea className="as-input as-textarea" rows={6} value={c.prompt || ""} onChange={(e) => set("prompt", e.target.value)} placeholder="e.g. Review the sales orders in {{data}} and decide which are at risk of slipping. Answer 'at_risk' or 'on_track'." />
+            <span className="as-hint">This is where you tell the agent what to do. Insert upstream data with {"{{data}}"}. Ask for one clear answer you can branch on.</span>
           </label>
           <label className="as-field"><span>Save answer as</span>
             <input className="as-input" value={c.outputKey || ""} onChange={(e) => set("outputKey", e.target.value.replace(/\W+/g, "_"))} />
@@ -588,7 +588,7 @@ function ConfigEmpty({ draft }) {
         <div><span className="as-lg" style={{ background: "var(--thread)" }} /> Data source — files, entities, tables</div>
         <div><span className="as-lg" style={{ background: "var(--yellow)" }} /> If / else — branch on a value</div>
         <div><span className="as-lg" style={{ background: "#2D7C6D" }} /> Web query — pull external data</div>
-        <div><span className="as-lg" style={{ background: "#7A4BB7" }} /> AI decision — let the model choose</div>
+        <div><span className="as-lg" style={{ background: "#7A4BB7" }} /> AI decision — write a prompt / instruction</div>
         <div><span className="as-lg" style={{ background: "var(--red)" }} /> Assign — human in the loop</div>
         <div><span className="as-lg" style={{ background: "var(--green)" }} /> Output — the result</div>
       </div>
@@ -726,7 +726,7 @@ function StudioCss() {
   return (
     <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
-    .as-root{position:fixed;inset:0;z-index:60;display:flex;background:var(--bg);color:var(--ink);
+    .as-root{position:fixed;inset:0;z-index:60;display:flex;overflow:hidden;background:var(--bg);color:var(--ink);
       font-family:var(--body);--r:12px;
       /* self-contained tokens — Studio can render while ThreadWire (.tf) is unmounted */
       --bg:#F4F6FA; --bg2:#EEF2F7; --panel:#FFFFFF; --panel2:#F5F8FC;
@@ -775,7 +775,7 @@ function StudioCss() {
     .as-btn-primary{background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:transparent;color:#fff}
     .as-btn-primary:hover{color:#fff;filter:brightness(1.05)}
     /* main */
-    .as-main{flex:1;display:flex;flex-direction:column;min-width:0}
+    .as-main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
     .as-topbar{display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
     .as-name-input{font-family:var(--disp);font-weight:700;font-size:17px;border:1px solid transparent;background:transparent;
       color:var(--ink);border-radius:8px;padding:4px 8px;min-width:120px;max-width:260px}
@@ -790,8 +790,10 @@ function StudioCss() {
     .as-select{width:auto}
     .as-input:focus,.as-select:focus{border-color:var(--amber);outline:none}
     /* build layout */
-    .as-build{flex:1;display:grid;grid-template-columns:224px 1fr 300px;min-height:0}
-    .as-palette{border-right:1px solid var(--line);background:var(--panel);padding:12px;display:flex;flex-direction:column;gap:6px}
+    .as-build{flex:1;display:grid;grid-template-columns:224px 1fr 300px;min-height:0;overflow:hidden}
+    .as-build>*{min-height:0;height:100%}
+    .as-palette{border-right:1px solid var(--line);background:var(--panel);padding:12px;display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto}
+    .as-cfg{min-height:0;overflow-y:auto}
     .as-pal-item{display:flex;align-items:center;gap:9px;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left}
     .as-pal-item:hover{border-color:var(--amber);background:var(--panel2)}
     .as-pal-ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:0 0 26px}
