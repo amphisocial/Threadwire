@@ -58,7 +58,71 @@ CORE_TABLES: Dict[str, dict] = {
 }
 
 MAX_STEPS = 60            # hard ceiling so a mis-wired graph can never loop forever
-MAX_ROWS = 200           # cap rows pulled per source node
+MAX_ROWS = 1000          # cap rows pulled per source node (filters keep the real set small)
+
+DATE_DTYPES = ("date", "timestamp without time zone", "timestamp with time zone")
+
+# operator -> (sql builder, value kind). Column names are validated against the
+# table's real columns before being placed in SQL; all values are parameterized.
+FILTER_OPS = {
+    "is":               (lambda col, i: f"{col} = ${i}", "text"),
+    "is_not":           (lambda col, i: f"{col} <> ${i}", "text"),
+    "before":           (lambda col, i: f"{col} < ${i}::timestamptz", "text"),
+    "after":            (lambda col, i: f"{col} > ${i}::timestamptz", "text"),
+    "on_or_before":     (lambda col, i: f"{col} <= ${i}::timestamptz", "text"),
+    "on_or_after":      (lambda col, i: f"{col} >= ${i}::timestamptz", "text"),
+    "older_than_days":  (lambda col, i: f"{col} < now() - make_interval(days => ${i}::int)", "int"),
+    "within_last_days": (lambda col, i: f"{col} >= now() - make_interval(days => ${i}::int)", "int"),
+}
+
+
+async def _filter_columns(con, tbl: str) -> List[dict]:
+    """Columns on a core table that are simple + safe to filter on: status + dates."""
+    if tbl not in CORE_TABLES:
+        return []
+    try:
+        cols = await con.fetch(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_schema='public' AND table_name=$1", tbl)
+    except Exception:
+        return []
+    out: List[dict] = []
+    for c in cols:
+        name, dt = c["column_name"], c["data_type"]
+        if name == "org_id":
+            continue
+        if name == "status" or name.endswith("_status"):
+            out.append({"name": name, "kind": "status"})
+        elif dt in DATE_DTYPES:
+            out.append({"name": name, "kind": "date"})
+    return out
+
+
+def _build_filter_sql(filters, join, allowed, start_idx):
+    """(sql_fragment | None, params). Cols validated against `allowed` names."""
+    allowed_names = {c["name"] for c in (allowed or [])}
+    conds, params, idx = [], [], start_idx
+    for f in (filters or []):
+        col, op, val = f.get("col"), f.get("op"), f.get("val")
+        if col not in allowed_names or op not in FILTER_OPS:
+            continue
+        builder, vkind = FILTER_OPS[op]
+        if vkind == "int":
+            try:
+                pv = int(val)
+            except (TypeError, ValueError):
+                continue
+        else:
+            if val in (None, ""):
+                continue
+            pv = str(val)
+        conds.append(builder(col, idx))
+        params.append(pv)
+        idx += 1
+    if not conds:
+        return None, []
+    glue = " OR " if str(join).lower() == "or" else " AND "
+    return "(" + glue.join(conds) + ")", params
 WEB_TIMEOUT = 10.0
 WEB_MAX_BYTES = 200_000
 
@@ -198,7 +262,16 @@ async def catalog(request: Request):
                 n = await con.fetchval(f"SELECT count(*) FROM {tbl} WHERE org_id=$1", org)
             except Exception:
                 n = 0
-            tables.append({"table": tbl, "label": meta["label"], "rows": int(n or 0)})
+            fcols = await _filter_columns(con, tbl)
+            for fc in fcols:
+                if fc["name"] == "status":
+                    try:
+                        vals = await con.fetch(
+                            f"SELECT DISTINCT status FROM {tbl} WHERE org_id=$1 AND status IS NOT NULL LIMIT 25", org)
+                        fc["values"] = sorted(v["status"] for v in vals if v["status"])
+                    except Exception:
+                        fc["values"] = []
+            tables.append({"table": tbl, "label": meta["label"], "rows": int(n or 0), "columns": fcols})
         people = await con.fetch(
             "SELECT email, full_name FROM users WHERE org_id=$1 AND is_active ORDER BY full_name", org)
     return {
@@ -525,8 +598,13 @@ async def _load_source(con, org, node) -> Any:
         if tbl not in CORE_TABLES:
             raise ValueError(f"Unknown table '{tbl}'")
         order = CORE_TABLES[tbl]["order"]
-        rows = await con.fetch(f"SELECT * FROM {tbl} WHERE org_id=$1 ORDER BY {order} LIMIT $2", org, limit)
-        return {"rows": [_out(dict(r)) for r in rows], "count": len(rows)}
+        allowed = await _filter_columns(con, tbl)
+        frag, fparams = _build_filter_sql(cfg.get("filters"), cfg.get("filterJoin", "and"), allowed, 2)
+        where = "org_id=$1" + (f" AND {frag}" if frag else "")
+        limit_idx = 2 + len(fparams)
+        sql = f"SELECT * FROM {tbl} WHERE {where} ORDER BY {order} LIMIT ${limit_idx}"
+        rows = await con.fetch(sql, org, *fparams, limit)
+        return {"rows": [_out(dict(r)) for r in rows], "count": len(rows), "filtered": bool(frag)}
     if kind == "document":
         d = await con.fetchrow(
             "SELECT COALESCE(NULLIF(title,''),filename) AS title, content_text, doc_type "
@@ -576,10 +654,13 @@ async def _fetch_web(url: str) -> dict:
 
 async def _ai_decision(prompt: str, vars: dict) -> str:
     filled = _interpolate(prompt, vars)
-    context = json.dumps(_out(vars))[:6000]
-    system = ("You are an operations agent inside ThreadWire. Read the DATA and follow the "
-              "INSTRUCTION. Be concise and decisive. If asked to choose, answer with just the "
-              "choice. Do not invent facts that aren't in the data.")
+    context = json.dumps(_out(vars))[:12000]
+    system = ("You are an operations agent inside ThreadWire. Use ONLY the rows present in DATA — "
+              "never invent IDs, dates, records, or statuses, and never mention an item that is not "
+              "in DATA. Treat DATA as the complete, already-filtered set: do not assume other rows "
+              "exist. Prefer filtering done upstream over reasoning about dates yourself. Follow the "
+              "INSTRUCTION, be concise and decisive; if asked to choose, reply with just the choice; "
+              "if nothing in DATA matches, reply exactly 'none'.")
     msg = f"DATA:\n{context}\n\nINSTRUCTION:\n{filled}"
     out = await ai_complete(system, [{"role": "user", "content": msg}])
     return (out or "").strip() or "(no response from the model)"

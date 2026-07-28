@@ -508,9 +508,17 @@ function NodeConfig({ node, catalog, patchGraph, onDelete }) {
               </select>
             </label>
           )}
+          {c.sourceType === "table" && c.ref && (
+            <FilterEditor
+              columns={(catalog.tables.find((t) => t.table === c.ref) || {}).columns || []}
+              filters={c.filters || []}
+              join={c.filterJoin || "and"}
+              onChange={(filters, join) => { set("filters", filters); set("filterJoin", join); }}
+            />
+          )}
           {(c.sourceType === "table" || c.sourceType === "entity") && (
             <label className="as-field"><span>Row limit</span>
-              <input className="as-input" type="number" min="1" max="200" value={c.limit || 25} onChange={(e) => set("limit", Number(e.target.value))} />
+              <input className="as-input" type="number" min="1" max="1000" value={c.limit || 25} onChange={(e) => set("limit", Number(e.target.value))} />
             </label>
           )}
           <label className="as-field"><span>Save result as</span>
@@ -605,6 +613,80 @@ function NodeConfig({ node, catalog, patchGraph, onDelete }) {
           <Trash2 size={14} /> Delete step
         </button>
       )}
+    </div>
+  );
+}
+
+/* deterministic filters on a data source — restricted to status + date columns,
+   so filtering never depends on the model doing date math */
+const DATE_OPS = [
+  ["older_than_days", "older than (days)"],
+  ["within_last_days", "within last (days)"],
+  ["before", "before"],
+  ["after", "after"],
+  ["on_or_before", "on or before"],
+  ["on_or_after", "on or after"],
+];
+const STATUS_OPS = [["is", "is"], ["is_not", "is not"]];
+const isDayOp = (op) => op === "older_than_days" || op === "within_last_days";
+
+function FilterEditor({ columns, filters, join, onChange }) {
+  const set = (next, j) => onChange(next, j ?? join);
+  const colKind = (name) => (columns.find((c) => c.name === name) || {}).kind;
+  const addFilter = () => {
+    const col = columns[0];
+    if (!col) return;
+    const op = col.kind === "date" ? "older_than_days" : "is";
+    set([...filters, { col: col.name, op, val: "" }]);
+  };
+  const upd = (i, patch) => set(filters.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
+  const del = (i) => set(filters.filter((_, idx) => idx !== i));
+
+  if (!columns.length) {
+    return <div className="as-field"><span>Filters</span><div className="as-hint">This table has no filterable status or date columns.</div></div>;
+  }
+  return (
+    <div className="as-field">
+      <span>Filters</span>
+      {filters.length > 1 && (
+        <div className="as-filter-join">
+          <button className={"as-seg" + (join !== "or" ? " on" : "")} onClick={() => set(filters, "and")}>Match ALL</button>
+          <button className={"as-seg" + (join === "or" ? " on" : "")} onClick={() => set(filters, "or")}>Match ANY</button>
+        </div>
+      )}
+      {filters.map((f, i) => {
+        const kind = colKind(f.col) || "status";
+        const col = columns.find((c) => c.name === f.col);
+        const ops = kind === "date" ? DATE_OPS : STATUS_OPS;
+        return (
+          <div key={i} className="as-filter-row">
+            <select className="as-input as-filter-col" value={f.col} onChange={(e) => {
+              const nk = colKind(e.target.value);
+              upd(i, { col: e.target.value, op: nk === "date" ? "older_than_days" : "is", val: "" });
+            }}>
+              {columns.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+            </select>
+            <select className="as-input as-filter-op" value={f.op} onChange={(e) => upd(i, { op: e.target.value, val: "" })}>
+              {ops.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+            {kind === "date" ? (
+              isDayOp(f.op)
+                ? <input className="as-input as-filter-val" type="number" min="0" placeholder="7" value={f.val} onChange={(e) => upd(i, { val: e.target.value })} />
+                : <input className="as-input as-filter-val" type="date" value={f.val} onChange={(e) => upd(i, { val: e.target.value })} />
+            ) : (col && col.values && col.values.length) ? (
+              <select className="as-input as-filter-val" value={f.val} onChange={(e) => upd(i, { val: e.target.value })}>
+                <option value="">Select…</option>
+                {col.values.map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+            ) : (
+              <input className="as-input as-filter-val" value={f.val} placeholder="value" onChange={(e) => upd(i, { val: e.target.value })} />
+            )}
+            <button className="as-filter-x" onClick={() => del(i)} title="Remove filter"><X size={13} /></button>
+          </div>
+        );
+      })}
+      <button className="as-filter-add" onClick={addFilter}><Plus size={13} /> Add filter</button>
+      <span className="as-hint">Filtering happens in the database before the step runs — e.g. status <b>is</b> open <b>AND</b> a date column <b>older than</b> 7 days. Do this instead of asking the AI to judge dates.</span>
     </div>
   );
 }
@@ -906,6 +988,19 @@ function StudioCss() {
       font-family:var(--body);font-size:12.5px;font-weight:600;cursor:pointer}
     .as-cfg-delete:hover{background:var(--red);border-color:var(--red);color:#fff}
     .as-rail-collapse{margin-left:auto}
+    .as-filter-join{display:flex;gap:0;margin-bottom:6px;border:1px solid var(--line2);border-radius:8px;overflow:hidden;width:fit-content}
+    .as-seg{background:var(--panel);border:0;padding:5px 11px;font-family:var(--mono);font-size:10.5px;color:var(--muted);cursor:pointer}
+    .as-seg.on{background:var(--amber);color:#fff}
+    .as-filter-row{display:flex;gap:5px;align-items:center;margin-bottom:6px}
+    .as-filter-col{flex:1 1 34%;min-width:0}
+    .as-filter-op{flex:1 1 34%;min-width:0}
+    .as-filter-val{flex:1 1 32%;min-width:0}
+    .as-filter-x{flex:0 0 auto;background:transparent;border:1px solid var(--line2);border-radius:7px;width:28px;height:28px;
+      display:grid;place-items:center;color:var(--muted);cursor:pointer}
+    .as-filter-x:hover{border-color:var(--red);color:var(--red)}
+    .as-filter-add{display:flex;align-items:center;gap:6px;background:transparent;border:1px dashed var(--line2);border-radius:8px;
+      padding:6px 10px;font-family:var(--body);font-size:12px;font-weight:600;color:var(--amber);cursor:pointer;margin-top:2px}
+    .as-filter-add:hover{background:var(--panel2);border-color:var(--amber)}
     .as-tab-badge{background:var(--red);color:#fff;border-radius:999px;font-size:10px;font-weight:700;min-width:16px;height:16px;
       display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-left:5px}
     .as-pal-item{display:flex;align-items:center;gap:9px;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left}
