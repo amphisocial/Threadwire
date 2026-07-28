@@ -7,6 +7,7 @@ import InviteAccept from "./auth/InviteAccept.jsx";
 import Profile, { PlanBadge } from "./auth/Profile.jsx";
 import CaseStudies from "./pages/CaseStudies.jsx";
 import OntologyStudio from "./ontology/OntologyStudio.jsx";
+import AgentStudio from "./agents/AgentStudio.jsx";
 import { getMe, logout, billingConfirm } from "./lib/api.js";
 
 const center = { minHeight: "100vh", display: "grid", placeItems: "center", background: "#F4F6FA", color: "#47606F", fontFamily: "'IBM Plex Mono',monospace" };
@@ -60,11 +61,14 @@ function Root() {
         <div aria-label="Threadwire workspace tabs" style={{ position: "fixed", top: 10, left: "50%", transform: "translateX(-50%)", zIndex: 95, display: "flex", gap: 3, padding: 4, borderRadius: 11, background: "rgba(255,255,255,.94)", border: "1px solid #DCE3EC", boxShadow: "0 8px 30px rgba(21,34,45,.12)", backdropFilter: "blur(10px)" }}>
           <button onClick={() => setWorkspace("operations")} style={workspaceButton(workspace === "operations")}>Operations</button>
           <button onClick={() => setWorkspace("ontology")} style={workspaceButton(workspace === "ontology")}>Ontology</button>
+          <button onClick={() => setWorkspace("studio")} style={workspaceButton(workspace === "studio")}>AI Studio</button>
         </div>
       )}
 
       {workspace === "ontology" && state.user
         ? <OntologyStudio user={state.user} onBack={() => setWorkspace("operations")} />
+        : workspace === "studio" && state.user
+        ? <AgentStudio user={state.user} onBack={() => setWorkspace("operations")} />
         : <App user={state.user} />}
 
       {state.user ? (

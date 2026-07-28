@@ -45,6 +45,34 @@ contextual **What-If** analysis.
   docked assistant appends to its prompt on the Workforce page so What-If
   questions reason over real numbers.
 
+### AI Studio — Agent Builder (new module)
+
+A no-code agent builder that lives in the top **AI Studio** workspace (next to
+Operations and Ontology). Users compose an agent as a visual graph and run it
+against their own data.
+
+- `frontend/src/agents/AgentStudio.jsx` — the module UI: a draggable node-graph
+  editor (drag from a step's right dot to another step's left dot to wire them),
+  a **Your data** palette that lists the org's uploaded files, created entities
+  and operational tables, a per-step config drawer, a **Runs** audit view and an
+  **Inbox** for human-in-the-loop items. Built on Threadwire's design tokens.
+- Step types: **Trigger**, **Data source** (uploaded file · entity · table ·
+  web URL), **If/else** condition (branches on a value), **Web query** (pulls
+  external data to merge), **AI decision** (server-side model call), **Assign to
+  person** (human-in-the-loop — assigns an approval/action/blocker/review to a
+  user; an approval can pause the run), and **Output**.
+- **Backend:** `backend/app/agents.py` — `/api/agents` CRUD, `/catalog` (data +
+  people), `/{id}/run` (executes the graph), `/{id}/runs` and `/runs/{run_id}`
+  (audit), `/runs/{run_id}/stop`, `/{id}/status` (activate/pause scheduling), and
+  `/inbox/items` + `/inbox/{id}/resolve`. Wired in `main.py` like the other
+  routers. Web queries are restricted to public http(s) targets (private/loopback
+  and cloud-metadata addresses are refused).
+- **Schema:** `db/migrations/020_agent_studio.sql` (`agents`, `agent_runs`,
+  `agent_inbox`), applied idempotently by `redeploy.sh`.
+- **Scheduling (optional cron):** `python -m app.agents` runs every *active*
+  agent whose cadence is due (hourly/daily/weekly). Point an OS cron/timer at it;
+  agents left on **Manual** only run from **Run once**.
+
 This repo turns the prototype into a deployable app for a single EC2 box
 (replaces the `threadwire.ai` root), with self-hosted auth + Postgres and a
 FastAPI backend that proxies AI calls server-side.

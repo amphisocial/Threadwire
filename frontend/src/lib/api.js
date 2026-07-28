@@ -94,3 +94,21 @@ export const deleteCaseStudy = (id) => fetch("/api/case-studies/" + id, opts("DE
 export const runDeliveryAgent = () => fetch("/api/agent/scan_delivery_risk", opts("POST")).then(jsonOrThrow);
 export const confirmBlocker = (id) => fetch("/api/blockers/" + id + "/confirm", opts("POST")).then(jsonOrThrow);
 export const dismissBlocker = (id) => fetch("/api/blockers/" + id + "/dismiss", opts("POST")).then(jsonOrThrow);
+
+// AI Studio — Agent Builder. Org-scoped no-code agents built from the org's own
+// files, entities and tables, with if/else, web queries, AI decisions and a
+// human-in-the-loop inbox. Every run is audited.
+const enc = encodeURIComponent;
+export const agentsCatalog = () => fetch("/api/agents/catalog", { credentials: "include" }).then(jsonOrThrow);
+export const listAgents = () => fetch("/api/agents", { credentials: "include" }).then(jsonOrThrow);
+export const getAgent = (id) => fetch("/api/agents/" + enc(id), { credentials: "include" }).then(jsonOrThrow);
+export const createAgent = (body) => fetch("/api/agents", opts("POST", body)).then(jsonOrThrow);
+export const saveAgent = (id, body) => fetch("/api/agents/" + enc(id), opts("PUT", body)).then(jsonOrThrow);
+export const deleteAgent = (id) => fetch("/api/agents/" + enc(id), opts("DELETE")).then(jsonOrThrow);
+export const setAgentStatus = (id, status) => fetch("/api/agents/" + enc(id) + "/status", opts("POST", { status })).then(jsonOrThrow);
+export const runAgent = (id) => fetch("/api/agents/" + enc(id) + "/run", opts("POST")).then(jsonOrThrow);
+export const listAgentRuns = (id) => fetch("/api/agents/" + enc(id) + "/runs", { credentials: "include" }).then(jsonOrThrow);
+export const getAgentRun = (runId) => fetch("/api/agents/runs/" + enc(runId), { credentials: "include" }).then(jsonOrThrow);
+export const stopAgentRun = (runId) => fetch("/api/agents/runs/" + enc(runId) + "/stop", opts("POST")).then(jsonOrThrow);
+export const agentInbox = () => fetch("/api/agents/inbox/items", { credentials: "include" }).then(jsonOrThrow);
+export const resolveInbox = (itemId, body) => fetch("/api/agents/inbox/" + enc(itemId) + "/resolve", opts("POST", body)).then(jsonOrThrow);
