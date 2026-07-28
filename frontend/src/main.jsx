@@ -58,7 +58,7 @@ function Root() {
   return (
     <>
       {state.user && workspace === "operations" && (
-        <div aria-label="Threadwire workspace tabs" style={{ position: "fixed", top: 10, left: "50%", transform: "translateX(-50%)", zIndex: 95, display: "flex", gap: 3, padding: 4, borderRadius: 11, background: "rgba(255,255,255,.94)", border: "1px solid #DCE3EC", boxShadow: "0 8px 30px rgba(21,34,45,.12)", backdropFilter: "blur(10px)" }}>
+        <div aria-label="Threadwire workspace tabs" style={{ position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)", zIndex: 80, display: "flex", gap: 3, padding: 4, borderRadius: 11, background: "rgba(255,255,255,.94)", border: "1px solid #DCE3EC", boxShadow: "0 8px 30px rgba(21,34,45,.12)", backdropFilter: "blur(10px)" }}>
           <button onClick={() => setWorkspace("operations")} style={workspaceButton(workspace === "operations")}>Operations</button>
           <button onClick={() => setWorkspace("ontology")} style={workspaceButton(workspace === "ontology")}>Ontology</button>
           <button onClick={() => setWorkspace("studio")} style={workspaceButton(workspace === "studio")}>AI Studio</button>
