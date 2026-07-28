@@ -899,6 +899,7 @@ function StudioCss() {
     .as-build{flex:1;display:grid;grid-template-columns:224px 1fr 300px;min-height:0;overflow:hidden}
     .as-build>*{min-height:0;height:100%}
     .as-palette{border-right:1px solid var(--line);background:var(--panel);padding:12px 12px 104px;display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto}
+    .as-palette>*{flex:0 0 auto}
     .as-cfg{min-height:0;overflow-y:auto;padding-bottom:104px}
     .as-cfg-delete{margin-top:16px;display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
       background:transparent;border:1px solid var(--line2);color:var(--red);border-radius:9px;padding:8px 10px;
