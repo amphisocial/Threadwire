@@ -4,7 +4,7 @@ import {
   Database, FileText, Boxes, Table2, Globe, GitBranch, Sparkles, UserCheck,
   Flag, CheckCircle2, AlertTriangle, CircleDot, ChevronRight, ArrowLeft,
   Zap, StopCircle, ListChecks, LayoutGrid, ShieldQuestion, CornerDownRight,
-  RefreshCw,
+  RefreshCw, PanelLeftOpen, PanelLeftClose,
 } from "lucide-react";
 import {
   agentsCatalog, listAgents, getAgent, createAgent, saveAgent, deleteAgent,
@@ -57,6 +57,7 @@ export default function AgentStudio({ user, onBack }) {
   const [inbox, setInbox] = useState({ items: [], openCount: 0 });
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
+  const [railOpen, setRailOpen] = useState(true);    // left pane; auto-collapses once an agent is open
   const dirty = useRef(false);
 
   const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
@@ -73,6 +74,7 @@ export default function AgentStudio({ user, onBack }) {
   const open = async (id) => {
     const a = await getAgent(id);
     setSelId(id); setDraft(a); setSelNode(null); setRunResult(null); setTab("build");
+    setRailOpen(false);   // reclaim space; toggle in the top bar brings it back
     dirty.current = false;
     listAgentRuns(id).then((r) => setRuns(r.runs || [])).catch(() => {});
   };
@@ -158,7 +160,8 @@ export default function AgentStudio({ user, onBack }) {
   return (
     <div className="as-root">
       <StudioCss />
-      {/* ---- left rail ---- */}
+      {/* ---- left rail (collapsible) ---- */}
+      {railOpen && (
       <aside className="as-rail">
         <div className="as-rail-head">
           <button className="as-icbtn" title="Back to Operations" onClick={onBack}><ArrowLeft size={16} /></button>
@@ -166,14 +169,10 @@ export default function AgentStudio({ user, onBack }) {
             <div className="as-brand"><Bot size={16} color="var(--amber)" /> AI Studio</div>
             <div className="as-sub">Agent builder</div>
           </div>
+          {draft && <button className="as-icbtn as-rail-collapse" title="Hide panel" onClick={() => setRailOpen(false)}><PanelLeftClose size={16} /></button>}
         </div>
 
         <button className="as-btn as-btn-primary as-full" onClick={newAgent}><Plus size={15} /> New agent</button>
-
-        <button className={"as-inbox-btn" + (inbox.openCount ? " has" : "")} onClick={() => { setTab("inbox"); reloadInbox(); }}>
-          <Inbox size={15} /> Inbox
-          {inbox.openCount > 0 && <span className="as-badge">{inbox.openCount}</span>}
-        </button>
 
         <div className="as-rail-label">Your agents</div>
         <div className="as-agent-list as-scroll">
@@ -188,6 +187,7 @@ export default function AgentStudio({ user, onBack }) {
         </div>
         <div className="as-rail-foot">{user?.full_name || user?.email}</div>
       </aside>
+      )}
 
       {/* ---- main ---- */}
       <main className="as-main">
@@ -196,12 +196,19 @@ export default function AgentStudio({ user, onBack }) {
         ) : (
           <>
             <header className="as-topbar">
+              {!railOpen && (
+                <>
+                  <button className="as-icbtn" title="Show agents panel" onClick={() => setRailOpen(true)}><PanelLeftOpen size={17} /></button>
+                  <button className="as-icbtn" title="Back to Operations" onClick={onBack}><ArrowLeft size={16} /></button>
+                </>
+              )}
               <input className="as-name-input" value={draft.name} onChange={(e) => setMeta("name", e.target.value)} />
               <span className="as-id-chip">{draft.id}</span>
               <div className="as-tabs">
                 {[["build", "Build", LayoutGrid], ["runs", "Runs", ListChecks], ["inbox", "Inbox", Inbox]].map(([k, lbl, Ic]) => (
                   <button key={k} className={"as-tab" + (tab === k ? " on" : "")} onClick={() => { setTab(k); if (k === "runs") listAgentRuns(draft.id).then((r) => setRuns(r.runs || [])); if (k === "inbox") reloadInbox(); }}>
                     <Ic size={14} /> {lbl}
+                    {k === "inbox" && inbox.openCount > 0 && <span className="as-tab-badge">{inbox.openCount}</span>}
                   </button>
                 ))}
               </div>
@@ -273,6 +280,21 @@ function Builder({ draft, catalog, selNode, setSelNode, patchGraph, addNode, add
     drag.current = { id: n.id, dx: e.clientX - rect.left + canvasRef.current.scrollLeft - n.x, dy: e.clientY - rect.top + canvasRef.current.scrollTop - n.y };
     setSelNode(n.id);
   };
+
+  /* delete the selected step with Delete/Backspace (ignored while typing) */
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (!selNode) return;
+      const t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      e.preventDefault();
+      patchGraph((g) => { g.nodes = g.nodes.filter((n) => n.id !== selNode); g.edges = g.edges.filter((ed) => ed.from !== selNode && ed.to !== selNode); return g; });
+      setSelNode(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selNode, patchGraph, setSelNode]);
 
   const clickOut = (nodeId, branch) => setConnect({ from: nodeId, branch });
   const clickIn = (nodeId) => {
@@ -357,7 +379,7 @@ function Builder({ draft, catalog, selNode, setSelNode, patchGraph, addNode, add
 
       {/* config */}
       <div className="as-config as-scroll">
-        {node ? <NodeConfig node={node} catalog={catalog} patchGraph={patchGraph} /> : <ConfigEmpty draft={draft} setDesc={(v) => patchGraph} />}
+        {node ? <NodeConfig node={node} catalog={catalog} patchGraph={patchGraph} onDelete={() => removeNode(node.id)} /> : <ConfigEmpty draft={draft} setDesc={(v) => patchGraph} />}
       </div>
     </div>
   );
@@ -441,7 +463,7 @@ function nodeSubtitle(n) {
 }
 
 /* ---------------------------------------------------------------- config */
-function NodeConfig({ node, catalog, patchGraph }) {
+function NodeConfig({ node, catalog, patchGraph, onDelete }) {
   const meta = NODE_TYPES[node.type];
   const set = (k, v) => patchGraph((g) => { const n = g.nodes.find((x) => x.id === node.id); if (n) n.config[k] = v; return g; });
   const c = node.config || {};
@@ -576,6 +598,12 @@ function NodeConfig({ node, catalog, patchGraph }) {
           <textarea className="as-input as-textarea" rows={4} value={c.template || ""} onChange={(e) => set("template", e.target.value)} />
           <span className="as-hint">This text (with {"{{placeholders}}"} filled in) becomes the run summary.</span>
         </label>
+      )}
+
+      {node.type !== "trigger" && onDelete && (
+        <button className="as-cfg-delete" onClick={onDelete} title="Remove this step (or press Delete)">
+          <Trash2 size={14} /> Delete step
+        </button>
       )}
     </div>
   );
@@ -870,8 +898,15 @@ function StudioCss() {
     /* build layout */
     .as-build{flex:1;display:grid;grid-template-columns:224px 1fr 300px;min-height:0;overflow:hidden}
     .as-build>*{min-height:0;height:100%}
-    .as-palette{border-right:1px solid var(--line);background:var(--panel);padding:12px;display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto}
-    .as-cfg{min-height:0;overflow-y:auto}
+    .as-palette{border-right:1px solid var(--line);background:var(--panel);padding:12px 12px 104px;display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto}
+    .as-cfg{min-height:0;overflow-y:auto;padding-bottom:104px}
+    .as-cfg-delete{margin-top:16px;display:flex;align-items:center;justify-content:center;gap:7px;width:100%;
+      background:transparent;border:1px solid var(--line2);color:var(--red);border-radius:9px;padding:8px 10px;
+      font-family:var(--body);font-size:12.5px;font-weight:600;cursor:pointer}
+    .as-cfg-delete:hover{background:var(--red);border-color:var(--red);color:#fff}
+    .as-rail-collapse{margin-left:auto}
+    .as-tab-badge{background:var(--red);color:#fff;border-radius:999px;font-size:10px;font-weight:700;min-width:16px;height:16px;
+      display:inline-flex;align-items:center;justify-content:center;padding:0 4px;margin-left:5px}
     .as-pal-item{display:flex;align-items:center;gap:9px;padding:8px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer;text-align:left}
     .as-pal-item:hover{border-color:var(--amber);background:var(--panel2)}
     .as-pal-ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex:0 0 26px}
