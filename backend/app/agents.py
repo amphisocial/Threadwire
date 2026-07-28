@@ -687,7 +687,7 @@ async def execute_agent(con, org, agent, trigger, who) -> dict:
     if not nodes:
         await con.execute(
             "UPDATE agent_runs SET status='failed', finished_at=now(), summary=$3, log=$4 "
-            "WHERE org_id=$1 AND id=$2", org, run_id, "Agent has no nodes yet", json.dumps(log))
+            "WHERE org_id=$1 AND id=$2", org, run_id, "Agent has no nodes yet", _out(log))
         await con.execute("UPDATE agents SET last_run_at=now() WHERE org_id=$1 AND id=$2", org, agent["id"])
         r = await con.fetchrow("SELECT * FROM agent_runs WHERE org_id=$1 AND id=$2", org, run_id)
         return _run_out(r, full=True)
@@ -699,17 +699,17 @@ async def execute_agent(con, org, agent, trigger, who) -> dict:
             summary = "Waiting on a person to respond"
             await con.execute(
                 "UPDATE agent_runs SET status='needs_input', summary=$3, log=$4 "
-                "WHERE org_id=$1 AND id=$2", org, run_id, summary, json.dumps(_out(log)))
+                "WHERE org_id=$1 AND id=$2", org, run_id, summary, _out(log))
         else:
             summary = vars.get("__output__") or f"Completed {len(log)} step(s)"
             await con.execute(
                 "UPDATE agent_runs SET status='success', finished_at=now(), summary=$3, log=$4 "
-                "WHERE org_id=$1 AND id=$2", org, run_id, str(summary)[:1000], json.dumps(_out(log)))
+                "WHERE org_id=$1 AND id=$2", org, run_id, str(summary)[:1000], _out(log))
         await _log(con, org, who, f"ran agent {agent['id']} ({trigger}) → {log and log[-1]['status']}", "agent.run")
     except Exception as e:
         await con.execute(
             "UPDATE agent_runs SET status='failed', finished_at=now(), summary=$3, log=$4 "
-            "WHERE org_id=$1 AND id=$2", org, run_id, str(e)[:1000], json.dumps(_out(log)))
+            "WHERE org_id=$1 AND id=$2", org, run_id, str(e)[:1000], _out(log))
     await con.execute("UPDATE agents SET last_run_at=now() WHERE org_id=$1 AND id=$2", org, agent["id"])
     r = await con.fetchrow("SELECT * FROM agent_runs WHERE org_id=$1 AND id=$2", org, run_id)
     return _run_out(r, full=True)
@@ -724,7 +724,7 @@ async def resume_run(con, org, run, agent, approved, item, who) -> Optional[dict
         await con.execute(
             "UPDATE agent_runs SET status='stopped', finished_at=now(), summary=$3, log=$4 "
             "WHERE org_id=$1 AND id=$2", org, run["id"],
-            f"Stopped: {who} chose '{item['decision'] or 'reject'}'", json.dumps(_out(log)))
+            f"Stopped: {who} chose '{item['decision'] or 'reject'}'", _out(log))
         return {"status": "stopped"}
 
     graph = agent.get("graph") or {}
@@ -739,23 +739,23 @@ async def resume_run(con, org, run, agent, approved, item, who) -> Optional[dict
     if not parked:
         await con.execute(
             "UPDATE agent_runs SET status='success', finished_at=now(), summary=$3, log=$4 "
-            "WHERE org_id=$1 AND id=$2", org, run["id"], "Completed after approval", json.dumps(_out(log)))
+            "WHERE org_id=$1 AND id=$2", org, run["id"], "Completed after approval", _out(log))
         return {"status": "success"}
     try:
         res = await _walk(con, org, run["agent_id"], run["id"], nodes, out_edges, parked, vars, log, who)
         if res.get("outcome") == "parked":
             await con.execute("UPDATE agent_runs SET status='needs_input', log=$3 WHERE org_id=$1 AND id=$2",
-                              org, run["id"], json.dumps(_out(log)))
+                              org, run["id"], _out(log))
             return {"status": "needs_input"}
         summary = vars.get("__output__") or "Completed after approval"
         await con.execute(
             "UPDATE agent_runs SET status='success', finished_at=now(), summary=$3, log=$4 "
-            "WHERE org_id=$1 AND id=$2", org, run["id"], str(summary)[:1000], json.dumps(_out(log)))
+            "WHERE org_id=$1 AND id=$2", org, run["id"], str(summary)[:1000], _out(log))
         return {"status": "success"}
     except Exception as e:
         await con.execute(
             "UPDATE agent_runs SET status='failed', finished_at=now(), summary=$3, log=$4 "
-            "WHERE org_id=$1 AND id=$2", org, run["id"], str(e)[:1000], json.dumps(_out(log)))
+            "WHERE org_id=$1 AND id=$2", org, run["id"], str(e)[:1000], _out(log))
         return {"status": "failed"}
 
 

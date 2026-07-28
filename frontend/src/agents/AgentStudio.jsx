@@ -112,7 +112,7 @@ export default function AgentStudio({ user, onBack }) {
     try {
       const res = await runAgent(draft.id);
       const byNode = {};
-      (res.log || []).forEach((s) => { byNode[s.node] = s.status; });
+      asSteps(res.log).forEach((s) => { byNode[s.node] = s.status; });
       setRunResult({ byNode, summary: res.summary, status: res.status });
       const label = res.status === "needs_input" ? "Waiting on a person — check the Inbox"
         : res.status === "success" ? "Run complete" : res.status === "failed" ? "Run failed" : res.status;
@@ -632,7 +632,7 @@ function RunsView({ runs, reload }) {
           </button>
           {open === r.id && detail && detail.id === r.id && (
             <div className="as-run-log">
-              {(detail.log || []).map((s, i) => (
+              {asSteps(detail.log).map((s, i) => (
                 <div key={i} className="as-log-step">
                   <span className="as-dot" style={{ background: s.status === "ok" ? "var(--green)" : s.status === "error" ? "var(--red)" : s.status === "warn" ? "var(--yellow)" : "var(--faint)" }} />
                   <span className="as-log-type">{s.type}</span>
@@ -640,7 +640,7 @@ function RunsView({ runs, reload }) {
                   <span className="as-log-at">{s.at ? new Date(s.at).toLocaleTimeString() : ""}</span>
                 </div>
               ))}
-              {(detail.log || []).length === 0 && <div className="as-empty-mini">No steps recorded.</div>}
+              {asSteps(detail.log).length === 0 && <div className="as-empty-mini">No steps recorded.</div>}
             </div>
           )}
         </div>
@@ -777,6 +777,12 @@ function cellText(v) {
   return String(v);
 }
 function safeJson(v) { try { return JSON.stringify(v, null, 2).slice(0, 1200); } catch { return String(v); } }
+// tolerate legacy runs whose log was stored double-encoded (a JSON string)
+function asSteps(log) {
+  if (Array.isArray(log)) return log;
+  if (typeof log === "string") { try { const p = JSON.parse(log); return Array.isArray(p) ? p : []; } catch { return []; } }
+  return [];
+}
 
 /* ---------------------------------------------------------------- welcome */
 function Welcome({ onNew, count }) {
