@@ -67,13 +67,28 @@ DATE_DTYPES = ("date", "timestamp without time zone", "timestamp with time zone"
 FILTER_OPS = {
     "is":               (lambda col, i: f"{col} = ${i}", "text"),
     "is_not":           (lambda col, i: f"{col} <> ${i}", "text"),
-    "before":           (lambda col, i: f"{col} < ${i}::timestamptz", "text"),
-    "after":            (lambda col, i: f"{col} > ${i}::timestamptz", "text"),
-    "on_or_before":     (lambda col, i: f"{col} <= ${i}::timestamptz", "text"),
-    "on_or_after":      (lambda col, i: f"{col} >= ${i}::timestamptz", "text"),
+    "before":           (lambda col, i: f"{col} < ${i}::timestamptz", "date"),
+    "after":            (lambda col, i: f"{col} > ${i}::timestamptz", "date"),
+    "on_or_before":     (lambda col, i: f"{col} <= ${i}::timestamptz", "date"),
+    "on_or_after":      (lambda col, i: f"{col} >= ${i}::timestamptz", "date"),
     "older_than_days":  (lambda col, i: f"{col} < now() - make_interval(days => ${i}::int)", "int"),
     "within_last_days": (lambda col, i: f"{col} >= now() - make_interval(days => ${i}::int)", "int"),
 }
+
+
+def _parse_dt(s):
+    """Parse a date picker value ('YYYY-MM-DD' or ISO datetime) into a datetime."""
+    s = str(s).strip()
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        pass
+    try:
+        return datetime.combine(date.fromisoformat(s), datetime.min.time())
+    except ValueError:
+        return None
 
 
 async def _filter_columns(con, tbl: str) -> List[dict]:
@@ -111,6 +126,10 @@ def _build_filter_sql(filters, join, allowed, start_idx):
             try:
                 pv = int(val)
             except (TypeError, ValueError):
+                continue
+        elif vkind == "date":
+            pv = _parse_dt(val)
+            if pv is None:
                 continue
         else:
             if val in (None, ""):
