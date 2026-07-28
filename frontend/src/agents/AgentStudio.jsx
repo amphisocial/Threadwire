@@ -14,7 +14,9 @@ import {
 
 /* ---------------------------------------------------------------- node kinds */
 const NODE_W = 208;
-const PORT = { in: 34, out: 34, condTrue: 28, condFalse: 60 };
+const NODE_H = 104;
+// condition branch ports sit on the bottom edge, split left/right
+const COND_T = 0.32, COND_F = 0.68;
 
 const NODE_TYPES = {
   trigger: { label: "Trigger", icon: Zap, color: "var(--amber)",
@@ -28,7 +30,7 @@ const NODE_TYPES = {
   ai: { label: "AI decision", icon: Sparkles, color: "#7A4BB7",
     blurb: "Write a prompt / instruction", defaults: { label: "Decide", prompt: "Given {{data}}, decide…", outputKey: "decision" } },
   assign: { label: "Assign to person", icon: UserCheck, color: "var(--red)",
-    blurb: "Human in the loop", defaults: { label: "Assign", assignee: "", kind: "approval", title: "Action required", detail: "", pause: true } },
+    blurb: "Human in the loop", defaults: { label: "Assign", assignee: "", kind: "approval", title: "Action required", detail: "AI found: {{decision}}", pause: true } },
   output: { label: "Output", icon: Flag, color: "var(--green)",
     blurb: "Final result", defaults: { label: "Done", template: "Agent finished. {{decision}}" } },
 };
@@ -76,7 +78,7 @@ export default function AgentStudio({ user, onBack }) {
   };
 
   const newAgent = async () => {
-    const graph = { nodes: [{ id: uid("n_"), type: "trigger", x: 80, y: 120, config: { ...NODE_TYPES.trigger.defaults } }], edges: [] };
+    const graph = { nodes: [{ id: uid("n_"), type: "trigger", x: 200, y: 40, config: { ...NODE_TYPES.trigger.defaults } }], edges: [] };
     const a = await createAgent({ name: "New agent", description: "", graph, schedule: "manual", status: "draft" });
     await reloadAgents();
     open(a.id);
@@ -142,9 +144,9 @@ export default function AgentStudio({ user, onBack }) {
   const addNode = (type, preset = {}) => {
     const id = uid("n_");
     patchGraph((g) => {
-      const y = 120 + (g.nodes.length % 5) * 120;
-      const x = 320 + Math.floor(g.nodes.length / 5) * 250;
-      g.nodes.push({ id, type, x, y, config: { ...NODE_TYPES[type].defaults, ...preset } });
+      const lastX = g.nodes.length ? g.nodes[g.nodes.length - 1].x : 200;
+      const maxBottom = g.nodes.reduce((m, nd) => Math.max(m, nd.y + NODE_H), 40);
+      g.nodes.push({ id, type, x: lastX, y: maxBottom + 46, config: { ...NODE_TYPES[type].defaults, ...preset } });
       return g;
     });
     setSelNode(id);
@@ -290,9 +292,10 @@ function Builder({ draft, catalog, selNode, setSelNode, patchGraph, addNode, add
   const removeEdge = (id) => patchGraph((g) => { g.edges = g.edges.filter((e) => e.id !== id); return g; });
 
   const portPos = (n, side, branch) => {
-    if (side === "in") return { x: n.x, y: n.y + PORT.in };
-    if (n.type === "condition") return { x: n.x + NODE_W, y: n.y + (branch === "false" ? PORT.condFalse : PORT.condTrue) };
-    return { x: n.x + NODE_W, y: n.y + PORT.out };
+    if (side === "in") return { x: n.x + NODE_W / 2, y: n.y };                       // top-center
+    if (n.type === "condition")
+      return { x: n.x + NODE_W * (branch === "false" ? COND_F : COND_T), y: n.y + NODE_H }; // bottom split
+    return { x: n.x + NODE_W / 2, y: n.y + NODE_H };                                  // bottom-center
   };
 
   return (
@@ -327,7 +330,7 @@ function Builder({ draft, catalog, selNode, setSelNode, patchGraph, addNode, add
             const a = graph.nodes.find((n) => n.id === e.from), b = graph.nodes.find((n) => n.id === e.to);
             if (!a || !b) return null;
             const p1 = portPos(a, "out", e.branch), p2 = portPos(b, "in");
-            const d = `M ${p1.x} ${p1.y} C ${p1.x + 60} ${p1.y}, ${p2.x - 60} ${p2.y}, ${p2.x} ${p2.y}`;
+            const d = `M ${p1.x} ${p1.y} C ${p1.x} ${p1.y + 46}, ${p2.x} ${p2.y - 46}, ${p2.x} ${p2.y}`;
             const stroke = e.branch === "true" ? "var(--green)" : e.branch === "false" ? "var(--red)" : "var(--line2)";
             return (
               <g key={e.id} className="as-wire" onClick={() => removeEdge(e.id)}>
@@ -348,7 +351,7 @@ function Builder({ draft, catalog, selNode, setSelNode, patchGraph, addNode, add
         ))}
 
         {graph.nodes.length <= 1 && (
-          <div className="as-canvas-hint"><CornerDownRight size={15} /> Add steps from the left, then drag from a step's right dot to another step's left dot to connect them.</div>
+          <div className="as-canvas-hint"><CornerDownRight size={15} /> Add steps from the left, then drag from a step's bottom dot down to the next step's top dot to connect them.</div>
         )}
       </div>
 
@@ -392,7 +395,7 @@ function NodeCard({ n, selected, runStatus, onDown, onSelect, onDelete, connect,
   const runTone = runStatus === "ok" ? "var(--green)" : runStatus === "error" ? "var(--red)"
     : runStatus === "warn" ? "var(--yellow)" : null;
   return (
-    <div className={"as-node" + (selected ? " sel" : "")} style={{ left: n.x, top: n.y, width: NODE_W, borderColor: selected ? meta.color : "var(--line2)" }}
+    <div className={"as-node" + (selected ? " sel" : "")} style={{ left: n.x, top: n.y, width: NODE_W, height: NODE_H, borderColor: selected ? meta.color : "var(--line2)" }}
       onMouseDown={onDown} onClick={(e) => { e.stopPropagation(); onSelect(); }}>
       <div className="as-node-head" style={{ background: meta.color }}>
         <Ic size={13} color="#fff" />
@@ -405,21 +408,21 @@ function NodeCard({ n, selected, runStatus, onDown, onSelect, onDelete, connect,
         {sub && <div className="as-node-sub">{sub}</div>}
       </div>
 
-      {/* input port (all but trigger) */}
+      {/* input port on TOP (all but trigger) */}
       {n.type !== "trigger" && (
-        <button className={"as-port as-port-in" + (connect ? " live" : "")} style={{ top: PORT.in - 6 }}
+        <button className={"as-port as-port-in" + (connect ? " live" : "")} style={{ left: NODE_W / 2 - 6, top: -7 }}
           onClick={(e) => { e.stopPropagation(); onIn(n.id); }} title="Input" />
       )}
-      {/* output ports */}
+      {/* output ports on BOTTOM */}
       {n.type === "condition" ? (
         <>
-          <button className="as-port as-port-out true" style={{ top: PORT.condTrue - 6 }} onClick={(e) => { e.stopPropagation(); onOut(n.id, "true"); }} title="If true" />
-          <span className="as-port-lbl" style={{ top: PORT.condTrue - 8, color: "var(--green)" }}>T</span>
-          <button className="as-port as-port-out false" style={{ top: PORT.condFalse - 6 }} onClick={(e) => { e.stopPropagation(); onOut(n.id, "false"); }} title="If false" />
-          <span className="as-port-lbl" style={{ top: PORT.condFalse - 8, color: "var(--red)" }}>F</span>
+          <button className="as-port as-port-out true" style={{ left: NODE_W * COND_T - 6, bottom: -7 }} onClick={(e) => { e.stopPropagation(); onOut(n.id, "true"); }} title="If true" />
+          <span className="as-port-lbl" style={{ left: NODE_W * COND_T + 9, bottom: -4, color: "var(--green)" }}>T</span>
+          <button className="as-port as-port-out false" style={{ left: NODE_W * COND_F - 6, bottom: -7 }} onClick={(e) => { e.stopPropagation(); onOut(n.id, "false"); }} title="If false" />
+          <span className="as-port-lbl" style={{ left: NODE_W * COND_F + 9, bottom: -4, color: "var(--red)" }}>F</span>
         </>
       ) : n.type !== "output" ? (
-        <button className={"as-port as-port-out" + (connect?.from === n.id ? " active" : "")} style={{ top: PORT.out - 6 }} onClick={(e) => { e.stopPropagation(); onOut(n.id, null); }} title="Output" />
+        <button className={"as-port as-port-out" + (connect?.from === n.id ? " active" : "")} style={{ left: NODE_W / 2 - 6, bottom: -7 }} onClick={(e) => { e.stopPropagation(); onOut(n.id, null); }} title="Output" />
       ) : null}
     </div>
   );
@@ -649,6 +652,8 @@ function RunsView({ runs, reload }) {
 /* ---------------------------------------------------------------- inbox */
 function InboxView({ inbox, reload, me }) {
   const [busyId, setBusyId] = useState(null);
+  const [openIds, setOpenIds] = useState(() => new Set());
+  const toggle = (id) => setOpenIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const act = async (id, status, decision) => {
     setBusyId(id);
     try { await resolveInbox(id, { status, decision }); await reload(); } catch { /* noop */ }
@@ -660,11 +665,16 @@ function InboxView({ inbox, reload, me }) {
   const kindIcon = { approval: ShieldQuestion, action: ListChecks, blocker: Flag, review: CheckCircle2 };
   const row = (it) => {
     const Ic = kindIcon[it.kind] || ListChecks;
+    const isOpen = openIds.has(it.id);
+    const hasData = it.payload && it.payload.vars && Object.keys(it.payload.vars).length > 0;
     return (
       <div key={it.id} className={"as-inbox-item k-" + it.kind}>
         <div className="as-inbox-ic"><Ic size={15} /></div>
         <div className="as-inbox-main">
-          <div className="as-inbox-title">{it.title}</div>
+          <button className="as-inbox-title as-inbox-titlebtn" onClick={() => toggle(it.id)} title="Show what the agent found">
+            <ChevronRight size={13} className="as-inbox-caret" style={{ transform: isOpen ? "rotate(90deg)" : "none" }} />
+            {it.title}
+          </button>
           {it.detail && <div className="as-inbox-detail">{it.detail}</div>}
           <div className="as-inbox-meta">
             <span className="as-chip">{it.kind}</span>
@@ -673,6 +683,12 @@ function InboxView({ inbox, reload, me }) {
             <span>· {fmt(it.createdAt)}</span>
             {it.status !== "open" && <span className="as-resolved">{it.decision || it.status} · {it.resolvedBy}</span>}
           </div>
+          {isOpen && (
+            <div className="as-inbox-payload">
+              <div className="as-pl-head">What the agent found</div>
+              {hasData ? <PayloadView payload={it.payload} /> : <div className="as-pl-empty">This item didn't capture any data. Add data-source steps before the assign step, and reference the AI's answer in the item's Details with {"{{decision}}"} to record specifics here.</div>}
+            </div>
+          )}
         </div>
         {it.status === "open" && (
           <div className="as-inbox-actions">
@@ -705,6 +721,62 @@ function InboxView({ inbox, reload, me }) {
     </div>
   );
 }
+
+/* renders the data an agent captured on an inbox item, so a person can see
+   exactly which records (e.g. which sales orders / blockers) it acted on */
+function PayloadView({ payload }) {
+  const vars = (payload && payload.vars) || {};
+  const keys = Object.keys(vars).filter((k) => k !== "__output__");
+  return (
+    <div className="as-payload">
+      {keys.map((k) => <PayloadVar key={k} name={k} value={vars[k]} />)}
+      {vars.__output__ != null && vars.__output__ !== "" && (
+        <div className="as-pl-block"><div className="as-pl-key">result</div><div className="as-pl-val">{String(vars.__output__)}</div></div>
+      )}
+      {keys.length === 0 && vars.__output__ == null && <div className="as-pl-empty">No captured data.</div>}
+    </div>
+  );
+}
+
+function PayloadVar({ name, value }) {
+  const rows = value && typeof value === "object" && Array.isArray(value.rows) ? value.rows : null;
+  const count = value && typeof value === "object" && value.count != null ? value.count : (rows ? rows.length : null);
+  return (
+    <div className="as-pl-block">
+      <div className="as-pl-key">{name}{count != null && <span className="as-pl-count">{count} record{count === 1 ? "" : "s"}</span>}</div>
+      {rows ? <MiniTable rows={rows} />
+        : value && typeof value === "object"
+          ? <pre className="as-pl-json">{safeJson(value)}</pre>
+          : <div className="as-pl-val">{String(value)}</div>}
+    </div>
+  );
+}
+
+function MiniTable({ rows }) {
+  const shown = rows.slice(0, 8);
+  const cols = [];
+  shown.forEach((r) => Object.keys(r || {}).forEach((c) => { if (!cols.includes(c)) cols.push(c); }));
+  const use = cols.slice(0, 6);
+  if (!use.length) return <div className="as-pl-val">{safeJson(shown)}</div>;
+  return (
+    <div className="as-pl-tablewrap">
+      <table className="as-pl-table">
+        <thead><tr>{use.map((c) => <th key={c}>{c}</th>)}</tr></thead>
+        <tbody>
+          {shown.map((r, i) => <tr key={i}>{use.map((c) => <td key={c} title={cellText(r[c])}>{cellText(r[c])}</td>)}</tr>)}
+        </tbody>
+      </table>
+      {rows.length > shown.length && <div className="as-pl-more">+{rows.length - shown.length} more</div>}
+    </div>
+  );
+}
+
+function cellText(v) {
+  if (v == null) return "—";
+  if (typeof v === "object") return safeJson(v);
+  return String(v);
+}
+function safeJson(v) { try { return JSON.stringify(v, null, 2).slice(0, 1200); } catch { return String(v); } }
 
 /* ---------------------------------------------------------------- welcome */
 function Welcome({ onNew, count }) {
@@ -816,23 +888,24 @@ function StudioCss() {
     .as-wire{pointer-events:stroke;cursor:pointer}
     .as-wire:hover path:first-child{stroke:var(--amber)!important}
     .as-wire-tag{font:600 10px var(--mono);pointer-events:none}
-    .as-node{position:absolute;background:var(--panel);border:1px solid var(--line2);border-radius:12px;
-      box-shadow:0 2px 8px rgba(21,34,45,.08);user-select:none;cursor:grab}
+    .as-node{position:absolute;background:var(--panel);border:1px solid var(--line2);border-radius:12px;display:flex;flex-direction:column;
+      box-shadow:0 2px 8px rgba(21,34,45,.08);user-select:none;cursor:grab;overflow:visible}
     .as-node.sel{box-shadow:0 8px 26px -10px rgba(42,70,196,.5)}
-    .as-node-head{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:11px 11px 0 0;color:#fff}
+    .as-node-head{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:11px 11px 0 0;color:#fff;flex:0 0 auto}
     .as-node-type{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.03em}
     .as-run-pip{width:8px;height:8px;border-radius:50%;margin-left:2px;box-shadow:0 0 0 2px rgba(255,255,255,.5)}
     .as-node-x{margin-left:auto;background:rgba(255,255,255,.2);border:0;color:#fff;border-radius:6px;width:18px;height:18px;display:grid;place-items:center;cursor:pointer}
     .as-node-x:hover{background:rgba(255,255,255,.38)}
-    .as-node-body{padding:8px 10px 10px}
-    .as-node-title{font-size:12.5px;font-weight:600;color:var(--ink)}
+    .as-node-body{padding:8px 10px 10px;flex:1 1 auto;min-height:0;overflow:hidden}
+    .as-node-title{font-size:12.5px;font-weight:600;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .as-node-sub{font-family:var(--mono);font-size:10px;color:var(--faint);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .as-port{position:absolute;width:13px;height:13px;border-radius:50%;background:var(--panel);border:2px solid var(--line2);cursor:crosshair;padding:0}
-    .as-port-in{left:-7px}.as-port-out{right:-7px}
+    .as-port{position:absolute;width:13px;height:13px;border-radius:50%;background:var(--panel);border:2px solid var(--line2);cursor:crosshair;padding:0;z-index:2}
     .as-port-in.live{border-color:var(--amber);box-shadow:0 0 0 3px rgba(42,70,196,.18)}
+    .as-port-in:hover{border-color:var(--amber)}
     .as-port-out:hover,.as-port-out.active{border-color:var(--amber);background:var(--amber)}
-    .as-port-out.true{border-color:var(--green)}.as-port-out.false{border-color:var(--red)}
-    .as-port-lbl{position:absolute;right:8px;font:700 9px var(--mono)}
+    .as-port-out.true{border-color:var(--green)}.as-port-out.true:hover{background:var(--green)}
+    .as-port-out.false{border-color:var(--red)}.as-port-out.false:hover{background:var(--red)}
+    .as-port-lbl{position:absolute;font:700 9px var(--mono)}
     .as-canvas-hint{position:absolute;left:50%;top:30px;transform:translateX(-50%);display:flex;gap:7px;align-items:center;
       background:var(--panel);border:1px dashed var(--line2);border-radius:999px;padding:7px 14px;font-size:12px;color:var(--muted);max-width:520px}
     /* config */
@@ -878,7 +951,26 @@ function StudioCss() {
     .as-inbox-ic{color:var(--muted);margin-top:1px}
     .as-inbox-main{flex:1;min-width:0}
     .as-inbox-title{font-size:13.5px;font-weight:600}
+    .as-inbox-titlebtn{display:flex;align-items:center;gap:5px;background:transparent;border:0;padding:0;cursor:pointer;color:var(--ink);text-align:left;font-family:var(--body)}
+    .as-inbox-titlebtn:hover{color:var(--amber)}
+    .as-inbox-caret{color:var(--faint);transition:transform .15s;flex:0 0 auto}
     .as-inbox-detail{font-size:12px;color:var(--muted);margin-top:2px}
+    .as-inbox-payload{margin-top:10px;border-top:1px dashed var(--line2);padding-top:10px}
+    .as-pl-head{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:8px}
+    .as-pl-empty{font-size:12px;color:var(--muted)}
+    .as-payload{display:flex;flex-direction:column;gap:10px}
+    .as-pl-block{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
+    .as-pl-key{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;margin-bottom:5px}
+    .as-pl-count{background:var(--line2);color:var(--muted);border-radius:999px;font-size:9.5px;font-weight:500;padding:1px 7px}
+    .as-pl-val{font-size:12px;color:var(--muted);white-space:pre-wrap;word-break:break-word}
+    .as-pl-json{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin:0;max-height:180px;overflow:auto;white-space:pre-wrap}
+    .as-pl-tablewrap{overflow:auto;max-height:240px;border:1px solid var(--line);border-radius:7px;background:var(--panel)}
+    .as-pl-table{border-collapse:collapse;width:100%;font-size:11.5px}
+    .as-pl-table th{position:sticky;top:0;background:var(--panel2);text-align:left;font-family:var(--mono);font-weight:600;color:var(--muted);
+      padding:6px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+    .as-pl-table td{padding:5px 9px;border-bottom:1px solid var(--line);color:var(--ink);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .as-pl-table tr:last-child td{border-bottom:0}
+    .as-pl-more{font-family:var(--mono);font-size:10.5px;color:var(--faint);padding:6px 9px;background:var(--panel2)}
     .as-inbox-meta{display:flex;gap:7px;flex-wrap:wrap;align-items:center;font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-top:6px}
     .as-chip{background:var(--panel2);border:1px solid var(--line2);border-radius:999px;padding:1px 8px;color:var(--muted)}
     .as-resolved{color:var(--green)}
