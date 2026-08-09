@@ -53,6 +53,7 @@ export const setUserProducts = (userId, body) => fetch("/api/platform/users/" + 
 
 export const billingCatalog = () => fetch("/api/billing/catalog", { credentials: "include" }).then(jsonOrThrow);
 export const billingSubscribe = (items) => fetch("/api/billing/subscribe", opts("POST", { items })).then(jsonOrThrow);
+export const setMemberAllocation = (id, product, allocated) => fetch("/api/admin/members/" + id + "/allocation", opts("PUT", { product, allocated })).then(jsonOrThrow);
 export const adminUsage = () => fetch("/api/admin/usage", { credentials: "include" }).then(jsonOrThrow);
 export const updateMember = (id, body) => fetch("/api/admin/members/" + id, opts("PATCH", body)).then(jsonOrThrow);
 export const importFromSource = (body) => fetch("/api/import/source", opts("POST", body)).then(jsonOrThrow);

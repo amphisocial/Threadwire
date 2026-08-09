@@ -1120,9 +1120,12 @@ async def admin_usage(user: dict = Depends(current_user)):
     if user["role"] not in ("org_admin", "superadmin"):
         raise HTTPException(403, "Admins only")
     async with db.pool().acquire() as con:
+        org = await con.fetchrow(
+            "SELECT products, product_tiers FROM organizations WHERE id=$1", user["org_id"])
         rows = await con.fetch(
             "SELECT u.id, u.email, u.full_name, u.role, u.plan, u.is_active, "
             "u.license_assigned, u.workforce_role, u.workforce_discipline, "
+            "u.product_grants, u.product_restrictions, "
             "COALESCE(d.tokens,0) AS tokens_today "
             "FROM users u LEFT JOIN usage_daily d "
             "ON d.user_id = u.id AND d.usage_date = CURRENT_DATE "
@@ -1140,8 +1143,21 @@ async def admin_usage(user: dict = Depends(current_user)):
             # migration is installed.
             workforce_people_count = 0
     ent = bool(user.get("enterprise"))
+    company_products = list((org and org["products"]) or [])
+    _pt = (org and org["product_tiers"]) or {}
+    if not isinstance(_pt, dict):
+        try: _pt = json.loads(_pt)
+        except Exception: _pt = {}
+    base = set(company_products)
     members = []
+    alloc_counts = {p: 0 for p in settings.PRODUCTS}
     for r in rows:
+        grants = set(r["product_grants"] or [])
+        restrict = set(r["product_restrictions"] or [])
+        eff = [p for p in settings.PRODUCTS if p in ((base | grants) - restrict)]
+        for p in eff:
+            if p in alloc_counts:
+                alloc_counts[p] += 1
         members.append({
             "id": str(r["id"]),
             "email": r["email"],
@@ -1151,16 +1167,29 @@ async def admin_usage(user: dict = Depends(current_user)):
             "license_assigned": bool(r["license_assigned"]),
             "workforce_role": r["workforce_role"] or "viewer",
             "workforce_discipline": r["workforce_discipline"],
+            "products": eff,
+            "product_grants": list(r["product_grants"] or []),
+            "product_restrictions": list(r["product_restrictions"] or []),
             "plan": "enterprise" if ent else (r["plan"] or "free"),
             "tokens_today": r["tokens_today"],
             "unlimited": bool(r["license_assigned"]) and (
                 ent or r["plan"] == "pro"
             ),
         })
+    product_tiers = {}
+    for p in settings.PRODUCTS:
+        tk = _pt.get(p)
+        if p in base or tk:
+            seats = settings.TIERS.get(tk, {}).get("seats") if tk else None
+            product_tiers[p] = {"tier": tk, "seats": seats,
+                                "label": settings.TIERS.get(tk, {}).get("label") if tk else None,
+                                "allocated": alloc_counts.get(p, 0)}
     return {
         "enterprise": ent,
         "free_limit": settings.free_daily_tokens,
         "members": members,
+        "company_products": company_products,
+        "product_tiers": product_tiers,
         "account_count": len(members),
         "active_account_count": sum(1 for m in members if m["is_active"]),
         "licensed_count": sum(1 for m in members if m["license_assigned"]),
@@ -1273,6 +1302,72 @@ async def update_member(
         "workforce_role": workforce_role,
         "workforce_discipline": workforce_discipline,
     }
+
+
+class AllocationIn(BaseModel):
+    product: str
+    allocated: bool
+
+
+@app.put("/api/admin/members/{member_id}/allocation")
+async def set_member_allocation(member_id: str, body: AllocationIn, user: dict = Depends(current_user)):
+    """Customer-admin: allocate/deallocate a product seat to one user, within the
+    company's purchased seat cap for that product. Works via per-user grants /
+    restrictions relative to the company baseline."""
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Admins only")
+    product = body.product
+    if product not in settings.PRODUCTS:
+        raise HTTPException(400, "Unknown product")
+    try:
+        member_uuid = uuid.UUID(member_id)
+    except ValueError:
+        raise HTTPException(400, "Invalid member id")
+
+    async with db.pool().acquire() as con:
+        async with con.transaction():
+            org = await con.fetchrow(
+                "SELECT products, product_tiers FROM organizations WHERE id=$1", user["org_id"])
+            base = set((org and org["products"]) or [])
+            if product not in base:
+                raise HTTPException(400, "Your company isn't subscribed to this product")
+            _pt = (org and org["product_tiers"]) or {}
+            if not isinstance(_pt, dict):
+                try: _pt = json.loads(_pt)
+                except Exception: _pt = {}
+            cap = settings.TIERS.get(_pt.get(product), {}).get("seats")
+
+            target = await con.fetchrow(
+                "SELECT id, product_grants, product_restrictions FROM users WHERE id=$1 AND org_id=$2",
+                member_uuid, user["org_id"])
+            if not target:
+                raise HTTPException(404, "Member not found")
+            grants = set(target["product_grants"] or [])
+            restrict = set(target["product_restrictions"] or [])
+
+            if body.allocated:
+                # turn ON: ensure not restricted (baseline already grants it)
+                restrict.discard(product)
+                grants.discard(product)  # baseline covers it; keep grants clean
+                # enforce seat cap across the org (count effective allocations)
+                if cap is not None:
+                    cnt = await con.fetchval(
+                        "SELECT count(*) FROM users u WHERE u.org_id=$1 "
+                        "AND ($2 = ANY(u.product_grants) OR ($3 AND NOT ($2 = ANY(u.product_restrictions)))) "
+                        "AND u.id <> $4",
+                        user["org_id"], product, product in base, member_uuid)
+                    if (cnt or 0) + 1 > cap:
+                        raise HTTPException(400, "Seat cap reached for %s (%d). Upgrade the tier to allocate more." % (product, cap))
+            else:
+                # turn OFF: restrict it (baseline would otherwise grant it)
+                grants.discard(product)
+                restrict.add(product)
+
+            await con.execute(
+                "UPDATE users SET product_grants=$2, product_restrictions=$3 WHERE id=$1",
+                member_uuid, [p for p in settings.PRODUCTS if p in grants],
+                [p for p in settings.PRODUCTS if p in restrict])
+    return {"ok": True, "product": product, "allocated": body.allocated}
 
 
 class SourceImportIn(BaseModel):

@@ -8,7 +8,7 @@ import {
   listDocuments, uploadDocument, loadSampleDocs, docDownloadUrl,
   updateSettings, loadSampleDataset, sampleCsvUrl,
   platformOrgs, setCompanyProducts, platformOrgUsers, setUserProducts,
-  billingCatalog, billingSubscribe,
+  billingCatalog, billingSubscribe, setMemberAllocation,
 } from "../lib/api.js";
 
 const PRODUCT_LIST = [
@@ -402,133 +402,208 @@ function UserManagementTab({ isAdmin }) {
     }
   };
 
+  const [sub, setSub] = useState("seats");
+  const allocate = async (member, product, allocated) => {
+    setSaving((s) => ({ ...s, [member.id]: true }));
+    setError("");
+    try {
+      await setMemberAllocation(member.id, product, allocated);
+      await load();
+    } catch (e) {
+      setError(e.message || "Could not update allocation.");
+    } finally {
+      setSaving((s) => ({ ...s, [member.id]: false }));
+    }
+  };
+
   if (!isAdmin) return <div style={{ color: C.faint, fontSize: 13 }}>Admin access required to manage users.</div>;
 
   const licensed = data?.licensed_count ?? data?.members?.filter((m) => m.license_assigned !== false).length ?? 0;
   const active = data?.active_account_count ?? data?.members?.filter((m) => m.is_active !== false).length ?? 0;
   const workforcePeople = data?.workforce_people_count ?? 0;
+  const companyProducts = data?.company_products || [];
+  const productTiers = data?.product_tiers || {};
+  const PMETA = { delivery: "Delivery Intelligence", workforce: "Workforce Intelligence", requirements: "Requirements Intelligence" };
+  const subTabs = [{ id: "seats", label: "Seats & invites" },
+    ...["delivery", "workforce", "requirements"].filter((p) => companyProducts.includes(p))
+      .map((p) => ({ id: p, label: PMETA[p].split(" ")[0] + " allocation" }))];
+
+  const inviteBox = (
+    <div style={card}>
+      <div style={eyebrow}>Invite a licensed user</div>
+      <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12, lineHeight: 1.55 }}>
+        Invitations create Threadwire login accounts and consume a license seat once accepted.
+        Workforce roster imports are separate and never consume seats.
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <input style={{ ...inp, flex: 1, minWidth: 220 }} type="email" placeholder="colleague@company.com"
+          value={email} onChange={(e) => setEmail(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && email && sendInvite()} />
+        <button style={btnP} onClick={sendInvite} disabled={busy || !email}>{busy ? "Sending…" : "Send invite"}</button>
+      </div>
+      {inviteMsg && (inviteMsg.ok
+        ? <div style={{ marginTop: 12, fontSize: 12.5 }}>
+            <div style={{ color: C.green }}>✓ Invite created{inviteMsg.emailed ? " and emailed." : " — SMTP not configured, copy the link below:"}</div>
+            {!inviteMsg.emailed && (
+              <div style={{ fontFamily: mono, fontSize: 11.5, color: C.thread, marginTop: 8, wordBreak: "break-all", cursor: "pointer",
+                background: C.bg2, padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.line}` }}
+                onClick={() => navigator.clipboard?.writeText(inviteMsg.url)}>
+                {inviteMsg.url}  ⧉ click to copy
+              </div>
+            )}
+          </div>
+        : <div style={{ marginTop: 12, fontSize: 12.5, color: C.red }}>✕ {inviteMsg.msg}</div>)}
+    </div>
+  );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div style={card}>
-        <div style={eyebrow}>Invite a licensed user</div>
-        <div style={{ fontSize: 12.5, color: C.muted, marginBottom: 12, lineHeight: 1.55 }}>
-          Invitations create Threadwire login accounts and consume a license seat once accepted.
-          Workforce roster imports are separate and never consume seats.
-        </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: inviteMsg ? 0 : undefined }}>
-          <input style={{ ...inp, flex: 1, minWidth: 220 }} type="email" placeholder="colleague@company.com"
-            value={email} onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && email && sendInvite()} />
-          <button style={btnP} onClick={sendInvite} disabled={busy || !email}>{busy ? "Sending…" : "Send invite"}</button>
-        </div>
-        {inviteMsg && (inviteMsg.ok
-          ? <div style={{ marginTop: 12, fontSize: 12.5 }}>
-              <div style={{ color: C.green }}>✓ Invite created{inviteMsg.emailed ? " and emailed." : " — SMTP not configured, copy the link below:"}</div>
-              {!inviteMsg.emailed && (
-                <div style={{ fontFamily: mono, fontSize: 11.5, color: C.thread, marginTop: 8, wordBreak: "break-all", cursor: "pointer",
-                  background: C.bg2, padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.line}` }}
-                  onClick={() => navigator.clipboard?.writeText(inviteMsg.url)}>
-                  {inviteMsg.url}  ⧉ click to copy
-                </div>
-              )}
-            </div>
-          : <div style={{ marginTop: 12, fontSize: 12.5, color: C.red }}>✕ {inviteMsg.msg}</div>)}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <SubTabBar tabs={subTabs} active={subTabs.some((t) => t.id === sub) ? sub : "seats"} setActive={setSub} />
+      {error && <div style={{ color: C.red, fontSize: 12.5 }}>✕ {error}</div>}
 
-      <div style={{ ...card, padding: 0, overflow: "hidden" }}>
-        <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <span style={eyebrow}>Licensed users</span>
-          <span style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginLeft: "auto" }}>
-            {data ? `${licensed} licensed · ${active} active accounts · ${workforcePeople.toLocaleString()} workforce records` : "Loading…"}
-          </span>
-        </div>
-        <div style={{ padding: "10px 18px", background: C.bg2, borderBottom: `1px solid ${C.line}`, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
-          <b style={{ color: C.ink }}>License seat</b> controls application access.
-          <b style={{ color: C.ink }}> Workforce role</b> controls what that licensed user can do in Workforce.
-          The employee/engineer roster lives in <span style={{ fontFamily: mono }}>wf_people</span> and is not listed here.
-        </div>
-        {error && <div style={{ padding: "10px 18px", color: C.red, fontSize: 12.5, borderBottom: `1px solid ${C.line}` }}>✕ {error}</div>}
-        <div style={{ overflowX: "auto" }}>
-          <div style={{ minWidth: 980 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(240px,1fr) 120px 230px 170px 110px", padding: "8px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>
-              <span>ACCOUNT</span><span>LICENSE</span><span>WORKFORCE ROLE</span><span>DISCIPLINE SCOPE</span><span style={{ textAlign: "right" }}>STATUS</span>
+      {sub === "seats" && (
+        <>
+          {inviteBox}
+          <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={eyebrow}>Licensed users</span>
+              <span style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginLeft: "auto" }}>
+                {data ? `${licensed} licensed · ${active} active accounts · ${workforcePeople.toLocaleString()} workforce records` : "Loading…"}
+              </span>
             </div>
-            {!data && !error && <div style={{ padding: 18, color: C.faint, fontSize: 13 }}>Loading…</div>}
-            {data?.members.map((m, i) => {
-              const accountActive = m.is_active !== false;
-              const hasLicense = m.license_assigned !== false;
-              const protectedAdmin = m.role === "org_admin" || m.role === "superadmin";
-              const isSaving = !!saving[m.id];
-              return (
-                <div key={m.id || i} style={{ display: "grid", gridTemplateColumns: "minmax(240px,1fr) 120px 230px 170px 110px", alignItems: "center",
-                  padding: "12px 18px", borderBottom: i < data.members.length - 1 ? `1px solid ${C.line}` : "none",
-                  background: !accountActive || !hasLicense ? "rgba(242,98,73,.035)" : "transparent", gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 13.5, color: accountActive && hasLicense ? C.ink : C.faint }}>
-                      {m.full_name || m.email}
-                      <span style={{ fontFamily: mono, fontSize: 10, color: m.role === "org_admin" ? C.amber : C.faint, marginLeft: 6 }}>
-                        {m.role === "org_admin" ? "org admin" : m.role === "superadmin" ? "site admin" : "member"}
-                      </span>
+            <div style={{ padding: "10px 18px", background: C.bg2, borderBottom: `1px solid ${C.line}`, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+              A <b style={{ color: C.ink }}>license seat</b> grants a login account. Use the per-product allocation tabs above to control which products each user can open.
+            </div>
+            <div style={{ overflowX: "auto" }}><div style={{ minWidth: 720 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(240px,1fr) 130px 120px", padding: "8px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>
+                <span>ACCOUNT</span><span>LICENSE</span><span style={{ textAlign: "right" }}>STATUS</span>
+              </div>
+              {!data && !error && <div style={{ padding: 18, color: C.faint, fontSize: 13 }}>Loading…</div>}
+              {data?.members.map((m, i) => {
+                const accountActive = m.is_active !== false;
+                const hasLicense = m.license_assigned !== false;
+                const protectedAdmin = m.role === "org_admin" || m.role === "superadmin";
+                const isSaving = !!saving[m.id];
+                return (
+                  <div key={m.id || i} style={{ display: "grid", gridTemplateColumns: "minmax(240px,1fr) 130px 120px", alignItems: "center",
+                    padding: "12px 18px", borderBottom: i < data.members.length - 1 ? `1px solid ${C.line}` : "none",
+                    background: !accountActive || !hasLicense ? "rgba(242,98,73,.035)" : "transparent", gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 13.5, color: accountActive && hasLicense ? C.ink : C.faint }}>
+                        {m.full_name || m.email}
+                        <span style={{ fontFamily: mono, fontSize: 10, color: m.role === "org_admin" ? C.amber : C.faint, marginLeft: 6 }}>
+                          {m.role === "org_admin" ? "org admin" : m.role === "superadmin" ? "site admin" : "member"}
+                        </span>
+                      </div>
+                      <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{m.email}</div>
                     </div>
-                    <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{m.email}</div>
-                  </div>
-
-                  <button style={{ ...btn, padding: "6px 9px", fontSize: 11, justifyContent: "center",
-                    color: hasLicense ? C.green : C.faint, borderColor: hasLicense ? C.green : C.line2 }}
-                    disabled={protectedAdmin || isSaving}
-                    title={protectedAdmin ? "Administrators must retain a license" : "Assign or release a Threadwire license seat"}
-                    onClick={() => saveMember(m, { license_assigned: !hasLicense })}>
-                    {hasLicense ? "Licensed" : "No seat"}
-                  </button>
-
-                  <select style={{ ...inp, padding: "7px 9px", fontSize: 11.5 }} value={m.workforce_role || "viewer"}
-                    disabled={isSaving}
-                    onChange={(e) => saveMember(m, { workforce_role: e.target.value })}>
-                    {WORKFORCE_ROLES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-
-                  {(m.workforce_role || "viewer") === "discipline_manager"
-                    ? <select style={{ ...inp, padding: "7px 9px", fontSize: 11.5 }} value={m.workforce_discipline || ""}
-                        disabled={isSaving}
-                        onChange={(e) => saveMember(m, { workforce_discipline: e.target.value || null })}>
-                        <option value="">All disciplines</option>
-                        {WORKFORCE_DISCIPLINES.map(([value, label]) => <option key={value} value={value}>{value} · {label}</option>)}
-                      </select>
-                    : <span style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>—</span>}
-
-                  <div style={{ textAlign: "right" }}>
-                    <button style={{ ...btn, padding: "6px 9px", fontSize: 11,
-                      color: accountActive ? C.green : C.red, borderColor: accountActive ? C.green : C.red }}
+                    <button style={{ ...btn, padding: "6px 9px", fontSize: 11, justifyContent: "center",
+                      color: hasLicense ? C.green : C.faint, borderColor: hasLicense ? C.green : C.line2 }}
                       disabled={protectedAdmin || isSaving}
-                      title={protectedAdmin ? "Administrators cannot be disabled" : "Enable or disable this login account"}
-                      onClick={() => saveMember(m, { is_active: !accountActive })}>
-                      {isSaving ? "…" : accountActive ? "Active" : "Disabled"}
+                      title={protectedAdmin ? "Administrators must retain a license" : "Assign or release a Threadwire license seat"}
+                      onClick={() => saveMember(m, { license_assigned: !hasLicense })}>
+                      {hasLicense ? "Licensed" : "No seat"}
                     </button>
+                    <div style={{ textAlign: "right" }}>
+                      <button style={{ ...btn, padding: "6px 9px", fontSize: 11,
+                        color: accountActive ? C.green : C.red, borderColor: accountActive ? C.green : C.red }}
+                        disabled={protectedAdmin || isSaving}
+                        title={protectedAdmin ? "Administrators cannot be disabled" : "Enable or disable this login account"}
+                        onClick={() => saveMember(m, { is_active: !accountActive })}>
+                        {isSaving ? "…" : accountActive ? "Active" : "Disabled"}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div></div>
           </div>
-        </div>
-      </div>
 
-      {invites.length > 0 && (
-        <div style={{ ...card, padding: 0, overflow: "hidden" }}>
-          <div style={{ padding: "12px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>PENDING INVITES</div>
-          {invites.map((iv, i) => (
-            <div key={iv.id} style={{ padding: "11px 18px", borderBottom: i < invites.length - 1 ? `1px solid ${C.line}` : "none", display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 13.5, color: C.ink }}>{iv.email}</span>
-              <Tag tone={iv.status === "accepted" ? "green" : iv.status === "revoked" ? "red" : "blue"}>{iv.status}</Tag>
-              <span style={{ marginLeft: "auto", fontFamily: mono, fontSize: 10.5, color: C.faint }}>{new Date(iv.created_at).toLocaleDateString()}</span>
-              {iv.status === "pending" && (
-                <button style={{ ...btn, padding: "5px 10px", fontSize: 11, color: C.red, borderColor: C.red }}
-                  onClick={() => revokeInvite(iv.id).then(load)}>Revoke</button>
-              )}
+          {invites.length > 0 && (
+            <div style={{ ...card, padding: 0, overflow: "hidden" }}>
+              <div style={{ padding: "12px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>PENDING INVITES</div>
+              {invites.map((iv, i) => (
+                <div key={iv.id} style={{ padding: "11px 18px", borderBottom: i < invites.length - 1 ? `1px solid ${C.line}` : "none", display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13.5, color: C.ink }}>{iv.email}</span>
+                  <Tag tone={iv.status === "accepted" ? "green" : iv.status === "revoked" ? "red" : "blue"}>{iv.status}</Tag>
+                  <span style={{ marginLeft: "auto", fontFamily: mono, fontSize: 10.5, color: C.faint }}>{new Date(iv.created_at).toLocaleDateString()}</span>
+                  {iv.status === "pending" && (
+                    <button style={{ ...btn, padding: "5px 10px", fontSize: 11, color: C.red, borderColor: C.red }}
+                      onClick={() => revokeInvite(iv.id).then(load)}>Revoke</button>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
+
+      {["delivery", "workforce", "requirements"].filter((p) => sub === p && companyProducts.includes(p)).map((product) => {
+        const t = productTiers[product] || {};
+        const cap = t.seats;
+        const allocated = t.allocated || 0;
+        const full = cap != null && allocated >= cap;
+        const isWf = product === "workforce";
+        const gridCols = isWf ? "minmax(220px,1fr) 120px 210px 160px" : "minmax(260px,1fr) 140px";
+        return (
+          <div key={product} style={{ ...card, padding: 0, overflow: "hidden" }}>
+            <div style={{ padding: "12px 18px", borderBottom: `1px solid ${C.line}`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={eyebrow}>{PMETA[product]} — allocation</span>
+              <span style={{ fontFamily: mono, fontSize: 11, color: full ? C.red : C.faint, marginLeft: "auto" }}>
+                {t.label ? `${t.label} · ` : ""}{allocated}{cap != null ? ` / ${cap}` : ""} seats allocated{full ? " · cap reached" : ""}
+              </span>
+            </div>
+            <div style={{ padding: "10px 18px", background: C.bg2, borderBottom: `1px solid ${C.line}`, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
+              Toggle which licensed users can open <b style={{ color: C.ink }}>{PMETA[product]}</b>{cap != null ? ` (up to ${cap} seats on the ${t.label} tier)` : ""}.
+              {isWf && " Workforce role and discipline scope control what an allocated user can do inside Workforce."}
+              {full && <span style={{ color: C.red }}> Seat cap reached — upgrade the tier in the License tab to allocate more.</span>}
+            </div>
+            <div style={{ overflowX: "auto" }}><div style={{ minWidth: isWf ? 760 : 480 }}>
+              <div style={{ display: "grid", gridTemplateColumns: gridCols, padding: "8px 18px", fontFamily: mono, fontSize: 10.5, color: C.faint, borderBottom: `1px solid ${C.line}` }}>
+                <span>ACCOUNT</span><span>ALLOCATION</span>{isWf && <><span>WORKFORCE ROLE</span><span>DISCIPLINE SCOPE</span></>}
+              </div>
+              {!data && <div style={{ padding: 18, color: C.faint, fontSize: 13 }}>Loading…</div>}
+              {data?.members.map((m, i) => {
+                const on = (m.products || []).includes(product);
+                const hasLicense = m.license_assigned !== false;
+                const isSaving = !!saving[m.id];
+                return (
+                  <div key={m.id || i} style={{ display: "grid", gridTemplateColumns: gridCols, alignItems: "center",
+                    padding: "12px 18px", borderBottom: i < data.members.length - 1 ? `1px solid ${C.line}` : "none", gap: 8,
+                    opacity: hasLicense ? 1 : 0.5 }}>
+                    <div>
+                      <div style={{ fontSize: 13.5, color: C.ink }}>{m.full_name || m.email}</div>
+                      <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>{m.email}</div>
+                    </div>
+                    <button style={{ ...btn, padding: "6px 9px", fontSize: 11, justifyContent: "center",
+                      color: on ? C.green : C.faint, borderColor: on ? C.green : C.line2 }}
+                      disabled={isSaving || !hasLicense || (!on && full)}
+                      title={!hasLicense ? "Assign a license seat first" : (!on && full ? "Seat cap reached" : "Allocate / remove this product")}
+                      onClick={() => allocate(m, product, !on)}>
+                      {isSaving ? "…" : on ? "Allocated" : "Not allocated"}
+                    </button>
+                    {isWf && (
+                      <>
+                        <select style={{ ...inp, padding: "7px 9px", fontSize: 11.5 }} value={m.workforce_role || "viewer"}
+                          disabled={isSaving} onChange={(e) => saveMember(m, { workforce_role: e.target.value })}>
+                          {WORKFORCE_ROLES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                        {(m.workforce_role || "viewer") === "discipline_manager"
+                          ? <select style={{ ...inp, padding: "7px 9px", fontSize: 11.5 }} value={m.workforce_discipline || ""}
+                              disabled={isSaving} onChange={(e) => saveMember(m, { workforce_discipline: e.target.value || null })}>
+                              <option value="">All disciplines</option>
+                              {WORKFORCE_DISCIPLINES.map(([value, label]) => <option key={value} value={value}>{value} · {label}</option>)}
+                            </select>
+                          : <span style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>—</span>}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div></div>
+          </div>
+        );
+      })}
     </div>
   );
 }
