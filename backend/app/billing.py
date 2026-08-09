@@ -68,6 +68,42 @@ async def create_checkout(price_id: str, success_url: str, cancel_url: str,
         return None
 
 
+async def create_checkout_multi(line_items: list, success_url: str, cancel_url: str,
+                                customer_email: Optional[str] = None,
+                                client_ref: Optional[str] = None,
+                                metadata: Optional[dict] = None) -> Optional[dict]:
+    """Subscription checkout with several line items.
+    line_items: [{"price": <id>, "quantity": <int>}, ...]"""
+    if not settings.stripe_secret_key or not line_items:
+        return None
+    data = {
+        "mode": "subscription",
+        "success_url": success_url,
+        "cancel_url": cancel_url,
+        "allow_promotion_codes": "true",
+    }
+    for i, li in enumerate(line_items):
+        if not li.get("price"):
+            return None
+        data["line_items[%d][price]" % i] = li["price"]
+        data["line_items[%d][quantity]" % i] = str(li.get("quantity", 1))
+    if customer_email:
+        data["customer_email"] = customer_email
+    if client_ref:
+        data["client_reference_id"] = client_ref
+    for k, v in (metadata or {}).items():
+        data["metadata[%s]" % k] = str(v)
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as c:
+            r = await c.post(BASE + "/checkout/sessions", data=data, auth=_auth())
+        if r.status_code != 200:
+            return None
+        j = r.json()
+        return {"id": j.get("id"), "url": j.get("url")}
+    except Exception:
+        return None
+
+
 async def retrieve_session(session_id: str) -> Optional[dict]:
     if not settings.stripe_secret_key:
         return None

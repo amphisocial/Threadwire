@@ -985,6 +985,72 @@ async def billing_checkout(body: CheckoutIn, user: dict = Depends(current_user))
     return {"url": sess["url"]}
 
 
+@app.get("/api/billing/catalog")
+async def billing_catalog(user: dict = Depends(current_user)):
+    """The product × tier price matrix + this company's current selection."""
+    tiers = []
+    for key, t in settings.TIERS.items():
+        tiers.append({"key": key, "label": t["label"], "seats": t["seats"],
+                      "rate": t["rate"], "monthly": round(t["seats"] * t["rate"], 2)})
+    products = []
+    for p in settings.PRODUCTS:
+        configured = {tk: bool(settings.product_price_id(p, tk)) for tk in settings.TIERS}
+        products.append({"key": p, "configured": configured})
+    async with db.pool().acquire() as con:
+        row = await con.fetchrow(
+            "SELECT products, product_tiers FROM organizations WHERE id=$1", user["org_id"])
+    current = {}
+    if row and row["product_tiers"]:
+        current = row["product_tiers"] if isinstance(row["product_tiers"], dict) else json.loads(row["product_tiers"])
+    return {"products": products, "tiers": tiers,
+            "current_tiers": current,
+            "current_products": list((row and row["products"]) or []),
+            "billing_configured": bool(settings.stripe_secret_key)}
+
+
+class SubscribeItem(BaseModel):
+    product: str
+    tier: str
+
+
+class SubscribeIn(BaseModel):
+    items: List[SubscribeItem]
+
+
+@app.post("/api/billing/subscribe")
+async def billing_subscribe(body: SubscribeIn, user: dict = Depends(current_user)):
+    if user["role"] not in ("org_admin", "superadmin"):
+        raise HTTPException(403, "Only a company admin can manage subscriptions")
+    if not settings.stripe_secret_key:
+        raise HTTPException(400, "Billing is not configured on the server")
+    # de-dupe to one tier per product; validate keys
+    chosen = {}
+    for it in body.items:
+        if it.product not in settings.PRODUCTS or it.tier not in settings.TIERS:
+            raise HTTPException(400, "Unknown product or tier: %s/%s" % (it.product, it.tier))
+        chosen[it.product] = it.tier
+    if not chosen:
+        raise HTTPException(400, "Select at least one product")
+    line_items, tiermap = [], {}
+    for product, tier in chosen.items():
+        price = settings.product_price_id(product, tier)
+        if not price:
+            raise HTTPException(400, "No Stripe price configured for %s/%s" % (product, tier))
+        line_items.append({"price": price, "quantity": settings.TIERS[tier]["seats"]})
+        tiermap[product] = tier
+    base = settings.app_base_url.rstrip("/")
+    success = base + "/?billing=success&session_id={CHECKOUT_SESSION_ID}"
+    cancel = base + "/?billing=cancel"
+    meta = {"kind": "products", "org_id": str(user["org_id"]),
+            "user_id": str(user["user_id"]), "tiers": json.dumps(tiermap)}
+    sess = await billing.create_checkout_multi(line_items, success, cancel,
+                                               customer_email=user["email"],
+                                               client_ref=str(user["user_id"]), metadata=meta)
+    if not sess or not sess.get("url"):
+        raise HTTPException(502, "Could not start checkout")
+    return {"url": sess["url"]}
+
+
 @app.get("/api/billing/confirm")
 async def billing_confirm(session_id: str, user: dict = Depends(current_user)):
     sess = await billing.retrieve_session(session_id)
@@ -997,6 +1063,26 @@ async def billing_confirm(session_id: str, user: dict = Depends(current_user)):
     plan = meta.get("plan")
     customer = sess.get("customer")
     sub = sess.get("subscription")
+
+    # Product subscription checkout (Delivery / Workforce / Requirements tiers)
+    if meta.get("kind") == "products":
+        if meta.get("org_id") != str(user["org_id"]) or user["role"] not in ("org_admin", "superadmin"):
+            raise HTTPException(403, "This checkout session does not belong to your company")
+        try:
+            tiers = json.loads(meta.get("tiers") or "{}")
+        except Exception:
+            tiers = {}
+        tiers = {p: t for p, t in tiers.items()
+                 if p in settings.PRODUCTS and t in settings.TIERS}
+        products = [p for p in settings.PRODUCTS if p in tiers]
+        async with db.pool().acquire() as con:
+            await con.execute(
+                "UPDATE organizations SET products=$2, product_tiers=$3::jsonb, "
+                "stripe_customer_id=COALESCE($4, stripe_customer_id), "
+                "stripe_subscription_id=$5 WHERE id=$1",
+                user["org_id"], products, json.dumps(tiers), customer, sub)
+        return {"ok": True, "kind": "products", "products": products, "tiers": tiers}
+
     async with db.pool().acquire() as con:
         if plan == "pro" and meta.get("user_id") == str(user["user_id"]):
             await con.execute(

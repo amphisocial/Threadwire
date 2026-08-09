@@ -51,6 +51,8 @@ export const setCompanyProducts = (orgId, products) => fetch("/api/platform/orgs
 export const platformOrgUsers = (orgId) => fetch("/api/platform/orgs/" + orgId + "/users", { credentials: "include" }).then(jsonOrThrow);
 export const setUserProducts = (userId, body) => fetch("/api/platform/users/" + userId + "/products", opts("PUT", body)).then(jsonOrThrow);
 
+export const billingCatalog = () => fetch("/api/billing/catalog", { credentials: "include" }).then(jsonOrThrow);
+export const billingSubscribe = (items) => fetch("/api/billing/subscribe", opts("POST", { items })).then(jsonOrThrow);
 export const adminUsage = () => fetch("/api/admin/usage", { credentials: "include" }).then(jsonOrThrow);
 export const updateMember = (id, body) => fetch("/api/admin/members/" + id, opts("PATCH", body)).then(jsonOrThrow);
 export const importFromSource = (body) => fetch("/api/import/source", opts("POST", body)).then(jsonOrThrow);

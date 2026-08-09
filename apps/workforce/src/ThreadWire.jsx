@@ -95,6 +95,26 @@ function detectProductCtx() {
   } catch (e) { return null; }
 }
 
+/* This build's target: "home" (marketing) or a product key. A product build is
+   an app-only shell — no marketing pages, ROI or case studies. */
+const BUILD_TARGET = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_APP_TARGET) || "home";
+const IS_MARKETING_BUILD = BUILD_TARGET === "home";
+
+/* Root marketing URL (threadwire.ai) from any subdomain. Logout & "all products"
+   send here. On localhost/preview, stays on the same origin. */
+function apexUrl() {
+  if (typeof window === "undefined") return "/";
+  const host = window.location.hostname || "";
+  const parts = host.split(".");
+  const known = Object.values(PRODUCTS).map((x) => x.subdomain);
+  const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(host);
+  if (host === "localhost" || isIp || parts.length < 2) return window.location.origin + "/";
+  let root = host;
+  if (parts.length > 2 && known.includes(parts[0])) root = parts.slice(1).join(".");
+  else if (parts[0] === "www") root = parts.slice(1).join(".");
+  return window.location.protocol + "//" + root + "/";
+}
+
 /* Build the URL for a product's app on its subdomain. In production this is
    https://<subdomain>.<root-domain>/; on localhost / preview hosts (no product
    subdomain) it falls back to the same origin with ?app=<key> so the switcher
@@ -410,6 +430,31 @@ function ProductsMenu({ go, route }) {
   );
 }
 
+/* Shown on a product subdomain when a signed-in user isn't entitled to that
+   product. Product builds have no marketing — this is the clean fallback. */
+function NoAccess({ productKey }) {
+  const p = PRODUCTS[productKey] || { short: "this product", name: "this product", tone: "var(--amber)", icon: Layers };
+  const Icon = p.icon;
+  return (
+    <div style={{ maxWidth: 620, margin: "0 auto", padding: "80px 22px", textAlign: "center" }}>
+      <div style={{ width: 60, height: 60, borderRadius: 16, margin: "0 auto 20px", background: "var(--panel2)", border: `1px solid ${p.tone}`, display: "grid", placeItems: "center" }}>
+        <Icon size={28} color={p.tone} />
+      </div>
+      <h1 className="tf-disp" style={{ fontSize: 26, fontWeight: 800, margin: "0 0 10px" }}>You don't have access to {p.short} yet</h1>
+      <p style={{ color: "var(--muted)", fontSize: 15, lineHeight: 1.6, margin: "0 0 26px" }}>
+        Your account isn't subscribed to {p.name}. A company admin can add it from the License tab,
+        or you can head back to the products you do have access to.
+      </p>
+      <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+        <button className="tf-btn tf-btn-primary" onClick={() => { window.location.href = apexUrl() + "?app=" + productKey; }}>
+          View {p.short} details <ArrowRight size={15} />
+        </button>
+        <button className="tf-btn tf-btn-ghost" onClick={() => { window.location.href = apexUrl(); }}>← Back to Threadwire</button>
+      </div>
+    </div>
+  );
+}
+
 /* Signed-in product switcher + "your subscriptions" view. Lets a user move
    between the products they're subscribed to (each lives on its own subdomain),
    shows which they don't have, and points unentitled products at Get in touch. */
@@ -494,12 +539,18 @@ function TopNav({ route, go, tier, onContact, loggedIn, user, productCtx }) {
       appLinks = PRODUCT_ORDER.filter((k) => entitled(user, k)).map((k) => [PRODUCTS[k].tabs[0][0], PRODUCTS[k].short]);
     }
   }
-  const productLabel = loggedIn && productCtx && PRODUCTS[productCtx] ? PRODUCTS[productCtx].short : "Delivery Control";
+  const productLabel = productCtx && PRODUCTS[productCtx] ? PRODUCTS[productCtx].short
+    : (IS_MARKETING_BUILD ? "Operational Intelligence" : "Delivery Control");
+  // On a product build, the logo returns to that product's app; on marketing, to home.
+  const onLogo = () => {
+    if (!IS_MARKETING_BUILD) { go(appLinks[0]?.[0] || (productCtx && PRODUCTS[productCtx]?.home) || "home"); }
+    else go(loggedIn ? (appLinks[0]?.[0] || "home") : "home");
+  };
 
   return (
     <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(255,255,255,.82)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "14px 22px", display: "flex", alignItems: "center", gap: 20 }}>
-        <div onClick={() => go(loggedIn ? (appLinks[0]?.[0] || "home") : "home")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+        <div onClick={onLogo} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
           <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center" }}>
             <Workflow size={17} color="#0a0e15" strokeWidth={2.4} />
           </div>
@@ -510,7 +561,15 @@ function TopNav({ route, go, tier, onContact, loggedIn, user, productCtx }) {
         </div>
         {loggedIn && <ProductSwitcher user={user} productCtx={productCtx} onContact={onContact} />}
         <div style={{ display: "flex", gap: 18, marginLeft: 8, alignItems: "center" }} className="tf-nav">
-          {loggedIn ? (
+          {!IS_MARKETING_BUILD ? (
+            // Product app: only this product's tabs — never marketing / ROI / case studies
+            appLinks.map(([k, l]) => (
+              <span key={k} className="tf-link" onClick={() => go(k)}
+                style={{ color: route === k ? "var(--ink)" : undefined, borderBottom: route === k ? "2px solid var(--amber)" : "2px solid transparent", paddingBottom: 3 }}>
+                {l}
+              </span>
+            ))
+          ) : loggedIn ? (
             appLinks.map(([k, l]) => (
               <span key={k} className="tf-link" onClick={() => go(k)}
                 style={{ color: route === k ? "var(--ink)" : undefined, borderBottom: route === k ? "2px solid var(--amber)" : "2px solid transparent", paddingBottom: 3 }}>
@@ -528,16 +587,15 @@ function TopNav({ route, go, tier, onContact, loggedIn, user, productCtx }) {
                 style={{ borderBottom: "2px solid transparent", paddingBottom: 3 }}>Case Studies</span>
             </>
           )}
-          {loggedIn && isSiteAdmin && (
-            <span className="tf-link" onClick={() => { window.location.href = "/case-studies"; }}
-              style={{ borderBottom: "2px solid transparent", paddingBottom: 3 }}>Case Studies</span>
-          )}
         </div>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
           <span className="tf-chip" style={{ color: tier === "paid" ? "var(--amber)" : "var(--muted)" }}>
             {tier === "paid" ? "● Connected" : "○ Sample data"}
           </span>
-          {!loggedIn && <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }} onClick={onContact}>Request a diagnostic</button>}
+          {!loggedIn && (IS_MARKETING_BUILD
+            ? <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }} onClick={onContact}>Request a diagnostic</button>
+            : <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }} onClick={() => { window.location.href = "/?signup=1"; }}>Log in / Sign up</button>
+          )}
         </div>
       </div>
     </div>
@@ -1374,9 +1432,17 @@ function ProductPage({ productKey, go, onContact }) {
           </div>
           <h1 className="tf-disp" style={{ fontSize: "clamp(28px,4vw,46px)", fontWeight: 800, maxWidth: 900, margin: 0, lineHeight: 1.1 }}>{c.hero}</h1>
           <p style={{ color: "var(--muted)", fontSize: 17, lineHeight: 1.6, maxWidth: 720, margin: "20px 0 28px" }}>{c.sub}</p>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <button className="tf-btn tf-btn-primary" onClick={() => onContact(productKey)}>Request a diagnostic <ArrowRight size={16} /></button>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+            <button className="tf-btn tf-btn-primary" onClick={() => { window.location.href = productUrl(productKey) + "?try=1"; }}>
+              Try {p.short} with sample data <ArrowRight size={16} />
+            </button>
             <button className="tf-btn tf-btn-ghost" onClick={() => go("home")}>← All products</button>
+          </div>
+          <div style={{ marginTop: 14, fontSize: 13.5, color: "var(--muted)" }}>
+            Interested? <span className="tf-link" style={{ color: "var(--brand-ink,#1B2E8C)", fontWeight: 600, cursor: "pointer" }}
+              onClick={() => { window.location.href = productUrl(productKey) + "?signup=1"; }}>
+              Log in to unlock every feature →
+            </span>
           </div>
         </div>
       </div>
@@ -4202,11 +4268,11 @@ export default function App({ user }) {
   // requirements.threadwire.ai), with a ?app= override for testing.
   const productCtx = useMemo(() => detectProductCtx(), []);
   const initialRoute = (() => {
-    if (!user) return "home";
+    if (IS_MARKETING_BUILD) return "home";           // apex is marketing-only
+    // Product build (subdomain): always open the product's app.
+    // Logged out → sample mode; logged in+entitled → full; else NoAccess handled in render.
     const p = productCtx && PRODUCTS[productCtx];
-    if (p && entitled(user, p.key)) return p.home;
-    const first = PRODUCT_ORDER.find((k) => entitled(user, k));
-    return first ? PRODUCTS[first].home : "home";
+    return p ? p.home : "home";
   })();
   const [route, setRoute] = useState(initialRoute);
   const [contactOpen, setContactOpen] = useState(false);
@@ -4451,10 +4517,13 @@ export default function App({ user }) {
         @media(max-width:820px){.tf-cols{grid-template-columns:1fr !important}.hide-sm{display:none !important}.tf-nav{display:none !important}}
       `}</style>
       <TopNav route={route} go={go} tier={Object.values(tier).includes("paid") ? "paid" : "free"} onContact={() => openContact()} loggedIn={backend} user={user} productCtx={productCtx} />
-      {route === "home" && <Home go={go} onContact={() => openContact()} />}
-      {route === "product-delivery" && <ProductPage productKey="delivery" go={go} onContact={openContact} />}
-      {route === "product-workforce" && <ProductPage productKey="workforce" go={go} onContact={openContact} />}
-      {route === "product-requirements" && <ProductPage productKey="requirements" go={go} onContact={openContact} />}
+      {!IS_MARKETING_BUILD && user && productCtx && !entitled(user, productCtx)
+        ? <NoAccess productKey={productCtx} />
+        : <>
+      {IS_MARKETING_BUILD && route === "home" && <Home go={go} onContact={() => openContact()} />}
+      {IS_MARKETING_BUILD && route === "product-delivery" && <ProductPage productKey="delivery" go={go} onContact={openContact} />}
+      {IS_MARKETING_BUILD && route === "product-workforce" && <ProductPage productKey="workforce" go={go} onContact={openContact} />}
+      {IS_MARKETING_BUILD && route === "product-requirements" && <ProductPage productKey="requirements" go={go} onContact={openContact} />}
       {route === "assets" && <AssetsPage tier={tier.assets} setTier={setT("assets")} stage={assetStage} setStage={setAssetStage} />}
       {route === "contracts" && <ContractsPage tier={tier.contracts} setTier={setT("contracts")} />}
       {route === "requirements" && <RequirementsPage tier={tier.requirements} setTier={setT("requirements")} />}
@@ -4462,12 +4531,13 @@ export default function App({ user }) {
       {route === "thread" && <ThreadPage tier={tier.thread} setTier={setT("thread")} />}
       {route === "compliance" && user && user.compliance_enabled && <Compliance user={user} embedded />}
       {route === "quotes" && user && user.quote_to_order && <QuotesPage />}
-      {route === "roi" && <ROIPage />}
+      {IS_MARKETING_BUILD && route === "roi" && <ROIPage />}
 
       {route === "workbench" && <AIWorkbench />}
       {route === "blockers" && <BlockersPage />}
       {route === "visibility" && <DeliveryPage />}
       {route === "finance" && <FinancePage />}
+      </>}
 
       <div style={{ borderTop: "1px solid var(--line)", marginTop: 30, paddingBottom: 70 }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "22px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

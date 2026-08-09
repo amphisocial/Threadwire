@@ -39,6 +39,26 @@ class Settings:
     stripe_webhook_secret = (
         (os.environ.get("STRIPE_WEBHOOK_SECRET_LIVE") if _payment_live else os.environ.get("STRIPE_WEBHOOK_SECRET_TEST"))
         or os.environ.get("STRIPE_WEBHOOK_SECRET", ""))
+
+    # ----- Product subscription pricing (per seat / month) --------------------
+    # Three products x three tiers. Tier is a fixed seat block billed at the cap;
+    # Stripe price IDs are per-seat, so checkout passes quantity = seat cap.
+    PRODUCTS = ("delivery", "workforce", "requirements")
+    TIERS = {
+        "pro":      {"label": "Pro",      "seats": 10,  "rate": 3.99},
+        "gold":     {"label": "Gold",     "seats": 50,  "rate": 9.99},
+        "platinum": {"label": "Platinum", "seats": 100, "rate": 24.99},
+    }
+
+    @classmethod
+    def product_price_id(cls, product: str, tier: str) -> str:
+        """Resolve the per-seat Stripe price id for a product+tier from env.
+        Looks up STRIPE_PRICE_<PRODUCT>_<TIER>[_LIVE|_TEST], with a plain
+        fallback, e.g. STRIPE_PRICE_WORKFORCE_GOLD_LIVE."""
+        base = "STRIPE_PRICE_%s_%s" % (product.upper(), tier.upper())
+        suffix = "_LIVE" if cls._payment_live else "_TEST"
+        return (os.environ.get(base + suffix) or os.environ.get(base) or "").strip()
+
     free_daily_tokens = int(os.environ.get("FREE_DAILY_TOKENS", "5"))
     cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
     # Share the session cookie across product subdomains (delivery/workforce/

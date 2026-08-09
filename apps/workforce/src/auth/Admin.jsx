@@ -8,6 +8,7 @@ import {
   listDocuments, uploadDocument, loadSampleDocs, docDownloadUrl,
   updateSettings, loadSampleDataset, sampleCsvUrl,
   platformOrgs, setCompanyProducts, platformOrgUsers, setUserProducts,
+  billingCatalog, billingSubscribe,
 } from "../lib/api.js";
 
 const PRODUCT_LIST = [
@@ -533,70 +534,122 @@ function UserManagementTab({ isAdmin }) {
 }
 
 /* =================== TAB 3: LICENSE =================== */
+const PRODUCT_META = {
+  delivery: { name: "Delivery Intelligence", tone: C.amber },
+  workforce: { name: "Workforce Intelligence", tone: C.thread },
+  requirements: { name: "Requirements Intelligence", tone: C.blue },
+};
+const TALK_TO_US = "mailto:hello@threadwire.ai?subject=Threadwire%20%E2%80%94%20services%20%2F%20setup";
+
 function LicenseTab({ isAdmin }) {
-  const [data, setData] = useState(null);
-  const [busy, setBusy] = useState("");
+  const [cat, setCat] = useState(null);      // { products, tiers, current_tiers, billing_configured }
+  const [sel, setSel] = useState({});        // { product: tierKey }
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
-  useEffect(() => { if (isAdmin) adminUsage().then(setData).catch(() => {}); }, [isAdmin]);
+  useEffect(() => {
+    billingCatalog().then((c) => {
+      setCat(c);
+      setSel({ ...(c.current_tiers || {}) });
+    }).catch(() => setCat({ products: [], tiers: [], current_tiers: {}, billing_configured: false }));
+  }, []);
 
-  const checkout = async (plan) => {
-    setBusy(plan);
-    try { const r = await billingCheckout(plan); if (r?.url) window.location.href = r.url; }
-    catch { /* ignore */ }
-    finally { setBusy(""); }
-  };
+  const tierByKey = useMemo(() => Object.fromEntries((cat?.tiers || []).map((t) => [t.key, t])), [cat]);
+  const monthly = useMemo(() => Object.entries(sel).reduce((sum, [, tk]) => sum + (tierByKey[tk]?.monthly || 0), 0), [sel, tierByKey]);
+  const chosen = Object.entries(sel).filter(([, tk]) => !!tk);
+  const dirty = JSON.stringify(sel) !== JSON.stringify(cat?.current_tiers || {});
 
-  const TIERS = [
-    { key: "diagnostic", label: "Revenue at Risk Diagnostic", price: "$2,500", period: "one-time", color: C.thread, note: "Credited toward pilot. ERP/CSV extracts, exposure map, blocker list, pilot design session.", cta: null },
-    { key: "core", label: "Threadwire Core", price: "$24,000", period: "/ year", color: C.faint, note: "Single site. CSV / SFTP integration. Delivery calendar, blocker workspace, standard dashboards.", cta: null },
-    { key: "pro", label: "Threadwire Pro", price: "$48,000", period: "/ year", color: C.amber, note: "Multiple sites. API integration. AI assistant. Blocker-aware revenue forecast. Quarterly value review.", cta: "pro" },
-    { key: "enterprise", label: "Enterprise", price: "Custom", period: "", color: C.blue, note: "Multi-site, multi-ERP. SSO / SCIM / SLA. Data warehouse integration. Enterprise success plan.", cta: "enterprise" },
-  ];
+  const pick = (product, tierKey) => setSel((s) => {
+    const next = { ...s };
+    if (next[product] === tierKey) delete next[product]; else next[product] = tierKey;
+    return next;
+  });
+
+  async function subscribe() {
+    setErr(""); setBusy(true);
+    try {
+      const items = chosen.map(([product, tier]) => ({ product, tier }));
+      const r = await billingSubscribe(items);
+      if (r?.url) window.location.href = r.url;
+      else setErr("Could not start checkout.");
+    } catch (e) { setErr(e?.message || "Checkout failed."); }
+    finally { setBusy(false); }
+  }
+
+  const money = (n) => "$" + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {/* running total */}
+      <div style={{ ...card, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", borderTop: `2px solid ${C.amber}` }}>
+        <div>
+          <div style={eyebrow}>Estimated monthly total</div>
+          <div style={{ fontFamily: disp, fontWeight: 800, fontSize: 34, color: C.amber, lineHeight: 1 }}>
+            {money(monthly)}<span style={{ fontFamily: mono, fontSize: 13, color: C.faint, fontWeight: 400 }}> / month</span>
+          </div>
+        </div>
+        <div style={{ fontFamily: mono, fontSize: 11.5, color: C.faint, maxWidth: 320, lineHeight: 1.5 }}>
+          {chosen.length ? chosen.map(([p, tk]) => `${PRODUCT_META[p]?.name.split(" ")[0]} · ${tierByKey[tk]?.label} (${tierByKey[tk]?.seats})`).join("  +  ") : "Select a plan per product below."}
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+          <a href={TALK_TO_US} style={{ ...btn, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Talk to us</a>
+          {isAdmin && (
+            <button style={{ ...btnP, opacity: dirty && chosen.length && cat?.billing_configured ? 1 : 0.5, pointerEvents: dirty && chosen.length && cat?.billing_configured ? "auto" : "none" }}
+              disabled={busy} onClick={subscribe}>
+              {busy ? "Opening checkout…" : "Checkout / Update subscription"}
+            </button>
+          )}
+        </div>
+      </div>
+      {err && <div style={{ fontFamily: mono, fontSize: 12, color: C.red }}>{err}</div>}
+      {cat && !cat.billing_configured && (
+        <div style={{ fontFamily: mono, fontSize: 12, color: C.faint }}>Online checkout isn't configured on this server yet — use “Talk to us” to get set up.</div>
+      )}
 
-      {/* Current status */}
-      <div style={card}>
-        <div style={eyebrow}>Current license</div>
-        {!data
-          ? <div style={{ color: C.faint, fontSize: 13 }}>Loading…</div>
-          : <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-              <div style={{ fontSize: 26, fontWeight: 800, fontFamily: disp, color: data.enterprise ? C.thread : C.amber }}>
-                {data.enterprise ? "Enterprise" : "Core / Trial"}
+      {/* product rows */}
+      {!cat ? <div style={{ color: C.faint, fontSize: 13 }}>Loading plans…</div>
+        : (cat.products || []).map((p) => {
+          const meta = PRODUCT_META[p.key] || { name: p.key, tone: C.amber };
+          return (
+            <div key={p.key} style={card}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                <span style={{ fontFamily: disp, fontWeight: 800, fontSize: 16 }}>{meta.name}</span>
+                {cat.current_tiers?.[p.key] && <Tag tone="thread">current: {tierByKey[cat.current_tiers[p.key]]?.label}</Tag>}
+                {sel[p.key] && <span style={{ marginLeft: "auto", fontFamily: mono, fontSize: 12, color: meta.tone }}>{money(tierByKey[sel[p.key]]?.monthly || 0)}/mo</span>}
               </div>
-              <Tag tone={data.enterprise ? "thread" : "amber"}>{data.enterprise ? "Active" : "Active"}</Tag>
-              <div style={{ marginLeft: "auto", fontFamily: mono, fontSize: 12, color: C.faint }}>
-                {data.licensed_count ?? data.members.filter(m => m.license_assigned !== false).length} licensed users · {data.workforce_people_count ?? 0} workforce records · {data.free_limit} AI messages / licensed user / day
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
+                {(cat.tiers || []).map((t) => {
+                  const on = sel[p.key] === t.key;
+                  const configured = p.configured?.[t.key];
+                  return (
+                    <button key={t.key} disabled={!isAdmin} onClick={() => pick(p.key, t.key)}
+                      style={{
+                        textAlign: "left", cursor: isAdmin ? "pointer" : "default",
+                        border: `1.5px solid ${on ? meta.tone : C.line2}`, borderRadius: 11,
+                        background: on ? meta.tone + "14" : "transparent", padding: 14,
+                      }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontFamily: disp, fontWeight: 800, fontSize: 14.5, color: on ? meta.tone : C.ink }}>{t.label}</span>
+                        {on && <span style={{ marginLeft: "auto", color: meta.tone }}>✓</span>}
+                      </div>
+                      <div style={{ fontFamily: mono, fontSize: 20, fontWeight: 700, color: on ? meta.tone : C.ink, marginTop: 6 }}>
+                        {money(t.rate)}<span style={{ fontSize: 10.5, color: C.faint, fontWeight: 400 }}> /user/mo</span>
+                      </div>
+                      <div style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginTop: 3 }}>
+                        up to {t.seats} users · {money(t.monthly)}/mo
+                      </div>
+                      {!configured && <div style={{ fontFamily: mono, fontSize: 10, color: C.red, marginTop: 6 }}>price not configured</div>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-        }
-      </div>
+          );
+        })}
 
-      {/* Tier cards */}
-      <div style={eyebrow}>Plans</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>
-        {TIERS.map((t) => (
-          <div key={t.key} style={{ ...card, borderTop: `2px solid ${t.color}`, display: "flex", flexDirection: "column" }}>
-            <div style={{ fontWeight: 800, fontSize: 15, fontFamily: disp, marginBottom: 6 }}>{t.label}</div>
-            <div style={{ fontFamily: mono, fontSize: 24, fontWeight: 700, color: t.color, marginBottom: 2 }}>{t.price}</div>
-            <div style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginBottom: 12 }}>{t.period}</div>
-            <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, flex: 1 }}>{t.note}</div>
-            {t.cta && isAdmin && (
-              <button style={{ ...btnP, marginTop: 16, justifyContent: "center", width: "100%", background: `linear-gradient(180deg,${t.color},${t.color}cc)` }}
-                disabled={busy === t.cta} onClick={() => checkout(t.cta)}>
-                {busy === t.cta ? "Opening…" : "Upgrade to " + t.label}
-              </button>
-            )}
-            {!t.cta && (
-              <div style={{ marginTop: 16, fontFamily: mono, fontSize: 11, color: C.faint }}>Contact us to get started</div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div style={{ fontSize: 12, color: C.faint, marginTop: 4 }}>
-        Pricing is site-based — no per-seat friction. All plans require your data to deliver value. Manage billing via your account portal.
+      <div style={{ fontSize: 12, color: C.faint }}>
+        Each product is billed per its own tier — Pro (10), Gold (50) or Platinum (100 users). Choose any combination across products; the monthly total updates above. Checkout is handled securely by Stripe.
+        {!isAdmin && " Only a company admin can change the subscription."}
       </div>
     </div>
   );

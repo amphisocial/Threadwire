@@ -17,7 +17,7 @@ function Root() {
   const inviteToken = (window.location.pathname === "/invite" && params.get("token")) || params.get("invite");
 
   const [state, setState] = useState({ loading: true, user: null });
-  const [showAuth, setShowAuth] = useState(false);
+  const [showAuth, setShowAuth] = useState(() => params.get("signup") === "1" || params.get("login") === "1");
   const [adminOpen, setAdminOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [workspace, setWorkspace] = useState("operations");
@@ -43,8 +43,9 @@ function Root() {
   if (inviteToken) return <InviteAccept token={inviteToken} />;
 
   if (state.loading) return <div style={center}>Loading…</div>;
-  // Public case-studies / whitepapers library (also usable by the signed-in site admin CMS).
-  if (window.location.pathname === "/case-studies") return <CaseStudies user={state.user} />;
+  // Public case-studies / whitepapers library — marketing site only.
+  const isMarketingBuild = ((import.meta.env && import.meta.env.VITE_APP_TARGET) || "home") === "home";
+  if (isMarketingBuild && /^\/case-studies\/?$/.test(window.location.pathname)) return <CaseStudies user={state.user} />;
   if (showAuth && !state.user) return <Login onAuthed={() => { setShowAuth(false); refresh(); }} onCancel={() => setShowAuth(false)} />;
   if (adminOpen && state.user) return <Admin user={state.user} onClose={() => setAdminOpen(false)} />;
 
@@ -78,7 +79,19 @@ function Root() {
             {state.user.role === "org_admin" || state.user.role === "superadmin" ? "⚙ Admin" : "⚙ Connections"}
           </button>
 
-          <button onClick={() => logout().then(() => { setWorkspace("operations"); refresh(); })} title={`Signed in as ${state.user.email}`}
+          <button onClick={() => logout().then(() => {
+              // Clean logout: always return to the marketing site (threadwire.ai).
+              const host = window.location.hostname || "";
+              const parts = host.split(".");
+              const known = ["delivery", "workforce", "requirements"];
+              let dest = "/";
+              if (host !== "localhost" && !/^\d+\.\d+\.\d+\.\d+$/.test(host) && parts.length >= 2) {
+                let root = host;
+                if (parts.length > 2 && (known.includes(parts[0]) || parts[0] === "www")) root = parts.slice(1).join(".");
+                dest = window.location.protocol + "//" + root + "/";
+              }
+              window.location.href = dest;
+            })} title={`Signed in as ${state.user.email}`}
             style={{ ...pill, left: 132, color: "#47606F", background: "rgba(255,255,255,.9)", border: "1px solid #DCE3EC" }}>
             Sign out
           </button>
