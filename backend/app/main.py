@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import StreamingResponse
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, EmailStr, Field
 
 from . import agent, agents, billing, case_studies, connectors_rest, db, emailer, importer, mfa, storage, workforce
@@ -54,8 +54,11 @@ def normalize_name(name: str) -> str:
 
 
 def set_session_cookie(resp: Response, sid: str) -> None:
-    resp.set_cookie(COOKIE, sid, max_age=settings.session_days * 86400,
-                    httponly=True, secure=settings.cookie_secure, samesite="lax", path="/")
+    kwargs = dict(max_age=settings.session_days * 86400, httponly=True,
+                  secure=settings.cookie_secure, samesite="lax", path="/")
+    if settings.cookie_domain:
+        kwargs["domain"] = settings.cookie_domain  # share across *.threadwire.ai
+    resp.set_cookie(COOKIE, sid, **kwargs)
 
 
 async def create_session(con, user_id: uuid.UUID, mfa_passed: bool = True) -> str:
@@ -86,7 +89,9 @@ async def load_session(request: Request):
                    u.workforce_role, u.workforce_discipline,
                    o.id AS org_id, o.legal_name,
                    o.enterprise, o.stripe_customer_id AS org_stripe_customer_id,
-                   o.quote_to_order, o.compliance_enabled
+                   o.quote_to_order, o.compliance_enabled,
+                   o.products AS org_products,
+                   u.product_grants, u.product_restrictions
             FROM sessions s
             JOIN users u ON u.id = s.user_id
             JOIN organizations o ON o.id = u.org_id
@@ -122,6 +127,18 @@ def user_public(row) -> dict:
         "workforce_discipline": row["workforce_discipline"],
         "org": {"legal_name": row["legal_name"]},
     }
+
+
+PRODUCT_KEYS = ("delivery", "workforce", "requirements")
+
+
+def effective_products(row) -> list:
+    """(company baseline ∪ per-user grants) − per-user restrictions, ordered."""
+    base = set(row.get("org_products") or [])
+    grants = set(row.get("product_grants") or [])
+    restrict = set(row.get("product_restrictions") or [])
+    eff = (base | grants) - restrict
+    return [p for p in PRODUCT_KEYS if p in eff]
 
 
 def is_unlimited(user) -> bool:
@@ -332,7 +349,10 @@ async def logout(request: Request, resp: Response):
                 await con.execute("DELETE FROM sessions WHERE id = $1", sid)
         except ValueError:
             pass
-    resp.delete_cookie(COOKIE, path="/")
+    if settings.cookie_domain:
+        resp.delete_cookie(COOKIE, path="/", domain=settings.cookie_domain)
+    else:
+        resp.delete_cookie(COOKIE, path="/")
     return {"ok": True}
 
 
@@ -350,7 +370,110 @@ async def me(user: dict = Depends(current_user)):
     pub["billing_mode"] = "live" if settings._payment_live else "test"
     pub["quote_to_order"] = bool(user.get("quote_to_order"))
     pub["compliance_enabled"] = bool(user.get("compliance_enabled"))
+    pub["products"] = effective_products(user)          # effective entitlements
+    pub["company_products"] = list(user.get("org_products") or [])
+    pub["product_grants"] = list(user.get("product_grants") or [])
+    pub["product_restrictions"] = list(user.get("product_restrictions") or [])
+    pub["is_platform_admin"] = user.get("role") == "superadmin"
     return pub
+
+
+# --------------------------------------------------------------------------- #
+# Platform admin (role = superadmin): product subscription management
+# --------------------------------------------------------------------------- #
+def require_platform_admin(user: dict):
+    if user.get("role") != "superadmin":
+        raise HTTPException(403, "Platform admins only")
+
+
+def _clean_products(items) -> list:
+    seen = [p for p in (items or []) if p in PRODUCT_KEYS]
+    return [p for p in PRODUCT_KEYS if p in set(seen)]
+
+
+@app.get("/api/platform/products")
+async def platform_products(user: dict = Depends(current_user)):
+    require_platform_admin(user)
+    return {"products": list(PRODUCT_KEYS)}
+
+
+@app.get("/api/platform/orgs")
+async def platform_orgs(user: dict = Depends(current_user)):
+    require_platform_admin(user)
+    async with db.pool().acquire() as con:
+        rows = await con.fetch(
+            "SELECT o.id, o.legal_name, o.products, "
+            "       (SELECT count(*) FROM users u WHERE u.org_id = o.id) AS member_count "
+            "FROM organizations o ORDER BY o.legal_name")
+    return [{"id": str(r["id"]), "legal_name": r["legal_name"],
+             "products": list(r["products"] or []), "member_count": r["member_count"]}
+            for r in rows]
+
+
+class CompanyProductsIn(BaseModel):
+    products: List[str]
+
+
+@app.put("/api/platform/orgs/{org_id}/products")
+async def set_company_products(org_id: str, body: CompanyProductsIn, user: dict = Depends(current_user)):
+    require_platform_admin(user)
+    products = _clean_products(body.products)
+    async with db.pool().acquire() as con:
+        updated = await con.fetchval(
+            "UPDATE organizations SET products = $2 WHERE id = $1 RETURNING id", org_id, products)
+    if not updated:
+        raise HTTPException(404, "Company not found")
+    return {"id": org_id, "products": products}
+
+
+@app.get("/api/platform/orgs/{org_id}/users")
+async def platform_org_users(org_id: str, user: dict = Depends(current_user)):
+    require_platform_admin(user)
+    async with db.pool().acquire() as con:
+        org = await con.fetchrow("SELECT products FROM organizations WHERE id = $1", org_id)
+        if not org:
+            raise HTTPException(404, "Company not found")
+        rows = await con.fetch(
+            "SELECT id, email, full_name, role, is_active, "
+            "       product_grants, product_restrictions "
+            "FROM users WHERE org_id = $1 ORDER BY email", org_id)
+    base = set(org["products"] or [])
+    out = []
+    for r in rows:
+        grants = set(r["product_grants"] or [])
+        restrict = set(r["product_restrictions"] or [])
+        eff = [p for p in PRODUCT_KEYS if p in ((base | grants) - restrict)]
+        out.append({"id": str(r["id"]), "email": r["email"], "full_name": r["full_name"],
+                    "role": r["role"], "is_active": bool(r["is_active"]),
+                    "grants": list(r["product_grants"] or []),
+                    "restrictions": list(r["product_restrictions"] or []),
+                    "effective": eff})
+    return {"company_products": list(base), "users": out}
+
+
+class UserProductsIn(BaseModel):
+    grants: Optional[List[str]] = None
+    restrictions: Optional[List[str]] = None
+
+
+@app.put("/api/platform/users/{user_id}/products")
+async def set_user_products(user_id: str, body: UserProductsIn, user: dict = Depends(current_user)):
+    require_platform_admin(user)
+    grants = _clean_products(body.grants) if body.grants is not None else None
+    restrict = _clean_products(body.restrictions) if body.restrictions is not None else None
+    sets, args = [], [user_id]
+    if grants is not None:
+        args.append(grants); sets.append(f"product_grants = ${len(args)}")
+    if restrict is not None:
+        args.append(restrict); sets.append(f"product_restrictions = ${len(args)}")
+    if not sets:
+        raise HTTPException(400, "Nothing to update")
+    async with db.pool().acquire() as con:
+        updated = await con.fetchval(
+            f"UPDATE users SET {', '.join(sets)} WHERE id = $1 RETURNING id", *args)
+    if not updated:
+        raise HTTPException(404, "User not found")
+    return {"id": user_id, "grants": grants, "restrictions": restrict}
 
 
 class OrgSettingsIn(BaseModel):

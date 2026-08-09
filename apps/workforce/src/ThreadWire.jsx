@@ -95,6 +95,27 @@ function detectProductCtx() {
   } catch (e) { return null; }
 }
 
+/* Build the URL for a product's app on its subdomain. In production this is
+   https://<subdomain>.<root-domain>/; on localhost / preview hosts (no product
+   subdomain) it falls back to the same origin with ?app=<key> so the switcher
+   still works for testing. */
+function productUrl(productKey) {
+  const p = PRODUCTS[productKey];
+  if (!p) return "/";
+  if (typeof window === "undefined") return "/";
+  const host = window.location.hostname || "";
+  const parts = host.split(".");
+  const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(host);
+  const known = Object.values(PRODUCTS).map((x) => x.subdomain);
+  // strip a leading product subdomain to get the root (delivery.threadwire.ai -> threadwire.ai)
+  let root = host;
+  if (parts.length > 2 && known.includes(parts[0])) root = parts.slice(1).join(".");
+  if (host === "localhost" || isIp || parts.length < 2) {
+    return window.location.origin + "/?app=" + p.subdomain;
+  }
+  return window.location.protocol + "//" + p.subdomain + "." + root + "/";
+}
+
 /* Is the signed-in user entitled to this product? Falls back to "entitled" when
    the backend hasn't supplied per-product flags yet, so existing accounts keep
    working; wire user.<entKey> / user.products server-side to enforce. */
@@ -389,6 +410,72 @@ function ProductsMenu({ go, route }) {
   );
 }
 
+/* Signed-in product switcher + "your subscriptions" view. Lets a user move
+   between the products they're subscribed to (each lives on its own subdomain),
+   shows which they don't have, and points unentitled products at Get in touch. */
+function ProductSwitcher({ user, productCtx, onContact }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+  useEffect(() => {
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+  const current = productCtx && PRODUCTS[productCtx] ? PRODUCTS[productCtx] : null;
+  const subscribed = PRODUCT_ORDER.filter((k) => entitled(user, k));
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button onClick={() => setOpen((o) => !o)} className="tf-mono"
+        style={{ display: "inline-flex", alignItems: "center", gap: 7, cursor: "pointer",
+          background: "var(--panel2)", border: "1px solid var(--line2)", borderRadius: 9,
+          padding: "6px 10px", fontSize: 11.5, color: "var(--ink)" }}>
+        {current ? <current.icon size={14} color={current.tone} /> : <Layers size={14} />}
+        <span style={{ fontWeight: 600 }}>{current ? current.short : "Products"}</span>
+        <ChevronDown size={13} style={{ transform: open ? "rotate(180deg)" : "none", transition: ".15s", color: "var(--faint)" }} />
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, width: 300, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 13, boxShadow: "0 16px 44px rgba(21,34,45,.16)", padding: 8, zIndex: 60 }}>
+          <div className="tf-mono" style={{ fontSize: 9.5, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--faint)", padding: "6px 10px 8px" }}>Your subscriptions</div>
+          {PRODUCT_ORDER.map((k) => {
+            const p = PRODUCTS[k];
+            const has = entitled(user, k);
+            const active = productCtx === k;
+            return (
+              <div key={k} onClick={() => { if (has && !active) window.location.href = productUrl(k); }}
+                style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 10px", borderRadius: 9,
+                  cursor: has && !active ? "pointer" : "default",
+                  background: active ? "var(--panel2)" : "transparent",
+                  opacity: has ? 1 : 0.55 }}
+                onMouseEnter={(e) => { if (has && !active) e.currentTarget.style.background = "var(--panel2)"; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}>
+                <div style={{ width: 30, height: 30, borderRadius: 8, background: "var(--bg2)", border: `1px solid ${has ? p.tone : "var(--line2)"}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <p.icon size={15} color={has ? p.tone : "var(--faint)"} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{p.short}</div>
+                  <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{p.tag}</div>
+                </div>
+                {active ? <span className="tf-mono" style={{ fontSize: 9.5, color: p.tone, fontWeight: 700 }}>CURRENT</span>
+                  : has ? <ArrowRight size={14} color="var(--faint)" />
+                  : <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)" }}>LOCKED</span>}
+              </div>
+            );
+          })}
+          {subscribed.length < PRODUCT_ORDER.length && (
+            <div style={{ borderTop: "1px solid var(--line)", marginTop: 6, paddingTop: 8 }}>
+              <button className="tf-btn tf-btn-ghost" style={{ width: "100%", justifyContent: "center", fontSize: 12.5, padding: "8px 10px" }}
+                onClick={() => { setOpen(false); onContact(); }}>
+                Add a product <ArrowRight size={13} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TopNav({ route, go, tier, onContact, loggedIn, user, productCtx }) {
   const isSiteAdmin = user?.role === "superadmin";
 
@@ -421,6 +508,7 @@ function TopNav({ route, go, tier, onContact, loggedIn, user, productCtx }) {
             <span className="tf-mono" style={{ fontSize: 9, color: "var(--amber)", display: "block", letterSpacing: ".12em", textTransform: "uppercase", lineHeight: 1, marginTop: 1 }}>{productLabel}</span>
           </div>
         </div>
+        {loggedIn && <ProductSwitcher user={user} productCtx={productCtx} onContact={onContact} />}
         <div style={{ display: "flex", gap: 18, marginLeft: 8, alignItems: "center" }} className="tf-nav">
           {loggedIn ? (
             appLinks.map(([k, l]) => (

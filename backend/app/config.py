@@ -41,6 +41,10 @@ class Settings:
         or os.environ.get("STRIPE_WEBHOOK_SECRET", ""))
     free_daily_tokens = int(os.environ.get("FREE_DAILY_TOKENS", "5"))
     cookie_secure = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
+    # Share the session cookie across product subdomains (delivery/workforce/
+    # requirements.threadwire.ai). Set TW_COOKIE_DOMAIN=.threadwire.ai in prod.
+    # Empty string = host-only cookie (dev/localhost default).
+    cookie_domain = os.environ.get("TW_COOKIE_DOMAIN", "").strip()
     session_days = int(os.environ.get("SESSION_DAYS", "14"))
 
     app_base_url = os.environ.get("APP_BASE_URL", "https://threadwire.ai")

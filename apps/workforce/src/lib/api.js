@@ -45,6 +45,12 @@ export const sampleUrl = (entity) => "/api/import/sample/" + entity;
 export const billingCheckout = (plan) => fetch("/api/billing/checkout", opts("POST", { plan })).then(jsonOrThrow);
 export const billingConfirm = (sid) => fetch("/api/billing/confirm?session_id=" + encodeURIComponent(sid), { credentials: "include" }).then(jsonOrThrow);
 export const billingPortal = () => fetch("/api/billing/portal", opts("POST")).then(jsonOrThrow);
+// Platform admin (superadmin): product subscription management
+export const platformOrgs = () => fetch("/api/platform/orgs", { credentials: "include" }).then(jsonOrThrow);
+export const setCompanyProducts = (orgId, products) => fetch("/api/platform/orgs/" + orgId + "/products", opts("PUT", { products })).then(jsonOrThrow);
+export const platformOrgUsers = (orgId) => fetch("/api/platform/orgs/" + orgId + "/users", { credentials: "include" }).then(jsonOrThrow);
+export const setUserProducts = (userId, body) => fetch("/api/platform/users/" + userId + "/products", opts("PUT", body)).then(jsonOrThrow);
+
 export const adminUsage = () => fetch("/api/admin/usage", { credentials: "include" }).then(jsonOrThrow);
 export const updateMember = (id, body) => fetch("/api/admin/members/" + id, opts("PATCH", body)).then(jsonOrThrow);
 export const importFromSource = (body) => fetch("/api/import/source", opts("POST", body)).then(jsonOrThrow);

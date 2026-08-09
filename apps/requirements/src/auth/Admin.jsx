@@ -7,7 +7,14 @@ import {
   listDataSources, createDataSource, syncDataSource,
   listDocuments, uploadDocument, loadSampleDocs, docDownloadUrl,
   updateSettings, loadSampleDataset, sampleCsvUrl,
+  platformOrgs, setCompanyProducts, platformOrgUsers, setUserProducts,
 } from "../lib/api.js";
+
+const PRODUCT_LIST = [
+  { key: "delivery", name: "Delivery Intelligence" },
+  { key: "workforce", name: "Workforce Intelligence" },
+  { key: "requirements", name: "Requirements Intelligence" },
+];
 
 /* ---- design tokens (must match ThreadWire.jsx) ---- */
 const C = {
@@ -875,8 +882,151 @@ function AIWorkbenchTab({ isAdmin }) {
   );
 }
 
+/* =================== TAB: SUBSCRIPTIONS (platform admin) =================== */
+function ProductChips({ selected, onToggle, disabled }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {PRODUCT_LIST.map((p) => {
+        const on = selected.includes(p.key);
+        return (
+          <button key={p.key} disabled={disabled} onClick={() => onToggle(p.key)}
+            style={{
+              fontFamily: mono, fontSize: 12, fontWeight: 600, borderRadius: 8, padding: "6px 11px",
+              cursor: disabled ? "default" : "pointer",
+              border: `1px solid ${on ? C.amber : C.line2}`,
+              background: on ? C.amber + "1e" : "transparent",
+              color: on ? C.amber : C.faint,
+            }}>
+            {on ? "✓ " : ""}{p.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function SubscriptionsTab() {
+  const [orgs, setOrgs] = useState(null);
+  const [sel, setSel] = useState(null);        // selected org id
+  const [detail, setDetail] = useState(null);  // { company_products, users }
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => { platformOrgs().then(setOrgs).catch(() => setOrgs([])); }, []);
+  useEffect(() => {
+    if (!sel) { setDetail(null); return; }
+    setDetail(null);
+    platformOrgUsers(sel).then(setDetail).catch(() => setDetail({ company_products: [], users: [] }));
+  }, [sel]);
+
+  const org = orgs?.find((o) => o.id === sel);
+  const flash = (m) => { setMsg(m); setTimeout(() => setMsg(""), 2000); };
+
+  async function toggleCompany(key) {
+    if (!org) return;
+    const next = org.products.includes(key) ? org.products.filter((p) => p !== key) : [...org.products, key];
+    setBusy(true);
+    try {
+      await setCompanyProducts(org.id, next);
+      setOrgs((os) => os.map((o) => (o.id === org.id ? { ...o, products: next } : o)));
+      const d = await platformOrgUsers(org.id); setDetail(d);   // effective recomputed server-side
+      flash("Company subscription updated");
+    } catch (e) { flash("Update failed"); } finally { setBusy(false); }
+  }
+
+  async function toggleUser(u, kind, key) {
+    const field = kind === "grant" ? "grants" : "restrictions";
+    const cur = u[field] || [];
+    const next = cur.includes(key) ? cur.filter((p) => p !== key) : [...cur, key];
+    setBusy(true);
+    try {
+      await setUserProducts(u.id, { [field]: next });
+      const d = await platformOrgUsers(sel); setDetail(d);
+      flash("User access updated");
+    } catch (e) { flash("Update failed"); } finally { setBusy(false); }
+  }
+
+  return (
+    <div>
+      <div style={eyebrow}>Platform · product subscriptions</div>
+      <div style={{ color: C.muted, fontSize: 13.5, lineHeight: 1.6, marginBottom: 20, maxWidth: 760 }}>
+        Set each company's baseline products, then grant or restrict per user. A user's effective
+        access is <b>(company baseline + personal grants) − personal restrictions</b>. Effective
+        access controls which product apps (delivery / workforce / requirements subdomains) they can open.
+        {msg && <span style={{ marginLeft: 10, color: C.green, fontFamily: mono, fontSize: 12 }}>✓ {msg}</span>}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 20, alignItems: "start" }}>
+        {/* org list */}
+        <div style={{ ...card, padding: 8, maxHeight: 560, overflow: "auto" }}>
+          {orgs == null ? <div style={{ padding: 14, fontFamily: mono, fontSize: 12, color: C.faint }}>Loading…</div>
+            : orgs.length === 0 ? <div style={{ padding: 14, fontFamily: mono, fontSize: 12, color: C.faint }}>No companies.</div>
+            : orgs.map((o) => (
+              <button key={o.id} onClick={() => setSel(o.id)} style={{
+                width: "100%", textAlign: "left", border: "none", cursor: "pointer",
+                borderRadius: 9, padding: "11px 12px", marginBottom: 2,
+                background: sel === o.id ? C.panel2 : "transparent",
+                borderLeft: sel === o.id ? `3px solid ${C.amber}` : "3px solid transparent",
+              }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: sel === o.id ? C.ink : C.muted }}>{o.legal_name}</div>
+                <div style={{ fontFamily: mono, fontSize: 10.5, color: C.faint }}>
+                  {o.member_count} user(s) · {o.products.length ? o.products.join(", ") : "no products"}
+                </div>
+              </button>
+            ))}
+        </div>
+
+        {/* detail */}
+        <div style={card}>
+          {!org ? (
+            <div style={{ color: C.faint, fontFamily: mono, fontSize: 12.5, padding: "40px 0", textAlign: "center" }}>Select a company to manage its subscriptions.</div>
+          ) : (
+            <>
+              <div style={{ fontFamily: disp, fontWeight: 800, fontSize: 18, marginBottom: 4 }}>{org.legal_name}</div>
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginBottom: 14 }}>Company baseline — applies to every user in this company</div>
+              <ProductChips selected={org.products} onToggle={toggleCompany} disabled={busy} />
+
+              <div style={{ borderTop: `1px solid ${C.line}`, margin: "20px 0 14px" }} />
+              <div style={{ fontFamily: mono, fontSize: 11, color: C.faint, marginBottom: 12 }}>Per-user grants (+) and restrictions (−). Grant adds beyond baseline; restrict removes from baseline.</div>
+
+              {!detail ? <div style={{ fontFamily: mono, fontSize: 12, color: C.faint }}>Loading users…</div>
+                : detail.users.length === 0 ? <div style={{ fontFamily: mono, fontSize: 12, color: C.faint }}>No users in this company.</div>
+                : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {detail.users.map((u) => (
+                      <div key={u.id} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{u.full_name || u.email}</span>
+                          <Tag tone={u.role === "superadmin" ? "amber" : u.role === "org_admin" ? "blue" : "muted"}>{u.role}</Tag>
+                          <span style={{ marginLeft: "auto", fontFamily: mono, fontSize: 10.5, color: C.faint }}>
+                            access: {u.effective.length ? u.effective.join(", ") : "none"}
+                          </span>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                          <div>
+                            <div style={{ fontFamily: mono, fontSize: 10, color: C.green, marginBottom: 6 }}>GRANT +</div>
+                            <ProductChips selected={u.grants} onToggle={(k) => toggleUser(u, "grant", k)} disabled={busy} />
+                          </div>
+                          <div>
+                            <div style={{ fontFamily: mono, fontSize: 10, color: C.red, marginBottom: 6 }}>RESTRICT −</div>
+                            <ProductChips selected={u.restrictions} onToggle={(k) => toggleUser(u, "restrict", k)} disabled={busy} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Admin({ user, onClose }) {
   const isAdmin = user.role === "org_admin" || user.role === "superadmin";
+  const isPlatformAdmin = user.role === "superadmin";
   const [tab, setTab] = useState("import");
 
   return (
@@ -910,6 +1060,7 @@ export default function Admin({ user, onClose }) {
             { id: "compliance", label: "Data Sources", icon: "🧬" },
             { id: "settings", label: "Settings", icon: "⚙" },
             { id: "license", label: "License", icon: "★" },
+            ...(isPlatformAdmin ? [{ id: "subscriptions", label: "Subscriptions", icon: "🧩" }] : []),
           ]}
           active={tab} setActive={setTab}
         />
@@ -920,6 +1071,7 @@ export default function Admin({ user, onClose }) {
         {tab === "compliance" && <DataSourcesDocs isAdmin={isAdmin} />}
         {tab === "settings" && <SettingsTab isAdmin={isAdmin} user={user} />}
         {tab === "license" && <LicenseTab isAdmin={isAdmin} />}
+        {tab === "subscriptions" && isPlatformAdmin && <SubscriptionsTab />}
       </div>
     </div>
   );
