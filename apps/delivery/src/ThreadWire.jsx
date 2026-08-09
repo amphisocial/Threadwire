@@ -923,11 +923,8 @@ function Home({ go, onContact }) {
           <h1 className="tf-disp" style={{ fontSize: "clamp(30px,4.8vw,56px)", fontWeight: 800, maxWidth: 960, margin: 0, lineHeight: 1.08 }}>
             One AI-powered thread connecting what you design, who builds it, and what ships.
           </h1>
-          <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.65, maxWidth: 700, margin: "22px 0 10px" }}>
-            Threadwire overlays the systems you already run — ERP, MES, PLM, project plans — and turns their data into decisions: what's at risk of missing, why, what it costs, and who's accountable for recovery. Three products, one thread from order to part to work order to blocker to owner - using AI to predict risk, explain business impact, and recommend action before commitments slip.
-          </p>
-          <p style={{ color: "var(--faint)", fontSize: 15, lineHeight: 1.6, maxWidth: 700, margin: "0 0 32px" }}>
-            Use all three products together for one connected operational view, or deploy any product independently. Every product includes a page-aware AI assistant for contextual What-If analysis.
+          <p style={{ color: "var(--muted)", fontSize: 16.5, lineHeight: 1.6, maxWidth: 720, margin: "20px 0 30px" }}>
+            Three products, one operational thread — use them together for a connected view, or deploy any one on its own. Every product includes a page-aware AI assistant for contextual What-If analysis.
           </p>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button className="tf-btn tf-btn-primary" onClick={() => { const el = document.getElementById("products"); el && el.scrollIntoView({ behavior: "smooth" }); }}>
@@ -936,41 +933,6 @@ function Home({ go, onContact }) {
             <button className="tf-btn tf-btn-ghost" onClick={onContact}>Get in touch</button>
           </div>
         </div>
-      </div>
-
-      {/* THE GAP + THE LOOP */}
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "56px 22px 0" }}>
-        <div className="tf-eyebrow" style={{ marginBottom: 8 }}>The gap we close</div>
-        <h2 className="tf-disp" style={{ fontSize: 30, fontWeight: 800, margin: "0 0 10px", maxWidth: 820 }}>Systems of record and dashboards — but no closed loop for execution risk and ownership.</h2>
-        <p style={{ color: "var(--muted)", fontSize: 15, lineHeight: 1.65, margin: "0 0 8px", maxWidth: 760 }}>
-          Reports tell you what happened; nobody owns what happens next. That's the white space Threadwire fills. We don't replace your data stack or your ERP — we sit above them and carry the work the last mile: from insight, to a prioritized action, to a named owner. Think Palantir-class execution outcomes, focused on a specific manufacturing problem — without the platform program.
-        </p>
-        <p style={{ color: "var(--faint)", fontSize: 14, lineHeight: 1.6, margin: "0 0 26px", maxWidth: 760 }}>
-          Operational intelligence is a loop, not a dashboard. Most tools stop at <b style={{ color: "var(--muted)" }}>Understand</b>. Threadwire carries it through <b style={{ color: "var(--amber)" }}>Recommend and Act</b> — with accountability.
-        </p>
-
-        <div className="tf-panel" style={{ padding: "20px 22px", marginBottom: 6, display: "flex", gap: 10, alignItems: "stretch", flexWrap: "wrap" }}>
-          {[
-            { n: "Observe", d: "Connect ERP / MES / PLM / order facts" },
-            { n: "Understand", d: "Map entities, blockers & dependencies" },
-            { n: "Predict", d: "Surface delivery & revenue risk" },
-            { n: "Recommend", d: "Prioritize actions and trade-offs", hot: true },
-            { n: "Act", d: "Assign owners, track recovery", hot: true },
-            { n: "Learn", d: "Improve playbooks & rules" },
-          ].map((s, i, arr) => (
-            <React.Fragment key={s.n}>
-              <div style={{ flex: "1 1 150px", minWidth: 140 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
-                  <span className="tf-mono" style={{ width: 20, height: 20, borderRadius: 99, display: "grid", placeItems: "center", fontSize: 11, background: s.hot ? "var(--amber)" : "var(--bg2)", color: s.hot ? "#fff" : "var(--faint)", border: s.hot ? "none" : "1px solid var(--line2)", flexShrink: 0 }}>{i + 1}</span>
-                  <span className="tf-disp" style={{ fontSize: 14.5, fontWeight: 800, color: s.hot ? "var(--amber)" : "var(--ink)" }}>{s.n}</span>
-                </div>
-                <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.45 }}>{s.d}</div>
-              </div>
-              {i < arr.length - 1 && <ArrowRight size={15} color="var(--line2)" style={{ alignSelf: "center", flexShrink: 0 }} />}
-            </React.Fragment>
-          ))}
-        </div>
-        <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginBottom: 4 }}>The loop closes only when insight becomes ownership and action.</div>
       </div>
 
       {/* THREE PRODUCTS */}
@@ -1125,6 +1087,41 @@ function Home({ go, onContact }) {
 
       </div>
 
+      {/* THE GAP + THE LOOP */}
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "56px 22px 0" }}>
+        <div className="tf-eyebrow" style={{ marginBottom: 8 }}>The gap we close</div>
+        <h2 className="tf-disp" style={{ fontSize: 30, fontWeight: 800, margin: "0 0 10px", maxWidth: 820 }}>Systems of record and dashboards — but no closed loop for execution risk and ownership.</h2>
+        <p style={{ color: "var(--muted)", fontSize: 15, lineHeight: 1.65, margin: "0 0 8px", maxWidth: 760 }}>
+          Reports tell you what happened; nobody owns what happens next. That's the white space Threadwire fills. We don't replace your data stack or your ERP — we sit above them and carry the work the last mile: from insight, to a prioritized action, to a named owner. Think Palantir-class execution outcomes, focused on a specific manufacturing problem — without the platform program.
+        </p>
+        <p style={{ color: "var(--faint)", fontSize: 14, lineHeight: 1.6, margin: "0 0 26px", maxWidth: 760 }}>
+          Operational intelligence is a loop, not a dashboard. Most tools stop at <b style={{ color: "var(--muted)" }}>Understand</b>. Threadwire carries it through <b style={{ color: "var(--amber)" }}>Recommend and Act</b> — with accountability.
+        </p>
+
+        <div className="tf-panel" style={{ padding: "20px 22px", marginBottom: 6, display: "flex", gap: 10, alignItems: "stretch", flexWrap: "wrap" }}>
+          {[
+            { n: "Observe", d: "Connect ERP / MES / PLM / order facts" },
+            { n: "Understand", d: "Map entities, blockers & dependencies" },
+            { n: "Predict", d: "Surface delivery & revenue risk" },
+            { n: "Recommend", d: "Prioritize actions and trade-offs", hot: true },
+            { n: "Act", d: "Assign owners, track recovery", hot: true },
+            { n: "Learn", d: "Improve playbooks & rules" },
+          ].map((s, i, arr) => (
+            <React.Fragment key={s.n}>
+              <div style={{ flex: "1 1 150px", minWidth: 140 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+                  <span className="tf-mono" style={{ width: 20, height: 20, borderRadius: 99, display: "grid", placeItems: "center", fontSize: 11, background: s.hot ? "var(--amber)" : "var(--bg2)", color: s.hot ? "#fff" : "var(--faint)", border: s.hot ? "none" : "1px solid var(--line2)", flexShrink: 0 }}>{i + 1}</span>
+                  <span className="tf-disp" style={{ fontSize: 14.5, fontWeight: 800, color: s.hot ? "var(--amber)" : "var(--ink)" }}>{s.n}</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.45 }}>{s.d}</div>
+              </div>
+              {i < arr.length - 1 && <ArrowRight size={15} color="var(--line2)" style={{ alignSelf: "center", flexShrink: 0 }} />}
+            </React.Fragment>
+          ))}
+        </div>
+        <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginBottom: 4 }}>The loop closes only when insight becomes ownership and action.</div>
+      </div>
+
       {/* FOOTER */}
       <div style={{ borderTop: "1px solid var(--line)", background: "var(--bg2)" }}>
         <div style={{ maxWidth: 1180, margin: "0 auto", padding: "32px 22px", display: "flex", alignItems: "flex-start", gap: 40, flexWrap: "wrap" }}>
@@ -1183,7 +1180,7 @@ const PRODUCT_CONTENT = {
     sub: "Delivery Intelligence overlays your ERP, MES and project data to show what's at risk of missing its promise date, why, what it costs, and who owns the recovery. It includes the Digital Thread — the connected view of orders, work orders, BOMs, ECOs and POs behind every commitment.",
     why: {
       problem: "Your ERP records the order. Nothing owns the delivery.",
-      body: "Systems of record tell you what was promised and dashboards tell you what already slipped — but between those two, execution risk lives in spreadsheets, status calls and someone's memory. By the time a blocker surfaces, the revenue is already exposed and the customer is already calling.",
+      body: "Threadwire overlays the systems you already run — ERP, MES, PLM, project plans — and turns their data into decisions. Systems of record tell you what was promised and dashboards tell you what already slipped; between those two, execution risk lives in spreadsheets, status calls and someone's memory. Threadwire threads it end to end — order to part to work order to blocker to owner — using AI to predict risk, explain business impact, and recommend action before commitments slip.",
       points: [
         ["Blocker-aware delivery calendar", "Every sales order on a calendar by promise date; orders with an open blocker show the revenue at risk."],
         ["Committed vs at-risk revenue, live", "See committed and blocked value by site and quarter, recalculated as blockers and revised dates change."],
