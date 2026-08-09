@@ -1,0 +1,4423 @@
+import React, { useState, useEffect, useRef, useMemo, useContext } from "react";
+import Compliance from "./compliance/Compliance.jsx";
+import AIWorkbench from "./workbench/AIWorkbench.jsx";
+import { PeggingExplorerPro, EcoImpactAnalyzerPro } from "./thread/DigitalThreadPro.jsx";
+import WorkforceIntelligence from "./workforce/WorkforceIntelligence.jsx";
+import { getQuotes, convertQuote } from "./lib/api.js";
+import {
+  LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer, Tooltip,
+  AreaChart, Area, BarChart, Bar, CartesianGrid,
+} from "recharts";
+import {
+  Cpu, FileText, GitBranch, Workflow, ArrowRight, ArrowLeft, Activity,
+  ShieldCheck, Boxes, ScrollText, Plug, Sparkles, Lock, Upload, Database,
+  CircleDot, Send, Bot, AlertTriangle, CheckCircle2, Clock, Gauge,
+  Wrench, PackageSearch, FileSpreadsheet, Link2, Layers, Zap, TrendingUp,
+  Minus, Trash2, Calculator, SlidersHorizontal, DollarSign, Factory, ChevronDown,
+  Coins, Scale, Truck,
+  Plus, CalendarDays, ChevronLeft, ChevronRight, User, Users2, X, ClipboardList, Building2, Filter,
+  Mic, MicOff, Volume2, VolumeX,
+} from "lucide-react";
+
+/* =========================================================================
+   ThreadWire — Digital Thread platform for manufacturing (concept prototype)
+   Rename the brand anywhere "ThreadWire" appears.
+   ========================================================================= */
+
+const BRAND = "Threadwire";
+const TAGLINE = "Manufacturing Delivery Control";
+const HEADLINE = "Know what will not ship—and the cash impact—before the customer does.";
+const ONE_LINER = "Your ERP records the order. Threadwire protects the delivery.";
+
+/* =========================================================================
+   PRODUCT MODEL
+   Threadwire is three products. On the marketing site (threadwire.ai) they are
+   presented as three offerings; each has a dedicated marketing page. Each
+   product also runs as its own signed-in app on a subdomain:
+     delivery.threadwire.ai · workforce.threadwire.ai · requirements.threadwire.ai
+   The signed-in app tabs for a product are only shown to signed-in users who
+   are entitled to that product, and only under that product's subdomain.
+   ========================================================================= */
+const PRODUCTS = {
+  delivery: {
+    key: "delivery", name: "Delivery Intelligence", short: "Delivery",
+    tag: "Delivery Risk & Cash", tone: "var(--amber)", icon: Activity,
+    subdomain: "delivery",
+    marketingRoute: "product-delivery",
+    // signed-in app tabs that belong to this product (order matters)
+    tabs: [["visibility", "Delivery"], ["blockers", "Blockers"], ["finance", "Forecast"], ["thread", "Digital Thread"]],
+    home: "visibility",
+    entKey: "delivery_enabled",
+  },
+  workforce: {
+    key: "workforce", name: "Workforce Intelligence", short: "Workforce",
+    tag: "Allocation & Capacity", tone: "var(--thread)", icon: Users2,
+    subdomain: "workforce",
+    marketingRoute: "product-workforce",
+    tabs: [["workforce", "Workforce"]],
+    home: "workforce",
+    entKey: "workforce_enabled",
+  },
+  requirements: {
+    key: "requirements", name: "Requirements Intelligence", short: "Requirements",
+    tag: "Trace & Verification", tone: "var(--blue)", icon: ClipboardList,
+    subdomain: "requirements",
+    marketingRoute: "product-requirements",
+    tabs: [["requirements", "Requirements"], ["workbench", "AI Workbench"]],
+    home: "requirements",
+    entKey: "requirements_enabled",
+  },
+};
+const PRODUCT_ORDER = ["workforce", "delivery", "requirements"];
+
+/* Which product owns a given signed-in app route (for gating). */
+function productForRoute(route) {
+  return Object.values(PRODUCTS).find((p) => p.tabs.some(([r]) => r === route)) || null;
+}
+
+/* Detect the active product context from the subdomain, with a dev/test
+   override via ?app=delivery or #app=delivery so the simulation works on any
+   host (localhost, preview URLs, the shared threadwire.ai during migration). */
+function detectProductCtx() {
+  if (typeof window === "undefined") return null;
+  try {
+    // A per-service build can be locked to one product via VITE_APP_TARGET
+    // (set at build time). "home" / unset falls through to runtime detection.
+    const forced = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_APP_TARGET) || "";
+    if (forced && forced !== "home") return PRODUCTS[forced] ? forced : null;
+    const q = new URLSearchParams(window.location.search).get("app")
+      || (window.location.hash.match(/app=(\w+)/)?.[1]) || "";
+    if (PRODUCTS[q]) return q;
+    const host = window.location.hostname || "";
+    const sub = host.split(".")[0];
+    const hit = Object.values(PRODUCTS).find((p) => p.subdomain === sub);
+    return hit ? hit.key : null;
+  } catch (e) { return null; }
+}
+
+/* Is the signed-in user entitled to this product? Falls back to "entitled" when
+   the backend hasn't supplied per-product flags yet, so existing accounts keep
+   working; wire user.<entKey> / user.products server-side to enforce. */
+function entitled(user, productKey) {
+  if (!user) return false;
+  const p = PRODUCTS[productKey];
+  if (!p) return false;
+  if (Array.isArray(user.products)) return user.products.includes(productKey);
+  if (typeof user[p.entKey] === "boolean") return user[p.entKey];
+  return true; // permissive default until entitlements are provisioned
+}
+
+/* ----------------------------- styles ----------------------------------- */
+const Styles = () => (
+  <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+    .tf {
+      /* Blue & white professional theme */
+      --bg:#F4F6FA; --bg2:#EEF2F7; --panel:#FFFFFF; --panel2:#F5F8FC;
+      --line:#DCE3EC; --line2:#C6D2E0;
+      --ink:#15222D; --muted:#47606F; --faint:#8093A0;
+      --inset:#EEF2F7;
+      /* accent (was amber) — now the brand blue so all accents re-theme automatically */
+      --amber:#2A46C4; --amber-d:#1B2E8C;
+      --thread:#3E6FE0; --thread-d:#1B2E8C;
+      --green:#12784E; --red:#AC3247; --yellow:#B27C12; --blue:#2A46C4;
+      --disp:'Bricolage Grotesque',sans-serif;
+      --body:'Inter',sans-serif;
+      --mono:'IBM Plex Mono',monospace;
+      color:var(--ink); font-family:var(--body);
+      background:
+        radial-gradient(900px 500px at 85% -10%, rgba(42,70,196,.06), transparent 60%),
+        radial-gradient(800px 600px at 0% 110%, rgba(62,111,224,.05), transparent 55%),
+        var(--bg);
+      min-height:100vh; letter-spacing:.1px;
+    }
+    .tf *{box-sizing:border-box}
+    .tf-grid-bg{
+      background-image:linear-gradient(rgba(42,70,196,.06) 1px,transparent 1px),
+                       linear-gradient(90deg,rgba(42,70,196,.06) 1px,transparent 1px);
+      background-size:46px 46px;
+    }
+    .tf-disp{font-family:var(--disp);letter-spacing:-.02em;line-height:1.02;color:var(--ink)}
+    .tf-mono{font-family:var(--mono);color:var(--muted)}
+    .tf-eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--amber)}
+    .tf-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(21,34,45,.04),0 4px 16px rgba(21,34,45,.04)}
+    .tf-chip{font-family:var(--mono);font-size:11px;border:1px solid var(--line2);border-radius:999px;padding:3px 10px;color:var(--muted);background:var(--panel2)}
+    .tf-btn{font-family:var(--mono);font-size:13px;font-weight:600;border-radius:10px;padding:10px 16px;border:1px solid var(--line2);background:var(--panel);color:var(--ink);cursor:pointer;transition:.16s;display:inline-flex;align-items:center;gap:8px}
+    .tf-btn:hover{border-color:var(--amber);color:var(--amber);transform:translateY(-1px)}
+    .tf-btn-primary{background:linear-gradient(180deg,var(--amber),var(--amber-d));border-color:transparent;color:#fff;font-weight:700}
+    .tf-btn-primary:hover{filter:brightness(1.06);color:#fff}
+    .tf-btn-ghost{background:transparent;border-color:var(--line2);color:var(--muted)}
+    .tf-btn-ghost:hover{color:var(--ink);border-color:var(--amber)}
+    .tf-link{cursor:pointer;color:var(--muted);transition:.15s;font-family:var(--mono);font-size:13px}
+    .tf-link:hover{color:var(--amber)}
+    .tf-tile{position:relative;overflow:hidden;cursor:pointer;transition:.2s;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 1px 2px rgba(21,34,45,.04),0 4px 16px rgba(21,34,45,.04)}
+    .tf-tile:hover{transform:translateY(-4px);border-color:var(--amber);box-shadow:0 24px 60px -28px rgba(42,70,196,.45)}
+    .tf-tile:hover .tf-tile-arrow{transform:translateX(4px);color:var(--amber)}
+    .tf-tile-glow{position:absolute;inset:auto -40px -60px auto;width:200px;height:200px;border-radius:50%;filter:blur(40px);opacity:.12}
+    .tf-row:hover{background:var(--panel2)}
+    .tf-input{font-family:var(--mono);font-size:13px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;padding:11px 13px;color:var(--ink);width:100%;outline:none}
+    .tf-input:focus{border-color:var(--amber);background:var(--panel)}
+    .tf-input::placeholder{color:var(--faint)}
+    .tf-fade{animation:tfIn .5s ease both}
+    .tf-stagger>*{animation:tfIn .5s ease both}
+    .tf-stagger>*:nth-child(1){animation-delay:.03s}
+    .tf-stagger>*:nth-child(2){animation-delay:.08s}
+    .tf-stagger>*:nth-child(3){animation-delay:.13s}
+    .tf-stagger>*:nth-child(4){animation-delay:.18s}
+    .tf-stagger>*:nth-child(5){animation-delay:.23s}
+    .tf-stagger>*:nth-child(6){animation-delay:.28s}
+    @keyframes tfIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+    @keyframes tfPulse{0%,100%{opacity:.4}50%{opacity:1}}
+    .tf-live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:tfPulse 1.4s infinite}
+    .tf-scroll::-webkit-scrollbar{width:8px;height:8px}
+    .tf-scroll::-webkit-scrollbar-thumb{background:var(--line2);border-radius:8px}
+    .tf-thread-line{stroke:var(--thread);stroke-width:1.5;fill:none;stroke-dasharray:4 4;animation:tfDash 1.2s linear infinite}
+    @keyframes tfDash{to{stroke-dashoffset:-16}}
+    .tf-tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;padding:2px 8px;border-radius:6px;border:1px solid var(--line2)}
+
+    /* nav link override — must be visible at rest */
+    .tf-nav .tf-link{color:var(--muted);font-size:13.5px}
+    .tf-nav .tf-link:hover{color:var(--ink)}
+
+    /* body text defaults — ensure readability everywhere */
+    .tf p{color:var(--muted);line-height:1.65}
+    select.tf-input option{background:var(--panel2);color:var(--ink)}
+  `}</style>
+);
+
+/* ----------------------------- helpers ---------------------------------- */
+async function askClaude(system, userText, history = [], page = "home") {
+  const messages = [...(history || []), { role: "user", content: userText }];
+  const res = await fetch("/api/ai/chat", {
+    method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+    body: JSON.stringify({
+      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      system: system || "",
+      page,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = data?.detail;
+    const message =
+      typeof detail === "string"
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((e) => `${(e.loc || []).join(".")}: ${e.msg || JSON.stringify(e)}`).join("; ")
+          : detail
+            ? JSON.stringify(detail)
+            : `AI request failed (${res.status})`;
+    throw new Error(message);
+  }
+  if (!data || typeof data.text !== "string" || !data.text.trim()) {
+    throw new Error("AI provider returned an empty response");
+  }
+  return data.text.trim();
+}
+
+const fmtUSD = (n) =>
+  n >= 1000 ? "$" + (n / 1000).toFixed(n % 1000 ? 1 : 0) + "k" : "$" + n;
+
+function StatusDot({ tone }) {
+  const c = { green: "var(--green)", red: "var(--red)", yellow: "var(--yellow)", blue: "var(--blue)", thread: "var(--thread)" }[tone] || "var(--muted)";
+  return <span style={{ width: 8, height: 8, borderRadius: 99, background: c, display: "inline-block" }} />;
+}
+function Tag({ children, tone = "muted" }) {
+  const map = {
+    green: ["rgba(67,194,119,.12)", "var(--green)"],
+    red: ["rgba(240,86,58,.12)", "var(--red)"],
+    yellow: ["rgba(227,179,65,.12)", "var(--yellow)"],
+    blue: ["rgba(90,169,255,.12)", "var(--blue)"],
+    thread: ["rgba(72,214,200,.12)", "var(--thread)"],
+    amber: ["rgba(255,138,61,.12)", "var(--amber)"],
+    muted: ["rgba(141,159,181,.10)", "var(--muted)"],
+  };
+  const [bg, fg] = map[tone] || map.muted;
+  return <span className="tf-tag" style={{ background: bg, color: fg, borderColor: "transparent" }}>{children}</span>;
+}
+
+/* ----------------------------- mock data -------------------------------- */
+const LIFECYCLE = [
+  { k: "plan", label: "Plan", icon: Layers },
+  { k: "design", label: "Design", icon: GitBranch },
+  { k: "procure", label: "Procure", icon: PackageSearch },
+  { k: "build", label: "Build", icon: Wrench },
+  { k: "commission", label: "Commission", icon: Zap },
+  { k: "operate", label: "Operate", icon: Activity },
+  { k: "maintain", label: "Maintain", icon: Gauge },
+  { k: "retire", label: "Retire", icon: CircleDot },
+];
+
+const ASSETS = [
+  { id: "AST-104", name: "5-Axis CNC Mill", line: "Machining Cell A", stage: "operate", oee: 91, health: 96, next: "12 days", status: "green" },
+  { id: "AST-118", name: "Robotic Welder R2", line: "Weld Bay 2", stage: "maintain", oee: 78, health: 71, next: "Overdue 2d", status: "yellow" },
+  { id: "AST-090", name: "Injection Molder 800T", line: "Molding C", stage: "operate", oee: 88, health: 84, next: "21 days", status: "green" },
+  { id: "AST-141", name: "AGV Fleet (x6)", line: "Logistics", stage: "commission", oee: 64, health: 90, next: "Commissioning", status: "blue" },
+  { id: "AST-052", name: "Press Brake 200T", line: "Fab", stage: "operate", oee: 83, health: 58, next: "4 days", status: "red" },
+  { id: "AST-160", name: "Laser Cutter Fiber-6kW", line: "Fab", stage: "procure", oee: 0, health: 100, next: "PO pending", status: "muted" },
+];
+
+const CONTRACTS = [
+  { id: "NDA-2241", name: "Mutual NDA — Vertex Sensors", party: "Vertex Sensors Inc.", type: "NDA", status: "Active", risk: "low", value: 0, expiry: "2026-11-02" },
+  { id: "MSA-0098", name: "Master Supply Agreement", party: "Helix Alloys GmbH", type: "MSA", status: "Expiring", risk: "med", value: 1850000, expiry: "2026-07-19" },
+  { id: "SOW-0451", name: "Integration SOW — Phase 2", party: "Northbridge Automation", type: "SOW", status: "In Review", risk: "high", value: 420000, expiry: "2026-12-31" },
+  { id: "SUP-0307", name: "Supply Agreement — PCBA", party: "Sundown Electronics", type: "Supply", status: "Active", risk: "low", value: 980000, expiry: "2027-03-15" },
+  { id: "NDA-2255", name: "One-way NDA — Bidder", party: "Quanta Robotics", type: "NDA", status: "Draft", risk: "low", value: 0, expiry: "—" },
+];
+
+const REQUIREMENTS = [
+  { id: "REQ-001", text: "The actuator shall reach 95% of commanded position within 250 ms under nominal load.", type: "Functional", status: "Verified", verif: "Test", src: "JAMA", tests: ["TC-014", "TC-022"], jira: "MFG-318", design: "DSN-Servo-Loop" },
+  { id: "REQ-002", text: "Enclosure shall maintain IP65 ingress protection across the full operating temperature range.", type: "Environmental", status: "In Review", verif: "Inspection", src: "JAMA", tests: ["TC-031"], jira: "MFG-321", design: "DSN-Enclosure" },
+  { id: "REQ-003", text: "Controller firmware shall log all fault codes with a UTC timestamp to non-volatile memory.", type: "Functional", status: "Verified", verif: "Test", src: "DOORS", tests: ["TC-009"], jira: "MFG-290", design: "DSN-FW-Logging" },
+  { id: "REQ-004", text: "Mean time between failures (MTBF) shall exceed 25,000 operating hours.", type: "Reliability", status: "Open", verif: "Analysis", src: "DOORS", tests: [], jira: "MFG-340", design: "DSN-Reliability" },
+  { id: "REQ-005", text: "Emergency stop shall halt all motion within 100 ms of activation per ISO 13850.", type: "Safety", status: "Verified", verif: "Test", src: "JAMA", tests: ["TC-001", "TC-002"], jira: "MFG-201", design: "DSN-Estop" },
+  { id: "REQ-006", text: "The HMI shall display current spindle load as a percentage refreshed at least every 500 ms.", type: "Functional", status: "In Review", verif: "Demonstration", src: "JAMA", tests: ["TC-040"], jira: "MFG-355", design: "DSN-HMI" },
+];
+
+const WORKORDERS = [
+  { id: "WO-7781", part: "PN-3320", desc: "Spindle Assembly", qty: 40, done: 28, status: "In Progress", due: "2026-06-14", tone: "yellow" },
+  { id: "WO-7782", part: "PN-1188", desc: "Control Cabinet", qty: 12, done: 12, status: "Complete", due: "2026-06-05", tone: "green" },
+  { id: "WO-7790", part: "PN-4501", desc: "Servo Bracket", qty: 200, done: 35, status: "Blocked", due: "2026-06-20", tone: "red" },
+  { id: "WO-7795", part: "PN-3320", desc: "Spindle Assembly", qty: 25, done: 0, status: "Released", due: "2026-06-28", tone: "blue" },
+];
+const BOM = [
+  { pn: "PN-3320", desc: "Spindle Assembly", level: 0, qty: 1, src: "Make", onhand: 8, demand: 65 },
+  { pn: "PN-3321", desc: "Bearing, angular contact", level: 1, qty: 2, src: "Buy", onhand: 140, demand: 130 },
+  { pn: "PN-3322", desc: "Shaft, hardened", level: 1, qty: 1, src: "Make", onhand: 22, demand: 65 },
+  { pn: "PN-3323", desc: "Collet nut", level: 1, qty: 1, src: "Buy", onhand: 12, demand: 65 },
+];
+const SAMPLE_PART_BOM = {
+  "PN-3320": [
+    { child: "PN-3321", desc: "Bearing, angular contact", qty: 2, line: "10", refdes: "B1,B2" },
+    { child: "PN-3322", desc: "Shaft, hardened 4140", qty: 1, line: "20", refdes: "S1" },
+    { child: "PN-3323", desc: "Collet nut", qty: 4, line: "30", refdes: "N1,N2,N3,N4" },
+  ],
+  "PN-1188": [
+    { child: "PN-3321", desc: "Bearing, angular contact", qty: 1, line: "10", refdes: "B1" },
+    { child: "PN-4501", desc: "Servo Bracket", qty: 2, line: "20", refdes: "K1,K2" },
+  ],
+  "PN-4501": [
+    { child: "PN-3323", desc: "Collet nut", qty: 2, line: "10", refdes: "N1,N2" },
+  ],
+};
+const SAMPLE_VENDOR_PARTS = {
+  "PN-3320": [
+    { code: "V-100", name: "Precision Castings Co", vpn: "PC-9920", cost: 405.0, lead: 35 },
+    { code: "V-220", name: "Apex Hardware", vpn: "AX-3320B", cost: 418.0, lead: 21 },
+  ],
+  "PN-3321": [{ code: "V-330", name: "Helix Alloys", vpn: "HX-7206", cost: 12.4, lead: 28 }],
+  "PN-3322": [{ code: "V-100", name: "Precision Castings Co", vpn: "PC-4140", cost: 64.0, lead: 30 }],
+  "PN-3323": [{ code: "V-220", name: "Apex Hardware", vpn: "AX-NUT-12", cost: 9.1, lead: 14 }],
+  "PN-4501": [
+    { code: "V-220", name: "Apex Hardware", vpn: "AX-BRK-45", cost: 86.0, lead: 18 },
+    { code: "V-410", name: "Northgate Sheet Metal", vpn: "NG-4501", cost: 91.0, lead: 12 },
+  ],
+};
+// Build a part-detail object from sample data (preview mode); members fetch /api/part_detail.
+const sampleDetail = (pn) => {
+  const meta = PART_META[pn] || {};
+  const isEnd = (ACTIVE_ORDERS || []).some((o) => o.part === pn);
+  return {
+    part: { part_number: pn, description: ACTIVE_PART_DESC[pn] || meta.desc || "", unit_cost: null, uom: "", commodity: meta.commodity || "", revision: meta.rev || "", lifecycle: meta.lifecycle || "", classification: isEnd ? "SOEI" : "" },
+    bom: (SAMPLE_PART_BOM[pn] || []).map((c) => ({ child_part_number: c.child, child_description: c.desc, quantity: c.qty, find_number: c.line, ref_designators: c.refdes })),
+    vendors: (SAMPLE_VENDOR_PARTS[pn] || []).map((v) => ({ vendor_part_number: v.vpn, vendor_code: v.code, vendor_name: v.name, unit_cost: v.cost, lead_time_days: v.lead })),
+  };
+};
+
+const ECO = [
+  { id: "ECO-220", title: "Bearing supplier change", status: "Approved", affects: ["PN-3321"], jira: "MFG-410" },
+  { id: "ECO-231", title: "Shaft tolerance tightening", status: "In Review", affects: ["PN-3322"], jira: "MFG-433" },
+];
+const POs = [
+  { id: "PO-9912", part: "PN-3321", supplier: "Helix Alloys", qty: 200, eta: "2026-06-11", status: "Confirmed", tone: "green" },
+  { id: "PO-9920", part: "PN-3323", supplier: "Sundown Elec.", qty: 80, eta: "2026-06-25", status: "Delayed", tone: "red" },
+];
+
+/* SPC sample generator */
+function genSPC(n = 28, target = 50, sigma = 1.1, seed = 7) {
+  let s = seed;
+  const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  return Array.from({ length: n }, (_, i) => {
+    const noise = (rnd() - 0.5) * sigma * 2;
+    const drift = i > 20 ? (i - 20) * 0.18 : 0; // small late drift
+    return { i: i + 1, v: +(target + noise + drift).toFixed(2) };
+  });
+}
+
+/* ----------------------------- shared UI -------------------------------- */
+/* Products dropdown for the marketing nav */
+function ProductsMenu({ go, route }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+  useEffect(() => {
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+  const onProduct = (route === "product-delivery" || route === "product-workforce" || route === "product-requirements");
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <span className="tf-link" onClick={() => setOpen((o) => !o)}
+        style={{ display: "inline-flex", alignItems: "center", gap: 4, cursor: "pointer",
+          color: onProduct ? "var(--ink)" : undefined,
+          borderBottom: onProduct ? "2px solid var(--amber)" : "2px solid transparent", paddingBottom: 3 }}>
+        Products <ChevronDown size={14} style={{ transform: open ? "rotate(180deg)" : "none", transition: ".15s" }} />
+      </span>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 10px)", left: -10, width: 320, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 14, boxShadow: "0 16px 44px rgba(21,34,45,.14)", padding: 8, zIndex: 60 }}>
+          {PRODUCT_ORDER.map((k) => {
+            const p = PRODUCTS[k];
+            return (
+              <div key={k} onClick={() => { setOpen(false); go(p.marketingRoute); }}
+                style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "11px 12px", borderRadius: 10, cursor: "pointer" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel2)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                <div style={{ width: 34, height: 34, borderRadius: 9, background: "var(--bg2)", border: `1px solid ${p.tone}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <p.icon size={17} color={p.tone} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{p.name}</div>
+                  <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", letterSpacing: ".06em", textTransform: "uppercase" }}>{p.tag}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TopNav({ route, go, tier, onContact, loggedIn, user, productCtx }) {
+  const isSiteAdmin = user?.role === "superadmin";
+
+  // Signed-in app: show only the active product's tabs (subdomain-scoped), plus
+  // any cross-product add-ons the user is entitled to. Marketing: Home /
+  // Products / ROI / Case Studies.
+  let appLinks = [];
+  if (loggedIn) {
+    const p = productCtx ? PRODUCTS[productCtx] : null;
+    if (p && entitled(user, p.key)) {
+      appLinks = [...p.tabs];
+      if (p.key === "delivery" && user?.quote_to_order) appLinks.push(["quotes", "Quote-to-Order"]);
+      if (p.key === "delivery" && user?.compliance_enabled) appLinks.push(["compliance", "Compliance"]);
+    } else {
+      // no/unknown product context (e.g. apex while signed in): offer entitled products
+      appLinks = PRODUCT_ORDER.filter((k) => entitled(user, k)).map((k) => [PRODUCTS[k].tabs[0][0], PRODUCTS[k].short]);
+    }
+  }
+  const productLabel = loggedIn && productCtx && PRODUCTS[productCtx] ? PRODUCTS[productCtx].short : "Delivery Control";
+
+  return (
+    <div style={{ position: "sticky", top: 0, zIndex: 40, background: "rgba(255,255,255,.82)", backdropFilter: "blur(10px)", borderBottom: "1px solid var(--line)" }}>
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "14px 22px", display: "flex", alignItems: "center", gap: 20 }}>
+        <div onClick={() => go(loggedIn ? (appLinks[0]?.[0] || "home") : "home")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+          <div style={{ width: 30, height: 30, borderRadius: 9, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center" }}>
+            <Workflow size={17} color="#0a0e15" strokeWidth={2.4} />
+          </div>
+          <div>
+            <span className="tf-disp" style={{ fontWeight: 800, fontSize: 19 }}>{BRAND}</span>
+            <span className="tf-mono" style={{ fontSize: 9, color: "var(--amber)", display: "block", letterSpacing: ".12em", textTransform: "uppercase", lineHeight: 1, marginTop: 1 }}>{productLabel}</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 18, marginLeft: 8, alignItems: "center" }} className="tf-nav">
+          {loggedIn ? (
+            appLinks.map(([k, l]) => (
+              <span key={k} className="tf-link" onClick={() => go(k)}
+                style={{ color: route === k ? "var(--ink)" : undefined, borderBottom: route === k ? "2px solid var(--amber)" : "2px solid transparent", paddingBottom: 3 }}>
+                {l}
+              </span>
+            ))
+          ) : (
+            <>
+              <span className="tf-link" onClick={() => go("home")}
+                style={{ color: route === "home" ? "var(--ink)" : undefined, borderBottom: route === "home" ? "2px solid var(--amber)" : "2px solid transparent", paddingBottom: 3 }}>Home</span>
+              <ProductsMenu go={go} route={route} />
+              <span className="tf-link" onClick={() => go("roi")}
+                style={{ color: route === "roi" ? "var(--ink)" : undefined, borderBottom: route === "roi" ? "2px solid var(--amber)" : "2px solid transparent", paddingBottom: 3 }}>ROI</span>
+              <span className="tf-link" onClick={() => { window.location.href = "/case-studies"; }}
+                style={{ borderBottom: "2px solid transparent", paddingBottom: 3 }}>Case Studies</span>
+            </>
+          )}
+          {loggedIn && isSiteAdmin && (
+            <span className="tf-link" onClick={() => { window.location.href = "/case-studies"; }}
+              style={{ borderBottom: "2px solid transparent", paddingBottom: 3 }}>Case Studies</span>
+          )}
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+          <span className="tf-chip" style={{ color: tier === "paid" ? "var(--amber)" : "var(--muted)" }}>
+            {tier === "paid" ? "● Connected" : "○ Sample data"}
+          </span>
+          {!loggedIn && <button className="tf-btn tf-btn-primary" style={{ padding: "8px 14px" }} onClick={onContact}>Request a diagnostic</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PageHead({ icon: Icon, eyebrow, title, sub, tier, setTier, children }) {
+  return (
+    <div className="tf-fade" style={{ marginBottom: 26 }}>
+      <div className="tf-eyebrow" style={{ marginBottom: 12 }}>{eyebrow}</div>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ width: 52, height: 52, borderRadius: 14, background: "var(--panel2)", border: "1px solid var(--line2)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+          <Icon size={24} color="var(--amber)" />
+        </div>
+        <div style={{ flex: 1, minWidth: 280 }}>
+          <h1 className="tf-disp" style={{ fontSize: 34, fontWeight: 800, margin: 0 }}>{title}</h1>
+          <p style={{ color: "var(--muted)", margin: "8px 0 0", maxWidth: 640, lineHeight: 1.55 }}>{sub}</p>
+        </div>
+        {setTier && <TierToggle tier={tier} setTier={setTier} />}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function TierToggle({ tier, setTier }) {
+  return (
+    <div style={{ display: "inline-flex", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 12, padding: 4 }}>
+      {[["free", "Free · Sample", Sparkles], ["paid", "Connected · Live", Plug]].map(([k, l, I]) => (
+        <button key={k} onClick={() => setTier(k)} className="tf-mono"
+          style={{
+            display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+            border: "none", borderRadius: 9, padding: "8px 14px",
+            background: tier === k ? (k === "paid" ? "linear-gradient(180deg,var(--amber),var(--amber-d))" : "var(--panel2)") : "transparent",
+            color: tier === k ? (k === "paid" ? "#fff" : "var(--ink)") : "var(--faint)",
+          }}>
+          <I size={14} /> {l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* A reusable "connect your real data" gate shown on the paid tier */
+function ConnectGate({ title, lines, connectors }) {
+  return (
+    <div className="tf-panel tf-fade" style={{ padding: 24, position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 14, right: 16 }}><Tag tone="amber">CONNECTED TIER</Tag></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+        <Plug size={18} color="var(--amber)" />
+        <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>{title}</h3>
+      </div>
+      <ul style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.7, margin: "8px 0 18px", paddingLeft: 18 }}>
+        {lines.map((l, i) => <li key={i}>{l}</li>)}
+      </ul>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, marginBottom: 18 }}>
+        {connectors.map((c) => (
+          <div key={c.name} className="tf-panel" style={{ padding: 14, background: "var(--bg2)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <c.icon size={16} color="var(--thread)" />
+              <span style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</span>
+            </div>
+            <div className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 10 }}>{c.desc}</div>
+            <button className="tf-btn tf-btn-ghost" style={{ width: "100%", justifyContent: "center", padding: "7px" }}>Connect</button>
+          </div>
+        ))}
+      </div>
+      <div style={{ borderTop: "1px dashed var(--line2)", paddingTop: 16 }}>
+        <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Or import a file (CSV / XLSX)</div>
+        <div style={{ border: "1.5px dashed var(--line2)", borderRadius: 12, padding: "22px", textAlign: "center", background: "var(--bg2)" }}>
+          <Upload size={22} color="var(--muted)" style={{ marginBottom: 8 }} />
+          <div style={{ fontSize: 14, color: "var(--muted)" }}>Drag a file here, or <span style={{ color: "var(--amber)" }}>browse</span></div>
+          <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 6 }}>Mapped automatically to the schema · column mapping editor follows</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- per-subject context built from the sample data ---- */
+const CTX = {
+  assets:
+    "ASSET FLEET:\n" +
+    ASSETS.map((a) => `${a.id} ${a.name} (${a.line}) stage=${a.stage} OEE=${a.oee || "n/a"}% health=${a.health}% nextPM=${a.next} status=${a.status}`).join("\n") +
+    "\n\nSPC: bore-diameter X̄ chart, target 50µm, UCL 53.2, LCL 46.8, Cpk ~1.18, late upward drift on recent subgroups. PLC=Siemens S7-1500, HMI=WinCC Unified, 42 tags mapped.",
+  contracts:
+    "CONTRACT REPOSITORY:\n" +
+    CONTRACTS.map((c) => `${c.id} "${c.name}" type=${c.type} party=${c.party} status=${c.status} risk=${c.risk} value=${c.value ? "$" + c.value.toLocaleString() : "n/a"} expiry=${c.expiry}`).join("\n"),
+  requirements:
+    "REQUIREMENTS SET (Jama + DOORS):\n" +
+    REQUIREMENTS.map((r) => `${r.id} [${r.type}/${r.status}/${r.src}] "${r.text}" tests=${r.tests.join(",") || "NONE"} jira=${r.jira} design=${r.design}`).join("\n"),
+  thread:
+    "WORK ORDERS:\n" + WORKORDERS.map((w) => `${w.id} ${w.part} ${w.desc} ${w.done}/${w.qty} ${w.status} due ${w.due}`).join("\n") +
+    "\n\nBOM (PN-3320 Spindle Assembly):\n" + BOM.map((b) => `${b.pn} ${b.desc} qty/asm ${b.qty} ${b.src} onhand ${b.onhand} demand ${b.demand}`).join("\n") +
+    "\n\nECO:\n" + ECO.map((e) => `${e.id} ${e.title} ${e.status} affects ${e.affects.join(",")}`).join("\n") +
+    "\n\nPURCHASE ORDERS:\n" + POs.map((p) => `${p.id} ${p.part} ${p.supplier} qty ${p.qty} eta ${p.eta} ${p.status}`).join("\n"),
+  workforce:
+    "Threadwire Workforce Intelligence is an engineering-resource allocation and capacity module. It tracks people (by discipline, location, seniority), projects, allocations (a % loading per person per month), imported baselines/plans (the budget track), timekeeping actuals, and open resource requests. Core reads: allocated-vs-plan by project, per-person utilisation vs a policy ceiling (default 110%), discipline capacity and spare headroom, and attainment (actual vs plan). It answers What-If capacity questions: whether a request can be filled from spare capacity, who is over-allocated, which projects breach their plan if open requests are filled, and where headroom exists. Live numbers are supplied in a separate LIVE WORKFORCE DATA block when data is loaded — always use those exact figures.",
+  home:
+    "Threadwire is a Manufacturing Delivery Control platform — not a generic AI or BI tool. It overlays Odoo, MRPeasy, JobBOSS, Sage, Epicor SMB, legacy SQL and Excel without replacing the ERP. Core promise: protect customer commitments and revenue. Target: mid-market discrete manufacturers ($20M–$200M revenue), high-mix/low-volume, make-to-order, engineer-to-order, contract manufacturing. Key modules: Delivery Calendar (sales orders by promise date, committed vs blocked revenue), Blockers (shop-floor issues tied to orders, owners, actions, revised dates, revenue at risk), Revenue Forecast (GM-level blocker-aware forecast by quarter/month), Digital Thread (work orders, BOM, ECO, PO, material forecasting), Direct Spend (BOM-linked sourcing, should-cost, Kraljic), ROI Calculator. Pricing: $2,500 Revenue at Risk Diagnostic (credited to pilot); $24K/yr Core (1 site, +$7.5K onboarding); $48K/yr Pro (3 sites, API, AI, +$15K onboarding); $90K–$150K/yr Enterprise. No free trial — the entry offer is a paid diagnostic. Sample data available in all tabs for exploration.",
+};
+
+/* ---- per-page assistant configuration (the "Claude for this tile") ---- */
+const ASSISTANT = {
+  home: {
+    subject: "Threadwire Delivery Control", accent: "var(--amber)",
+    intro: "Ask me about manufacturing delivery control, how Threadwire works, pricing, or how it overlays your ERP.",
+    suggestions: ["How does it overlay my ERP?", "What's the Revenue at Risk Diagnostic?", "How is pricing structured?"],
+    system: "You are the Threadwire product assistant. Threadwire is a Manufacturing Delivery Control platform — it protects customer commitments and revenue by connecting ERP and operational data, exposing blockers, assigning actions and using AI to prioritize recovery. It overlays existing ERPs (Odoo, MRPeasy, JobBOSS, Sage, Epicor SMB, legacy SQL, Excel) without replacement. Target buyers: COO/GM, VP Operations, CFO at mid-market discrete manufacturers ($20M–$200M, high-mix/make-to-order/contract). Pricing: $2,500 Revenue at Risk Diagnostic (credited to pilot); $24K/yr Core + $7.5K onboarding; $48K/yr Pro + $15K onboarding (flagship); $90K–$150K/yr Enterprise. No free trial — paid diagnostic is the entry motion. Be concise and outcome-focused. Never claim 'real-time' for CSV-based flows.\n\n" + CTX.home,
+    fallback: () => "Threadwire is Manufacturing Delivery Control — the operating layer that shows what will not ship, the revenue and cash exposure, why it is blocked, who owns recovery, and what promise date is now credible. It overlays your existing ERP without replacement and brings a live delivery review calendar, blocker workspace and AI-assisted investigation. Start with a $2,500 Revenue at Risk Diagnostic, then move to a paid 45-day pilot.",
+  },
+  assets: {
+    subject: "Assets & Equipment", accent: "var(--amber)",
+    intro: "Ask about asset health, OEE, maintenance or the SPC chart.",
+    suggestions: ["Which assets need attention?", "Explain the SPC drift", "What's the lowest OEE?"],
+    system: "You are an asset & equipment reliability assistant. Answer ONLY from this data. Reference asset IDs. Be concise.\n\n" + CTX.assets,
+    fallback: (q) =>
+      /spc|drift|control/i.test(q) ? "The X̄ chart shows a small upward drift on the most recent subgroups, trending toward UCL (53.2µm). Cpk is ~1.18 — capable but worth a tool-wear check before it breaches a control limit."
+      : /oee|low/i.test(q) ? "Lowest OEE is AST-118 Robotic Welder R2 at 78% (PM overdue 2 days). AST-141 AGV Fleet shows 64% but it's still in commissioning."
+      : "Attention list: AST-052 Press Brake (health 58%, PM in 4 days), AST-118 Welder (PM overdue 2d). Everything else is green. Ask me about any AST-ID.",
+  },
+  contracts: {
+    subject: "Contracts", accent: "var(--thread)",
+    intro: "Ask about obligations, renewals or risk across your agreements.",
+    suggestions: ["What's expiring soon?", "Highest-risk contract?", "Total contract value?"],
+    system: "You are a contract analyst. Answer ONLY from this repository. Reference contract IDs and dates. Be concise.\n\n" + CTX.contracts,
+    fallback: (q) =>
+      /expir|renew/i.test(q) ? "MSA-0098 (Helix Alloys, $1.85M) expires 2026-07-19 — the nearest renewal, flagged Expiring. Confirm the opt-out window before it auto-renews."
+      : /risk|high/i.test(q) ? "Highest risk is SOW-0451 (Northbridge Automation, $420k, In Review) — high risk, likely scope/liability language to review before signing."
+      : "5 agreements: 2 Active, 1 Expiring, 1 In Review, 1 Draft. Combined value ~$4.2M. Nearest action: MSA-0098 expiry on 2026-07-19.",
+  },
+  requirements: {
+    subject: "Requirements", accent: "var(--blue)",
+    intro: "Chat with your connected requirements — coverage, conflicts, trace.",
+    suggestions: ["Which requirements lack tests?", "Summarize safety requirements", "Any conflicts?"],
+    system: "You are a requirements analyst. Answer ONLY from this imported set. Cite requirement IDs. Be concise.\n\n" + CTX.requirements,
+    fallback: (q) =>
+      /coverage|test/i.test(q) ? "REQ-004 (MTBF > 25,000 hrs) has no linked test cases — verified by analysis, but it's a coverage gap. All others have ≥1 linked TC."
+      : /safety/i.test(q) ? "Safety: REQ-005 — E-stop must halt all motion within 100 ms per ISO 13850 (Verified, TC-001/TC-002). Only Safety-tagged item in the set."
+      : /conflict|ambig/i.test(q) ? "Watch REQ-006 (HMI refresh ≥500 ms) vs REQ-001 (250 ms actuator window) — confirm the slower HMI rate doesn't mislead operators about response."
+      : "6 requirements: 3 Verified, 2 In Review, 1 Open. One coverage gap (REQ-004). Ask about a REQ-ID, coverage or trace links.",
+  },
+  thread: {
+    subject: "Material & Thread", accent: "var(--green)",
+    intro: "Ask for material status or shortage forecasts across the thread.",
+    suggestions: ["What slips if MAX14001AAP+ is delayed 4 weeks?", "Which soft pegs should be hardened?", "Summarize ECO-2026-0418 impact"],
+    system: "You are a supply-chain / material planning assistant over a manufacturing digital thread. Answer ONLY from this data, be quantitative, flag shortages. Reference IDs.\n\n" + CTX.thread,
+    fallback: (q) =>
+      /short|material/i.test(q) ? "Against 65-unit demand: PN-3322 short 43 (22 on-hand), PN-3323 short 53 (12 on-hand) with PO-9920 DELAYED to 06-25. PN-3321 bearings fine (140 vs 130)."
+      : /7781|time|finish/i.test(q) ? "WO-7781 is 28/40 (due 06-14). Risk: PN-3323 from delayed PO-9920 (ETA 06-25) jeopardizes the last 12 units. Expedite or use an alternate supplier."
+      : /eco-220|eco/i.test(q) ? "ECO-220 (bearing supplier change, Approved) affects PN-3321. Stock covers demand, so no immediate shortage — validate the new supplier's first-article and lead time first."
+      : "4 work orders (WO-7790 Blocked), BOM short on PN-3322/PN-3323, PO-9920 delayed. Ask me to forecast a WO or part.",
+  },
+  roi: {
+    subject: "ROI & Business Case", accent: "var(--amber)",
+    intro: "Ask how the model works, what to enter, or how to defend the numbers.",
+    suggestions: ["Hard vs soft savings?", "What's a credible payback?", "How is NPV calculated?"],
+    system: "You are a manufacturing value-engineering / business-case advisor. Help the user build a credible AI ROI case using a value-driver tree, hard vs soft savings, risk adjustment, payback and NPV. Be concise and practical.\n\n" + CTX.home,
+    fallback: (q) =>
+      /hard|soft/i.test(q) ? "Hard savings hit the P&L and are easy to defend: recovered throughput from less downtime, scrap/rework reduction, inventory carrying, expedite freight, warranty, recovered contract leakage. Soft savings are productivity and risk-avoidance (engineering hours freed, contract/ECO cycle-time) — real, but discount them (this model uses 50%) so finance trusts the case."
+      : /payback|npv|discount/i.test(q) ? "Payback is implementation cost divided by monthly net benefit (benefit minus run cost) — most manufacturing AI cases land in 6–18 months. NPV discounts the 3-year net cash flows (default 10%) back to today; a positive NPV with payback under ~18 months is a strong case."
+      : "Start with industry + revenue, then refine downtime %, COPQ %, and engineering FTEs — those move the number most. Keep improvement assumptions conservative and swap in your measured baseline before presenting.",
+  },
+  directspend: {
+    subject: "Sourcing & Direct Spend", accent: "var(--thread)",
+    intro: "Ask about sourcing events, should-cost, RFQ weighting or supplier choice.",
+    suggestions: ["Explain should-cost vs quote", "Who should win SE-1048?", "How does weighting work?"],
+    system: "You are a direct-materials sourcing and should-cost advisor for manufacturing procurement. Help with BOM-linked sourcing, weighted RFQ scoring, should-cost modeling and supplier strategy. Be concise and practical.\n\n" + CTX.thread,
+    fallback: (q) =>
+      /should-cost|should cost|quote/i.test(q) ? "Should-cost builds the price bottom-up (material = mass × commodity price × scrap factor, plus labor, overhead and a fair margin). The gap between the lowest quote and should-cost is your negotiation headroom — multiply it by annual volume to size the prize."
+      : /weight|rfq|scoring/i.test(q) ? "Weighted RFQ avoids picking on price alone: score each supplier on price, quality, lead time, supply risk and sustainability, then weight those to your category strategy. Strategic/bottleneck items lean toward risk and lead time; leverage items lean toward price."
+      : /se-1048|win|award/i.test(q) ? "For SE-1048 (PN-3322 shaft), the recommendation shifts with your weights: price-weighted favors Midwest Forge (lowest quote), while quality/risk-weighted favors Apex. The should-cost (~$8) shows real headroom against the ~$8.90 best quote."
+      : "Sourcing events fire from BOM/ECO changes. Pick one to load its weighted RFQ and should-cost. Ask me to compare suppliers or size the savings.",
+  },
+  quotes: {
+    subject: "Quote-to-Order Pipeline", accent: "var(--thread)",
+    intro: "Ask about pipeline value, quotes at risk, or what to convert next.",
+    suggestions: ["What should we convert this week?", "Which quotes are blocked?", "Pipeline value by stage?"],
+    system: "You help a manufacturing sales/ops team run a quote-to-order pipeline (open → quoted → won → converted). Prioritize by value, required date and blockers; recommend which won quotes to convert to sales orders. Be concise.\n\n" + CTX.home,
+    fallback: () => "The pipeline runs open → quoted → won → converted. Convert won quotes with the nearest required dates first so they land on the delivery calendar with a real promise date; clear blockers on quoted deals before they age out.",
+  },
+  blockers: {
+    subject: "Shop-floor Blockers", accent: "var(--red)",
+    intro: "Ask which orders are at risk, who owns a blocker, or what to prioritize.",
+    suggestions: ["Which blocker risks the most revenue?", "What's open and unassigned?", "Summarize today's blockers"],
+    system: "You help a manufacturing ops team triage shop-floor blockers tied to sales orders — by revenue at risk, owner and status. Be concise and action-oriented.\n\n" + CTX.thread,
+    fallback: (q, c) => {
+      if (!c) return "Blockers are ranked by revenue at risk. Open one to see its impacted orders, parts and work order, assign an owner, and close it when cleared.";
+      const lead = c.top ? `Highest-exposure open blocker: \u201c${c.top.title}\u201d at ${fmtMoney(c.top.val)}. ` : "";
+      return `${lead}${c.open} blocker${c.open === 1 ? "" : "s"} open or assigned, ${fmtMoney(c.atRisk)} revenue at risk in total. Open one to assign an owner and close it — the delivery calendar and forecast update as you do.`;
+    },
+  },
+  visibility: {
+    subject: "Delivery & Order Risk", accent: "var(--amber)",
+    intro: "Ask about this week's revenue, at-risk orders, or a customer's delivery.",
+    suggestions: ["What's this week's revenue forecast?", "Which orders are at risk?", "Show next week"],
+    system: "You help a manufacturing team read a point-in-time delivery calendar: sales orders by promise date, revenue forecast, and which orders carry open blockers. Be concise.\n\n" + CTX.thread,
+    fallback: (q, c) => {
+      if (!c) return "Open the Delivery calendar to see orders by promise date; each carries committed vs blocked revenue.";
+      const site = c.site === "All" ? "all sites" : c.site;
+      if (/risk|blocker|blocked/i.test(q) && !/revenue|forecast|committed|expected/i.test(q))
+        return `${c.atRisk} order${c.atRisk === 1 ? "" : "s"} this week (${c.weekLabel}, ${site}) carry an open blocker — ${fmtMoney(c.blocked)} at risk. Open a red-banded card to view and close the blocker.`;
+      return `This week (${c.weekLabel}, ${site}): expected revenue ${fmtMoney(c.expected)} across ${c.orders} order${c.orders === 1 ? "" : "s"} — ${fmtMoney(c.committed)} committed (clear) and ${fmtMoney(c.blocked)} blocked by open issues (at risk). Clear the blockers and the full ${fmtMoney(c.expected)} ships. Use the site filter or prev/next week to change scope.`;
+    },
+  },
+  workforce: {
+    subject: "Workforce & Capacity", accent: "var(--amber)",
+    intro: "Ask about allocation, utilisation or run a What-If — e.g. can we staff a request from spare capacity, or which projects breach plan?",
+    suggestions: ["Who is over-allocated this month?", "What if I add 2 Software engineers to the busiest project?", "Which projects go over plan if every open request is filled?"],
+    system: "You are a workforce-planning and capacity assistant for engineering resource management. Answer ONLY from the workforce data provided. Be quantitative: cite hours, % loading, headcount, project codes and person names. For What-If questions, reason from spare capacity (ceiling minus current load) and the plan track, and state the assumptions you used. Flag over-allocation (load above the ceiling) and projects whose allocated + open-request demand exceeds plan. If no live data block is present, say the workspace has no data loaded yet and suggest loading sample data or importing.\n\n" + CTX.workforce,
+    fallback: (q) =>
+      /over.?alloc|overload|too much|capacity/i.test(q) ? "Open the People view and sort by load — anyone above 100% for the selected month is over-allocated against the 110% ceiling. Load sample data first if the workspace is empty."
+      : /what.?if|add|hire|scenario/i.test(q) ? "For a What-If, check the discipline with spare capacity on the Portfolio view (people below ~95% load), then use a resource request to place that headroom on a project. I can reason over the exact numbers once data is loaded."
+      : "Workforce Intelligence tracks allocation vs plan, per-person utilisation and open resource requests. Load sample data or import your people and Microsoft Project baselines, then ask me who has capacity or which projects breach plan.",
+  },
+  finance: {
+    subject: "Revenue Forecast", accent: "var(--green)",
+    intro: "Ask about committed vs at-risk revenue, a quarter, or what's dragging the forecast.",
+    suggestions: ["What's committed this quarter?", "How much revenue is at risk?", "Which quarter looks weakest?"],
+    system: "You help a GM read a point-in-time, blocker-aware revenue forecast: committed (clear) vs at-risk (blocked) by quarter and month. Be concise and decision-oriented.\n\n" + CTX.thread,
+    fallback: (q, c) => {
+      if (!c) return "The forecast splits pipeline into committed (no open blocker) and at-risk (an open blocker on the order). Clearing blockers converts at-risk revenue to committed.";
+      return `Across the forecast horizon: ${fmtMoney(c.expected)} total pipeline — ${fmtMoney(c.committed)} committed (clear) and ${fmtMoney(c.blocked)} at risk from open blockers. Clearing the highest-value blockers moves at-risk into committed. Filter by site on the Forecast page for per-location numbers and the per-quarter split.`;
+    },
+  },
+};
+
+/* ---- Docked, minimizable, subject-aware assistant (on every page) ---- */
+function DockedAssistant({ route, chat, update, open, setOpen, botCtx, snapshot, backend }) {
+  const cfg = ASSISTANT[route] || ASSISTANT.home;
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const endRef = useRef(null);
+  const msgs = chat?.msgs || [];
+  const hist = chat?.hist || [];
+  useEffect(() => { if (open) endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy, open, route]);
+
+  const [listening, setListening] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const [convo, setConvo] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const recogRef = useRef(null);
+  const convoRef = useRef(false);
+  const voiceRef = useRef(false);
+  useEffect(() => { convoRef.current = convo; }, [convo]);
+  useEffect(() => { voiceRef.current = voiceOn; }, [voiceOn]);
+  const sttOk = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+  const ttsOk = typeof window !== "undefined" && window.speechSynthesis;
+
+  function startListen() {
+    if (!sttOk) return;
+    window.speechSynthesis && window.speechSynthesis.cancel();
+    let r = recogRef.current;
+    if (!r) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      r = new SR();
+      r.lang = "en-US"; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+      r.onresult = (e) => {
+        let interim = "", final = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) final += t; else interim += t;
+        }
+        if (final) { setInput(""); setListening(false); send(final); }
+        else setInput(interim);
+      };
+      r.onend = () => setListening(false);
+      r.onerror = (ev) => { setListening(false); if (ev.error === "not-allowed" || ev.error === "service-not-allowed") setConvo(false); };
+      recogRef.current = r;
+    }
+    try { r.start(); setListening(true); } catch (_) {}
+  }
+  const stopListen = () => { try { recogRef.current && recogRef.current.stop(); } catch (_) {} setListening(false); };
+
+  const speak = (text) => {
+    if (!ttsOk) { if (convoRef.current) startListen(); return; }
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(String(text).replace(/[*_#`>]/g, ""));
+    u.rate = 1.03; u.pitch = 1;
+    const vs = synth.getVoices();
+    const v = vs.find((x) => /Samantha|Google US English|Microsoft (Aria|Jenny|Zira)/i.test(x.name)) || vs.find((x) => /^en/i.test(x.lang));
+    if (v) u.voice = v;
+    u.onend = () => { setSpeaking(false); if (convoRef.current) startListen(); };
+    u.onerror = () => { setSpeaking(false); };
+    setSpeaking(true);
+    synth.speak(u);
+  };
+
+  const toggleMic = () => {
+    if (convo || listening) { setConvo(false); stopListen(); window.speechSynthesis && window.speechSynthesis.cancel(); setSpeaking(false); }
+    else { setConvo(true); setVoiceOn(true); startListen(); }
+  };
+  const toggleVoice = () => { setVoiceOn((v) => { const nv = !v; if (!nv) { window.speechSynthesis && window.speechSynthesis.cancel(); setSpeaking(false); } return nv; }); };
+
+  useEffect(() => () => { try { recogRef.current && recogRef.current.abort(); } catch (_) {} window.speechSynthesis && window.speechSynthesis.cancel(); }, []);
+  useEffect(() => { if (!open) { setConvo(false); stopListen(); window.speechSynthesis && window.speechSynthesis.cancel(); setSpeaking(false); } }, [open]);
+  useEffect(() => { setConvo(false); stopListen(); window.speechSynthesis && window.speechSynthesis.cancel(); setSpeaking(false); }, [route]);
+
+  const send = async (text) => {
+    const q = (text ?? input).trim();
+    if (!q || busy) return;
+    setInput("");
+    update(route, (c) => ({ ...c, msgs: [...c.msgs, { role: "user", text: q }] }));
+    setBusy(true);
+    // Signed-in requests receive organization-scoped context from Postgres in
+    // /api/ai/chat. Do not resend the complete browser snapshot: it can exceed
+    // ChatIn.system's validation limit and is not the authoritative data source.
+    const screenCtx = (!backend && route === "thread" && typeof window !== "undefined" && window.__twDigitalThreadCtx && window.__twDigitalThreadCtx.combined) ? "\n\n" + window.__twDigitalThreadCtx.combined : "";
+    const wfCtx = (!backend && route === "workforce" && typeof window !== "undefined" && window.__twWorkforceCtx) ? "\n\n" + window.__twWorkforceCtx : "";
+    const liveGuard = backend
+      ? "\n\nSIGNED-IN MODE: Ignore sample/demo records embedded earlier. "
+        + "Use the COMPACT LIVE DELIVERY CONTEXT and server database context as authoritative. "
+        + "Never invent today's date, a week range, an effective promise date, or a revenue total. "
+        + "Use the exact precomputed values supplied in the context."
+      : "";
+    const resolvedSnapshot = typeof snapshot === "function" ? snapshot(q) : snapshot;
+    const clientSnapshot = resolvedSnapshot ? "\n\n" + resolvedSnapshot : "";
+    const sys = cfg.system + liveGuard + clientSnapshot + screenCtx + wfCtx;
+    let out;
+    let offline = false;
+    try {
+      out = await askClaude(sys, q, hist, route);
+    } catch (e) {
+      if (backend) {
+        out = `AI assistant unavailable: ${e?.message || "provider error"}`;
+      } else {
+        out = cfg.fallback(q, botCtx);
+        offline = true;
+      }
+    }
+    update(route, (c) => ({
+      msgs: [...c.msgs, { role: "bot", text: out, offline }],
+      hist: [...c.hist, { role: "user", content: q }, { role: "assistant", content: out }].slice(-8),
+    }));
+    setBusy(false);
+    if (voiceRef.current) speak(out);
+    else if (convoRef.current) startListen();
+  };
+
+  /* minimized pill */
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="tf-fade"
+        style={{
+          position: "fixed", bottom: 22, right: 22, zIndex: 60, cursor: "pointer",
+          display: "flex", alignItems: "center", gap: 10, padding: "12px 18px 12px 12px",
+          borderRadius: 999, border: "1px solid var(--line2)",
+          background: "linear-gradient(180deg,var(--panel),var(--bg2))",
+          boxShadow: "0 18px 50px -18px rgba(21,34,45,.28)", color: "var(--ink)",
+        }}>
+        <span style={{ width: 32, height: 32, borderRadius: 999, background: cfg.accent, display: "grid", placeItems: "center", position: "relative" }}>
+          <Bot size={18} color="#0a0e15" />
+          {msgs.length > 0 && <span className="tf-live-dot" style={{ position: "absolute", top: -1, right: -1, border: "2px solid var(--panel)" }} />}
+        </span>
+        <span style={{ textAlign: "left", lineHeight: 1.1 }}>
+          <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", display: "block" }}>Ask AI ·</span>
+          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{cfg.subject}</span>
+        </span>
+      </button>
+    );
+  }
+
+  /* expanded panel */
+  return (
+    <div className="tf-fade" style={{
+      position: "fixed", bottom: 22, right: 22, zIndex: 60,
+      width: "min(390px, calc(100vw - 32px))", height: "min(560px, calc(100vh - 110px))",
+      display: "flex", flexDirection: "column", overflow: "hidden",
+      borderRadius: 16, border: "1px solid var(--line2)",
+      background: "linear-gradient(180deg,var(--panel),var(--bg2))",
+      boxShadow: "0 30px 80px -24px rgba(21,34,45,.3)",
+    }}>
+      {/* header */}
+      <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 9 }}>
+        <div style={{ width: 28, height: 28, borderRadius: 8, background: cfg.accent, display: "grid", placeItems: "center" }}>
+          <Bot size={16} color="#0a0e15" />
+        </div>
+        <div style={{ lineHeight: 1.1 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>{cfg.subject} AI</div>
+          <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", display: "flex", alignItems: "center", gap: 5 }}>
+            <span className="tf-live-dot" style={{ width: 6, height: 6 }} /> scoped to this page
+          </div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+          {ttsOk && (
+            <button title={voiceOn ? "Mute spoken replies" : "Speak replies aloud"} onClick={toggleVoice}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: voiceOn ? cfg.accent : "var(--faint)", padding: 6, borderRadius: 8 }}>
+              {voiceOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            </button>
+          )}
+          {msgs.length > 0 && (
+            <button title="Clear" onClick={() => update(route, () => ({ msgs: [], hist: [] }))}
+              style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--faint)", padding: 6, borderRadius: 8 }}>
+              <Trash2 size={15} />
+            </button>
+          )}
+          <button title="Minimize" onClick={() => setOpen(false)}
+            style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--muted)", padding: 6, borderRadius: 8 }}>
+            <Minus size={17} />
+          </button>
+        </div>
+      </div>
+
+      {/* messages */}
+      <div className="tf-scroll" style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 11 }}>
+        {msgs.length === 0 && (
+          <div style={{ color: "var(--faint)", textAlign: "center", marginTop: 22 }}>
+            <Sparkles size={22} color={cfg.accent} style={{ marginBottom: 8 }} />
+            <div style={{ fontSize: 13, lineHeight: 1.5, padding: "0 8px" }}>{cfg.intro}</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, justifyContent: "center", marginTop: 14 }}>
+              {cfg.suggestions.map((s) => (
+                <button key={s} onClick={() => send(s)} className="tf-btn tf-btn-ghost" style={{ fontSize: 11.5, padding: "6px 10px" }}>{s}</button>
+              ))}
+            </div>
+          </div>
+        )}
+        {msgs.map((m, i) => (
+          <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "88%" }}>
+            <div style={{
+              padding: "9px 12px", borderRadius: 12, fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap",
+              background: m.role === "user" ? "var(--panel2)" : "var(--bg2)",
+              border: "1px solid", borderColor: m.role === "user" ? "var(--line2)" : "var(--line)",
+            }}>{m.text}</div>
+            {m.offline && <div className="tf-mono" style={{ fontSize: 9, color: "var(--faint)", marginTop: 3 }}>offline demo reasoning</div>}
+          </div>
+        ))}
+        {busy && <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>thinking<span style={{ animation: "tfPulse 1s infinite" }}>…</span></div>}
+        <div ref={endRef} />
+      </div>
+
+      {/* input */}
+      <div style={{ padding: 11, borderTop: "1px solid var(--line)", display: "flex", gap: 7, alignItems: "center" }}>
+        {sttOk && (
+          <button onClick={toggleMic} title={convo || listening ? "Stop voice conversation" : "Talk to the assistant"}
+            style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center", cursor: "pointer",
+              border: "1px solid " + (listening || convo ? "var(--red)" : "var(--line2)"),
+              background: listening || convo ? "rgba(240,86,58,.16)" : "var(--bg2)",
+              color: listening || convo ? "var(--red)" : "var(--muted)",
+              animation: listening ? "tfPulse 1.1s infinite" : "none" }}>
+            {convo || listening ? <Mic size={16} /> : <MicOff size={16} />}
+          </button>
+        )}
+        <input className="tf-input" value={input}
+          placeholder={listening ? "Listening…" : speaking ? "Speaking…" : `Ask about ${cfg.subject.toLowerCase()}…`}
+          onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
+        <button className="tf-btn tf-btn-primary" onClick={() => send()} disabled={busy} style={{ padding: "10px 13px" }}>
+          <Send size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------- HOME ------------------------------------- */
+/* Delivery product pricing — shown on the Delivery product page. */
+const DELIVERY_TIERS = [
+  { key: "diagnostic", label: "Revenue at Risk\nDiagnostic", price: "$2,500", period: "one-time", note: "Credited toward pilot", included: ["ERP/CSV data extracts", "Exposure map — committed vs blocked", "Data-health score", "Top blocker list", "Pilot design session"], highlight: false, cta: "Request a diagnostic" },
+  { key: "core", label: "Threadwire Core", price: "$24,000", period: "/ year", note: "+ onboarding fee", included: ["Single site", "Broad viewer access", "CSV / SFTP integration", "Delivery calendar & blocker workspace", "Standard dashboards"], highlight: false, cta: "Get in touch" },
+  { key: "pro", label: "Threadwire Pro", price: "$48,000", period: "/ year", note: "+ onboarding fee", included: ["Multiple sites", "API integration", "AI assistant", "Blocker-aware revenue forecast", "Advanced prioritization", "Quarterly value review"], highlight: true, cta: "Get in touch" },
+  { key: "enterprise", label: "Enterprise", price: "Custom", period: "", note: "Contact us", included: ["Multi-site, multi-ERP", "SSO / SCIM / SLA", "Data warehouse integration", "Advanced governance", "Enterprise success plan"], highlight: false, cta: "Get in touch" },
+];
+
+function Home({ go, onContact }) {
+  return (
+    <div>
+      {/* HERO */}
+      <div className="tf-grid-bg tf-fade" style={{ borderBottom: "1px solid var(--line)" }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "70px 22px 54px" }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 18 }}>ai-powered operational intelligence for engineering &amp; manufacturing</div>
+          <h1 className="tf-disp" style={{ fontSize: "clamp(30px,4.8vw,56px)", fontWeight: 800, maxWidth: 960, margin: 0, lineHeight: 1.08 }}>
+            One AI-powered thread connecting what you design, who builds it, and what ships.
+          </h1>
+          <p style={{ color: "var(--muted)", fontSize: 18, lineHeight: 1.65, maxWidth: 700, margin: "22px 0 10px" }}>
+            Threadwire overlays the systems you already run — ERP, MES, PLM, project plans — and turns their data into decisions: what's at risk of missing, why, what it costs, and who's accountable for recovery. Three products, one thread from order to part to work order to blocker to owner - using AI to predict risk, explain business impact, and recommend action before commitments slip.
+          </p>
+          <p style={{ color: "var(--faint)", fontSize: 15, lineHeight: 1.6, maxWidth: 700, margin: "0 0 32px" }}>
+            Use all three products together for one connected operational view, or deploy any product independently. Every product includes a page-aware AI assistant for contextual What-If analysis.
+          </p>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <button className="tf-btn tf-btn-primary" onClick={() => { const el = document.getElementById("products"); el && el.scrollIntoView({ behavior: "smooth" }); }}>
+              Explore the products <ArrowRight size={16} />
+            </button>
+            <button className="tf-btn tf-btn-ghost" onClick={onContact}>Get in touch</button>
+          </div>
+        </div>
+      </div>
+
+      {/* THE GAP + THE LOOP */}
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "56px 22px 0" }}>
+        <div className="tf-eyebrow" style={{ marginBottom: 8 }}>The gap we close</div>
+        <h2 className="tf-disp" style={{ fontSize: 30, fontWeight: 800, margin: "0 0 10px", maxWidth: 820 }}>Systems of record and dashboards — but no closed loop for execution risk and ownership.</h2>
+        <p style={{ color: "var(--muted)", fontSize: 15, lineHeight: 1.65, margin: "0 0 8px", maxWidth: 760 }}>
+          Reports tell you what happened; nobody owns what happens next. That's the white space Threadwire fills. We don't replace your data stack or your ERP — we sit above them and carry the work the last mile: from insight, to a prioritized action, to a named owner. Think Palantir-class execution outcomes, focused on a specific manufacturing problem — without the platform program.
+        </p>
+        <p style={{ color: "var(--faint)", fontSize: 14, lineHeight: 1.6, margin: "0 0 26px", maxWidth: 760 }}>
+          Operational intelligence is a loop, not a dashboard. Most tools stop at <b style={{ color: "var(--muted)" }}>Understand</b>. Threadwire carries it through <b style={{ color: "var(--amber)" }}>Recommend and Act</b> — with accountability.
+        </p>
+
+        <div className="tf-panel" style={{ padding: "20px 22px", marginBottom: 6, display: "flex", gap: 10, alignItems: "stretch", flexWrap: "wrap" }}>
+          {[
+            { n: "Observe", d: "Connect ERP / MES / PLM / order facts" },
+            { n: "Understand", d: "Map entities, blockers & dependencies" },
+            { n: "Predict", d: "Surface delivery & revenue risk" },
+            { n: "Recommend", d: "Prioritize actions and trade-offs", hot: true },
+            { n: "Act", d: "Assign owners, track recovery", hot: true },
+            { n: "Learn", d: "Improve playbooks & rules" },
+          ].map((s, i, arr) => (
+            <React.Fragment key={s.n}>
+              <div style={{ flex: "1 1 150px", minWidth: 140 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 6 }}>
+                  <span className="tf-mono" style={{ width: 20, height: 20, borderRadius: 99, display: "grid", placeItems: "center", fontSize: 11, background: s.hot ? "var(--amber)" : "var(--bg2)", color: s.hot ? "#fff" : "var(--faint)", border: s.hot ? "none" : "1px solid var(--line2)", flexShrink: 0 }}>{i + 1}</span>
+                  <span className="tf-disp" style={{ fontSize: 14.5, fontWeight: 800, color: s.hot ? "var(--amber)" : "var(--ink)" }}>{s.n}</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.45 }}>{s.d}</div>
+              </div>
+              {i < arr.length - 1 && <ArrowRight size={15} color="var(--line2)" style={{ alignSelf: "center", flexShrink: 0 }} />}
+            </React.Fragment>
+          ))}
+        </div>
+        <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginBottom: 4 }}>The loop closes only when insight becomes ownership and action.</div>
+      </div>
+
+      {/* THREE PRODUCTS */}
+      <div id="products" style={{ maxWidth: 1180, margin: "0 auto", padding: "54px 22px 0" }}>
+        <div className="tf-eyebrow" style={{ marginBottom: 8 }}>The platform</div>
+        <h2 className="tf-disp" style={{ fontSize: 30, fontWeight: 800, margin: "0 0 6px" }}>Three products that share one operational thread</h2>
+        <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 26px", maxWidth: 720 }}>
+          Buy the whole platform for one connected view, or license a single product. Open a product page to see why it exists, the AI assistant inside it, and its agentic workflows.
+        </p>
+
+        <div className="tf-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 16, marginBottom: 20 }}>
+          {[
+            {
+              key: "op", icon: Activity, tone: "var(--amber)", name: "Delivery Intelligence",
+              tag: "Delivery Risk & Cash",
+              line: "Will it ship — and what does it cost if it doesn't?",
+              points: ["Blocker-aware delivery calendar", "Committed vs at-risk revenue, live", "Root cause and the owner on the hook"],
+              q: "What won't ship this quarter, and what's the cash impact?",
+              route: "product-delivery", cta: "Explore Delivery",
+            },
+            {
+              key: "wf", icon: Users2, tone: "var(--thread)", name: "Workforce Intelligence",
+              tag: "Allocation & Capacity",
+              line: "Who's on what, and where the plan won't hold.",
+              points: ["Allocation vs plan by project", "Per-person utilisation & spare capacity", "Import people, projects & MS Project baselines"],
+              q: "Do we have the people to hit the plan?",
+              route: "product-workforce", cta: "Explore Workforce",
+            },
+            {
+              key: "rq", icon: ClipboardList, tone: "var(--blue)", name: "Requirements Intelligence",
+              tag: "Trace & Verification",
+              line: "What's specified, and what's still unverified.",
+              points: ["AI-drafted parent/child requirement trees", "Coverage, conflicts & verification gaps", "Trace to tests, design and change"],
+              q: "Which requirements aren't verified yet — and what's blocking them?",
+              route: "product-requirements", cta: "Explore Requirements",
+            },
+          ].map((p) => (
+            <div key={p.key} className="tf-tile" style={{ padding: 22, display: "flex", flexDirection: "column" }}>
+              <div className="tf-tile-glow" style={{ background: p.tone }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: "var(--bg2)", border: `1px solid ${p.tone}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <p.icon size={23} color={p.tone} />
+                </div>
+                <div>
+                  <div className="tf-mono" style={{ fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: p.tone }}>{p.tag}</div>
+                  <div className="tf-disp" style={{ fontSize: 19, fontWeight: 800 }}>{p.name}</div>
+                </div>
+              </div>
+              <p style={{ fontSize: 14, color: "var(--ink)", lineHeight: 1.5, margin: "0 0 14px", fontWeight: 500 }}>{p.line}</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+                {p.points.map((pt) => (
+                  <div key={pt} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, color: "var(--muted)", lineHeight: 1.4 }}>
+                    <CheckCircle2 size={14} color={p.tone} style={{ flexShrink: 0, marginTop: 1 }} /> {pt}
+                  </div>
+                ))}
+              </div>
+              <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginBottom: 16 }}>
+                <div className="tf-mono" style={{ fontSize: 9.5, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--faint)", marginBottom: 4 }}>Answers</div>
+                <div style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.45, fontStyle: "italic" }}>"{p.q}"</div>
+              </div>
+              <button className="tf-btn tf-btn-primary tf-tile-arrow" style={{ marginTop: "auto", justifyContent: "center" }} onClick={() => go(p.route)}>
+                {p.cta} <ArrowRight size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* THREAD — THE WHAT-IF ASSISTANT */}
+        <div className="tf-panel" style={{ padding: 0, marginBottom: 20, overflow: "hidden", border: "1px solid var(--line2)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(280px,1fr) minmax(280px,1.05fr)", gap: 0 }}>
+            <div style={{ padding: "26px 26px 24px", background: "linear-gradient(135deg,rgba(42,70,196,.06),rgba(62,111,224,.02))" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 11, background: "var(--bg2)", border: "1px solid var(--thread)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <Sparkles size={20} color="var(--thread)" />
+                </div>
+                <div className="tf-mono" style={{ fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--thread)" }}>The AI, built in</div>
+              </div>
+              <h2 className="tf-disp" style={{ fontSize: 24, fontWeight: 800, margin: "0 0 10px", lineHeight: 1.15 }}>Meet Thread — the What-If assistant in every product</h2>
+              <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6, margin: "0 0 12px" }}>
+                Thread is page-aware. It sees the same live data you do and reasons over it — your actual allocations, commitments, blockers and requirements — not a generic chatbot bolted on top. Ask a what-if and it makes the trade-offs explicit.
+              </p>
+              <p className="tf-mono" style={{ color: "var(--faint)", fontSize: 11.5, lineHeight: 1.55, margin: 0 }}>
+                Grounded in your data · every answer cites the order, blocker, person or requirement behind it.
+              </p>
+            </div>
+            <div style={{ padding: "24px 26px", display: "flex", flexDirection: "column", gap: 10, justifyContent: "center" }}>
+              {[
+                "Pull two engineers off Aurora — what slips, and who's now overloaded?",
+                "Push this order two weeks — what's the revenue impact and which commitments move?",
+                "Reassign this blocker — who owns recovery, and does the plan still hold?",
+              ].map((ex) => (
+                <div key={ex} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "11px 13px", borderRadius: 10, background: "var(--bg2)", border: "1px solid var(--line)" }}>
+                  <Sparkles size={14} color="var(--thread)" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <span style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.45 }}>{ex}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* bundle / separate */}
+        <div className="tf-panel" style={{ padding: "18px 22px", marginBottom: 48, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", background: "linear-gradient(90deg,rgba(42,70,196,.05),rgba(62,111,224,.03))" }}>
+          <Boxes size={18} color="var(--amber)" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>Run them together, or one at a time</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)" }}>Run all three and they share one thread — the same customers, orders, parts, people and commitments — so a delivery risk, a capacity gap and an unverified requirement line up on the same screen. Or license any one on its own and add the others later.</div>
+          </div>
+          <button className="tf-btn" onClick={onContact} style={{ flexShrink: 0 }}>Discuss licensing <ArrowRight size={15} /></button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 22px 0" }}>
+
+        {/* ERP OVERLAY BANNER */}
+        <div className="tf-panel" style={{ padding: "18px 22px", marginBottom: 48, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", borderColor: "var(--line2)", background: "linear-gradient(90deg,rgba(72,214,200,.06),rgba(255,138,61,.04))" }}>
+          <Plug size={18} color="var(--thread)" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>Complements your stack — doesn't replace it</div>
+            <div style={{ fontSize: 13.5, color: "var(--muted)" }}>Sit Threadwire above your ERP, MES, PLM or data platform. It ingests from Odoo, MRPeasy, JobBOSS, Sage, Epicor SMB, legacy SQL and Excel — adding the manufacturing operating model and execution workflow, not another platform to migrate to.</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {["Odoo", "MRPeasy", "JobBOSS", "Sage", "Epicor SMB", "Legacy SQL"].map((n) => (
+              <span key={n} className="tf-chip">{n}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* PER-PRODUCT PRICING POINTER (whole-platform pricing removed) */}
+        <div style={{ marginBottom: 60 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Pricing</div>
+          <h2 className="tf-disp" style={{ fontSize: 28, fontWeight: 800, margin: "0 0 8px" }}>Priced per product</h2>
+          <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 24px", maxWidth: 680 }}>
+            Each product is licensed on its own. Open a product page for its pricing and packaging, or get in touch and we'll scope the right combination.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 14 }}>
+            {PRODUCT_ORDER.map((k) => {
+              const p = PRODUCTS[k];
+              return (
+                <div key={k} className="tf-panel" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 11, background: "var(--bg2)", border: `1px solid ${p.tone}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                      <p.icon size={20} color={p.tone} />
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{p.name}</div>
+                  </div>
+                  <button className="tf-btn" style={{ justifyContent: "center" }} onClick={() => go(p.marketingRoute)}>See {p.short} pricing <ArrowRight size={14} /></button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+      </div>
+
+      {/* FOOTER */}
+      <div style={{ borderTop: "1px solid var(--line)", background: "var(--bg2)" }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "32px 22px", display: "flex", alignItems: "flex-start", gap: 40, flexWrap: "wrap" }}>
+          <div style={{ flex: "0 0 220px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center" }}>
+                <Workflow size={15} color="#0a0e15" strokeWidth={2.4} />
+              </div>
+              <span className="tf-disp" style={{ fontWeight: 800, fontSize: 17 }}>{BRAND}</span>
+            </div>
+            <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", lineHeight: 1.6 }}>
+              Manufacturing Delivery Control.<br />
+              Protect customer commitments<br />and revenue.
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 40, flexWrap: "wrap", flex: 1 }}>
+            {[
+              { heading: "Products", links: [["Delivery Intelligence", "product-delivery"], ["Workforce Intelligence", "product-workforce"], ["Requirements Intelligence", "product-requirements"]] },
+              { heading: "Company", links: [["ROI Calculator", "roi"], ["Case studies", "@case-studies"]] },
+              { heading: "Contact", links: [["Get in touch", null]] },
+            ].map((col) => (
+              <div key={col.heading}>
+                <div className="tf-eyebrow" style={{ marginBottom: 12 }}>{col.heading}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {col.links.map(([label, route]) => (
+                    <span key={label}
+                      onClick={route && route.startsWith("@") ? () => { window.location.href = "/" + route.slice(1); }
+                        : route ? () => go(route) : label === "Get in touch" ? onContact : undefined}
+                      style={{ fontSize: 13, color: "var(--muted)", cursor: (route || label === "Get in touch") ? "pointer" : "default" }}
+                      className={(route || label === "Get in touch") ? "tf-link" : ""}>{label}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "16px 22px 20px", display: "flex", gap: 12, alignItems: "center", borderTop: "1px solid var(--line)" }}>
+          <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>© 2026 Threadwire · threadwire.ai</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+   PRODUCT MARKETING PAGES
+   Products ▸ Delivery / Workforce / Requirements. Each page covers: why the
+   product exists, the built-in AI assistant, its agentic workflows, and
+   pricing (Delivery shows tiers; the others route to the contact form with the
+   product pre-selected).
+   ========================================================================= */
+const PRODUCT_CONTENT = {
+  delivery: {
+    eyebrow: "Product · Delivery Intelligence",
+    hero: "Protect every delivery commitment — and the revenue behind it.",
+    sub: "Delivery Intelligence overlays your ERP, MES and project data to show what's at risk of missing its promise date, why, what it costs, and who owns the recovery. It includes the Digital Thread — the connected view of orders, work orders, BOMs, ECOs and POs behind every commitment.",
+    why: {
+      problem: "Your ERP records the order. Nothing owns the delivery.",
+      body: "Systems of record tell you what was promised and dashboards tell you what already slipped — but between those two, execution risk lives in spreadsheets, status calls and someone's memory. By the time a blocker surfaces, the revenue is already exposed and the customer is already calling.",
+      points: [
+        ["Blocker-aware delivery calendar", "Every sales order on a calendar by promise date; orders with an open blocker show the revenue at risk."],
+        ["Committed vs at-risk revenue, live", "See committed and blocked value by site and quarter, recalculated as blockers and revised dates change."],
+        ["Digital Thread behind every order", "Trace an at-risk order down through its work orders, BOM, ECOs and POs to find the real constraint."],
+        ["Ownership, not just insight", "Every blocker has an owner, an action and a revised date — recovery is tracked, not assumed."],
+      ],
+    },
+    assistant: {
+      name: "Thread — for Delivery",
+      body: "The page-aware assistant reasons over your actual orders, blockers and promise dates — never a generic chatbot. Ask a what-if and it makes the trade-off explicit, citing the exact orders and revenue behind the answer.",
+      examples: [
+        "What won't ship this quarter, and what's the cash impact?",
+        "Push SO-4471 two weeks — what revenue moves and which commitments are affected?",
+        "Reassign this blocker — who owns recovery, and does the plan still hold?",
+      ],
+    },
+    workflows: [
+      ["Revenue-at-risk triage", "Continuously ranks open blockers by revenue exposure and age, so the team works the most expensive problems first."],
+      ["Root-cause tracing", "Walks the Digital Thread from a late order to the constraining work order, part or PO and names the likely cause."],
+      ["Recovery drafting", "Proposes a recovery action and owner for each blocker, with a revised date, for a human to approve or adjust."],
+      ["Forecast reconciliation", "Rebuilds the blocker-aware revenue forecast as dates shift, flagging quarters that just fell out of commit."],
+    ],
+    pricing: "tiers",
+  },
+  workforce: {
+    eyebrow: "Product · Workforce Intelligence",
+    hero: "See who's on what — and where the plan won't hold.",
+    sub: "Workforce Intelligence connects your people, projects and schedule baselines to show allocation against plan, per-person utilisation and where capacity runs out before the work does.",
+    why: {
+      problem: "Project plans assume people. Reality allocates them.",
+      body: "A schedule can look green while the people it depends on are triple-booked. Allocation lives across MS Project files, resource spreadsheets and team leads' heads — so over-allocation and idle capacity only surface after a milestone is already at risk.",
+      points: [
+        ["Allocation vs plan by project", "See planned versus actual allocation across every project, with the gaps highlighted."],
+        ["Per-person utilisation & spare capacity", "Spot who's over-committed and where there's slack to redeploy, at a glance."],
+        ["Import people, projects & baselines", "Bring in team rosters, project plans and MS Project baselines rather than rebuilding them."],
+        ["Capacity risk, early", "Surface the point where demand exceeds capacity before the milestone depends on it."],
+      ],
+    },
+    assistant: {
+      name: "Thread — for Workforce",
+      body: "The assistant sees your live allocations and plan, so what-if staffing questions get grounded answers — which projects slip, who becomes overloaded, and where the spare capacity is.",
+      examples: [
+        "Pull two engineers off Aurora — what slips, and who's now overloaded?",
+        "Do we have the people to hit the Q3 plan as staffed today?",
+        "Who has spare capacity for a two-week critical task next month?",
+      ],
+    },
+    workflows: [
+      ["Over-allocation detection", "Continuously scans allocation against capacity and flags people and weeks that are over-committed."],
+      ["Rebalancing proposals", "Suggests reallocations that relieve overload using available spare capacity, for a lead to approve."],
+      ["Baseline drift watch", "Compares current allocation to the imported plan baseline and surfaces where reality has diverged."],
+      ["Scenario staffing", "Models a staffing change end-to-end so the schedule and utilisation impact are visible before you commit."],
+    ],
+    pricing: "contact",
+  },
+  requirements: {
+    eyebrow: "Product · Requirements Intelligence",
+    hero: "Know what's specified — and what's still unverified.",
+    sub: "Requirements Intelligence helps engineering teams draft, decompose and verify requirements with AI in the loop — surfacing coverage gaps, conflicts and unverified items, with traceability enforced by the workflow rather than the model.",
+    why: {
+      problem: "Requirements get breezed past early — and become technical debt later.",
+      body: "Decomposing parents into derived children and keeping everything traceable is judgment-heavy and tedious, so gaps accumulate quietly and get discovered in V&V, when they're expensive. The goal isn't to replace engineering judgment — it's to reach a reviewable first draft faster so the team spends its time scrutinising, not staring at a blank page.",
+      points: [
+        ["AI-drafted parent/child trees", "Propose derived requirements from a parent — each traced to exactly one parent with a stated rationale."],
+        ["Coverage, conflicts & gaps", "Surface requirements with no verification, conflicting constraints, or missing children."],
+        ["Trace to tests, design and change", "Keep the line from requirement to verification and downstream artifacts intact."],
+        ["Human owns every result", "Nothing enters the baseline until an engineer approves, rejects or edits it — the model drafts, the human decides."],
+      ],
+    },
+    assistant: {
+      name: "Thread — for Requirements",
+      body: "The assistant works over your actual requirement set, so it can point to the specific items that are unverified, conflicting or missing derived children — and explain the reasoning a reviewer needs to stay skeptical.",
+      examples: [
+        "Which requirements aren't verified yet — and what's blocking them?",
+        "Derive the children for this parent and show the rationale for each.",
+        "Where do two requirements conflict or overlap in scope?",
+      ],
+    },
+    workflows: [
+      ["Requirements extraction", "Pulls candidate requirements from specs, PDFs and documents with type and origin traceability, for review."],
+      ["Derivation assistant", "Decomposes a parent into traceable children, each with an engineering rationale and a link to exactly one parent."],
+      ["Test-case generation", "Drafts verification test cases and procedures from accepted requirements, each traced back to its requirement."],
+      ["CDRL drafting", "Drafts contract data deliverables in a provided format, populated from project data, for a human to finalise."],
+    ],
+    pricing: "contact",
+  },
+};
+
+function ProductPage({ productKey, go, onContact }) {
+  const p = PRODUCTS[productKey];
+  const c = PRODUCT_CONTENT[productKey];
+  const Icon = p.icon;
+  return (
+    <div>
+      {/* HERO */}
+      <div className="tf-grid-bg tf-fade" style={{ borderBottom: "1px solid var(--line)" }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "56px 22px 44px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--panel)", border: `1px solid ${p.tone}`, display: "grid", placeItems: "center" }}>
+              <Icon size={22} color={p.tone} />
+            </div>
+            <div className="tf-eyebrow" style={{ margin: 0 }}>{c.eyebrow}</div>
+          </div>
+          <h1 className="tf-disp" style={{ fontSize: "clamp(28px,4vw,46px)", fontWeight: 800, maxWidth: 900, margin: 0, lineHeight: 1.1 }}>{c.hero}</h1>
+          <p style={{ color: "var(--muted)", fontSize: 17, lineHeight: 1.6, maxWidth: 720, margin: "20px 0 28px" }}>{c.sub}</p>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <button className="tf-btn tf-btn-primary" onClick={() => onContact(productKey)}>Request a diagnostic <ArrowRight size={16} /></button>
+            <button className="tf-btn tf-btn-ghost" onClick={() => go("home")}>← All products</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "54px 22px 0" }}>
+        {/* WHY */}
+        <div style={{ marginBottom: 56 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Why it's needed</div>
+          <h2 className="tf-disp" style={{ fontSize: 28, fontWeight: 800, margin: "0 0 10px", maxWidth: 820 }}>{c.why.problem}</h2>
+          <p style={{ color: "var(--muted)", fontSize: 15, lineHeight: 1.65, margin: "0 0 26px", maxWidth: 780 }}>{c.why.body}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14 }}>
+            {c.why.points.map(([h, d]) => (
+              <div key={h} className="tf-panel" style={{ padding: 18 }}>
+                <div style={{ display: "flex", gap: 9, alignItems: "flex-start", marginBottom: 6 }}>
+                  <CheckCircle2 size={16} color={p.tone} style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div style={{ fontWeight: 700, fontSize: 14.5 }}>{h}</div>
+                </div>
+                <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55, paddingLeft: 25 }}>{d}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* AI ASSISTANT */}
+        <div className="tf-panel" style={{ padding: 0, marginBottom: 56, overflow: "hidden", border: "1px solid var(--line2)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(280px,1fr) minmax(280px,1.05fr)", gap: 0 }}>
+            <div style={{ padding: "28px 26px", background: "linear-gradient(135deg,rgba(42,70,196,.06),rgba(62,111,224,.02))" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 11, background: "var(--bg2)", border: `1px solid ${p.tone}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                  <Sparkles size={20} color={p.tone} />
+                </div>
+                <div className="tf-mono" style={{ fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: p.tone }}>The AI assistant</div>
+              </div>
+              <h2 className="tf-disp" style={{ fontSize: 23, fontWeight: 800, margin: "0 0 10px", lineHeight: 1.15 }}>{c.assistant.name}</h2>
+              <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6, margin: 0 }}>{c.assistant.body}</p>
+            </div>
+            <div style={{ padding: "24px 26px", display: "flex", flexDirection: "column", gap: 10, justifyContent: "center" }}>
+              {c.assistant.examples.map((ex) => (
+                <div key={ex} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "11px 13px", borderRadius: 10, background: "var(--bg2)", border: "1px solid var(--line)" }}>
+                  <Sparkles size={14} color={p.tone} style={{ flexShrink: 0, marginTop: 2 }} />
+                  <span style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.45 }}>{ex}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* AGENTIC WORKFLOWS */}
+        <div style={{ marginBottom: 56 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Agentic workflows</div>
+          <h2 className="tf-disp" style={{ fontSize: 28, fontWeight: 800, margin: "0 0 10px" }}>Work that runs itself — with a human in the loop</h2>
+          <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 24px", maxWidth: 740 }}>
+            Beyond answering questions, {p.short} runs purpose-built agents over your data. Each drafts and proposes; a person approves, edits or rejects before anything is committed.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14 }}>
+            {c.workflows.map(([h, d], i) => (
+              <div key={h} className="tf-panel" style={{ padding: 18, display: "flex", gap: 13 }}>
+                <div className="tf-mono" style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, display: "grid", placeItems: "center", fontSize: 12, background: "var(--bg2)", border: `1px solid ${p.tone}`, color: p.tone }}>{i + 1}</div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14.5, marginBottom: 4 }}>{h}</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55 }}>{d}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* PRICING */}
+        <div style={{ marginBottom: 60 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Pricing</div>
+          {c.pricing === "tiers" ? (
+            <>
+              <h2 className="tf-disp" style={{ fontSize: 26, fontWeight: 800, margin: "0 0 8px" }}>Site-based pricing. No per-seat friction.</h2>
+              <p style={{ color: "var(--muted)", fontSize: 14.5, margin: "0 0 26px", maxWidth: 680 }}>
+                Delivery needs planners, operations, finance and customer service to participate. Per-seat pricing would undermine the cross-functional workflow that creates the value.
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 14, alignItems: "start" }}>
+                {DELIVERY_TIERS.map((t) => (
+                  <div key={t.key} className="tf-panel" style={{ padding: 22, border: t.highlight ? `1px solid ${p.tone}` : "1px solid var(--line)", position: "relative" }}>
+                    {t.highlight && <div style={{ position: "absolute", top: 12, right: 12 }}><Tag tone="amber">Most popular</Tag></div>}
+                    <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.3, whiteSpace: "pre-line", marginBottom: 6 }}>{t.label}</div>
+                    <div className="tf-disp" style={{ fontSize: 30, fontWeight: 800, color: t.highlight ? p.tone : "var(--ink)", margin: "12px 0 2px", lineHeight: 1 }}>{t.price}</div>
+                    <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginBottom: 4 }}>{t.period}</div>
+                    <div className="tf-mono" style={{ fontSize: 11, color: "var(--thread)", marginBottom: 16 }}>{t.note}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+                      {t.included.map((item) => (
+                        <div key={item} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "var(--muted)", lineHeight: 1.4 }}>
+                          <CheckCircle2 size={14} color="var(--green)" style={{ flexShrink: 0, marginTop: 1 }} /> {item}
+                        </div>
+                      ))}
+                    </div>
+                    <button className={`tf-btn${t.highlight ? " tf-btn-primary" : ""}`} style={{ width: "100%", justifyContent: "center" }} onClick={() => onContact(productKey)}>{t.cta}</button>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="tf-panel" style={{ padding: "28px 26px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", background: "linear-gradient(90deg,rgba(42,70,196,.05),rgba(62,111,224,.03))" }}>
+              <div style={{ flex: 1, minWidth: 300 }}>
+                <h2 className="tf-disp" style={{ fontSize: 22, fontWeight: 800, margin: "0 0 8px" }}>Let's scope {p.short} to your team</h2>
+                <p style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.6, margin: 0, maxWidth: 620 }}>
+                  {p.short} is priced to your team size and rollout. Tell us a little about your environment and we'll put together pricing and a diagnostic.
+                </p>
+              </div>
+              <button className="tf-btn tf-btn-primary" style={{ flexShrink: 0 }} onClick={() => onContact(productKey)}>Contact for pricing <ArrowRight size={15} /></button>
+            </div>
+          )}
+        </div>
+
+        {/* CLOSING CTA */}
+        <div className="tf-panel" style={{ padding: "22px 24px", marginBottom: 64, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", background: "var(--bg2)" }}>
+          <Icon size={18} color={p.tone} />
+          <span style={{ fontSize: 14, color: "var(--muted)" }}>
+            <b style={{ color: "var(--ink)" }}>Want to see {p.short} on your data?</b> Start with a diagnostic — we'll map your exports and show the exposure before you commit.
+          </span>
+          <button className="tf-btn tf-btn-primary" style={{ marginLeft: "auto" }} onClick={() => onContact(productKey)}>Request a diagnostic <ArrowRight size={15} /></button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------- ASSETS ----------------------------------- */
+function AssetsPage({ tier, setTier, stage, setStage }) {
+  const [sel, setSel] = useState(ASSETS[0]);
+  const [live, setLive] = useState(false);
+  const [spc, setSpc] = useState(genSPC());
+  const target = 50, ucl = 53.2, lcl = 46.8;
+
+  useEffect(() => {
+    if (!(live && tier === "paid")) return;
+    const t = setInterval(() => {
+      setSpc((p) => {
+        const last = p[p.length - 1].i;
+        const v = +(target + (Math.random() - 0.5) * 2.4).toFixed(2);
+        return [...p.slice(-27), { i: last + 1, v }];
+      });
+    }, 1400);
+    return () => clearInterval(t);
+  }, [live, tier]);
+
+  const filtered = stage === "all" ? ASSETS : ASSETS.filter((a) => a.stage === stage);
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={Boxes} eyebrow="Module · Asset Management" title="Asset lifecycle management"
+        sub="Track every asset from plan to retire. Monitor OEE and health, pull PLC/HMI signals, and run SPC analysis on equipment measurement data."
+        tier={tier} setTier={setTier} />
+
+      {/* stage filter */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 22 }}>
+        <button onClick={() => setStage("all")} className="tf-btn tf-btn-ghost" style={{ padding: "7px 13px", borderColor: stage === "all" ? "var(--amber)" : undefined }}>All stages</button>
+        {LIFECYCLE.map((s) => (
+          <button key={s.k} onClick={() => setStage(s.k)} className="tf-btn tf-btn-ghost"
+            style={{ padding: "7px 13px", borderColor: stage === s.k ? "var(--amber)" : undefined, color: stage === s.k ? "var(--amber)" : undefined }}>
+            <s.icon size={14} /> {s.label}
+          </button>
+        ))}
+      </div>
+
+      {tier === "free" && (
+        <div className="tf-panel tf-fade" style={{ padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 10, background: "var(--bg2)" }}>
+          <Database size={16} color="var(--green)" />
+          <span style={{ fontSize: 13.5, color: "var(--muted)" }}>You're viewing the <b style={{ color: "var(--ink)" }}>bundled sample fleet</b>. SPC data is simulated. Switch to <b style={{ color: "var(--amber)" }}>Connected</b> to stream live PLC/HMI tags.</span>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1.4fr", gap: 18 }} className="tf-cols">
+        {/* asset table */}
+        <div className="tf-panel tf-fade" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center" }}>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Assets {stage !== "all" && `· ${LIFECYCLE.find((s) => s.k === stage)?.label}`}</span>
+            <span className="tf-chip" style={{ marginLeft: "auto" }}>{filtered.length} items</span>
+          </div>
+          <div className="tf-scroll" style={{ maxHeight: 430, overflowY: "auto" }}>
+            {filtered.map((a) => (
+              <div key={a.id} className="tf-row" onClick={() => setSel(a)} style={{
+                padding: "13px 16px", cursor: "pointer", borderBottom: "1px solid var(--line)",
+                background: sel.id === a.id ? "var(--panel2)" : "transparent", display: "flex", alignItems: "center", gap: 12,
+              }}>
+                <StatusDot tone={a.status} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{a.name}</div>
+                  <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{a.id} · {a.line}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div className="tf-mono" style={{ fontSize: 13, color: a.oee ? "var(--ink)" : "var(--faint)" }}>{a.oee ? a.oee + "%" : "—"}</div>
+                  <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>OEE</div>
+                </div>
+              </div>
+            ))}
+            {filtered.length === 0 && <div style={{ padding: 30, textAlign: "center", color: "var(--faint)" }}>No assets in this stage.</div>}
+          </div>
+        </div>
+
+        {/* detail + SPC */}
+        <div className="tf-fade" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <Cpu size={18} color="var(--amber)" />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{sel.name}</div>
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{sel.id} · {sel.line}</div>
+              </div>
+              <span style={{ marginLeft: "auto" }}><Tag tone={sel.status === "muted" ? "muted" : sel.status}>{LIFECYCLE.find((s) => s.k === sel.stage)?.label}</Tag></span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+              {[["OEE", sel.oee ? sel.oee + "%" : "—", Gauge], ["Health", sel.health + "%", Activity], ["Next PM", sel.next, Wrench]].map(([l, v, I]) => (
+                <div key={l} style={{ background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 11, padding: 12 }}>
+                  <I size={14} color="var(--muted)" />
+                  <div className="tf-disp" style={{ fontSize: 20, fontWeight: 700, marginTop: 6 }}>{v}</div>
+                  <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
+              <Tag tone="blue">PLC: Siemens S7-1500</Tag>
+              <Tag tone="thread">HMI: WinCC Unified</Tag>
+              <Tag tone="muted">42 tags mapped</Tag>
+            </div>
+          </div>
+
+          {/* SPC */}
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
+              <TrendingUp size={17} color="var(--thread)" />
+              <span style={{ fontWeight: 600, fontSize: 14 }}>SPC · X̄ control chart</span>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>bore Ø (µm dev)</span>
+              {tier === "paid" ? (
+                <button onClick={() => setLive((v) => !v)} className="tf-btn tf-btn-ghost"
+                  style={{ marginLeft: "auto", padding: "5px 11px", fontSize: 11.5, borderColor: live ? "var(--green)" : undefined, color: live ? "var(--green)" : undefined }}>
+                  {live && <span className="tf-live-dot" />} {live ? "Streaming" : "Start live"}
+                </button>
+              ) : <span className="tf-chip" style={{ marginLeft: "auto" }}>simulated</span>}
+            </div>
+            <ResponsiveContainer width="100%" height={190}>
+              <LineChart data={spc} margin={{ top: 6, right: 8, bottom: 0, left: -18 }}>
+                <CartesianGrid stroke="var(--line)" strokeDasharray="2 4" vertical={false} />
+                <XAxis dataKey="i" tick={{ fill: "var(--faint)", fontSize: 10, fontFamily: "var(--mono)" }} />
+                <YAxis domain={[44, 56]} tick={{ fill: "var(--faint)", fontSize: 10, fontFamily: "var(--mono)" }} />
+                <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line2)", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "var(--muted)" }} />
+                <ReferenceLine y={ucl} stroke="var(--red)" strokeDasharray="5 4" label={{ value: "UCL", fill: "var(--red)", fontSize: 10, position: "right" }} />
+                <ReferenceLine y={target} stroke="var(--thread)" strokeDasharray="2 2" label={{ value: "CL", fill: "var(--thread)", fontSize: 10, position: "right" }} />
+                <ReferenceLine y={lcl} stroke="var(--red)" strokeDasharray="5 4" label={{ value: "LCL", fill: "var(--red)", fontSize: 10, position: "right" }} />
+                <Line type="monotone" dataKey="v" stroke="var(--amber)" strokeWidth={2} dot={{ r: 2.5, fill: "var(--amber)" }} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+            <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 6 }}>
+              Cpk 1.18 · last 28 subgroups{spc.some((p) => p.v > ucl || p.v < lcl) ? " · ⚠ rule-1 violation detected" : " · in control"}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {tier === "paid" && (
+        <div style={{ marginTop: 22 }}>
+          <ConnectGate title="Connect equipment & asset data"
+            lines={[
+              "Stream live PLC/HMI tags via OPC-UA or MQTT for real-time SPC.",
+              "Sync the asset register and maintenance history from your CMMS / EAM.",
+              "Map equipment tags to characteristics for automatic control charts.",
+            ]}
+            connectors={[
+              { name: "OPC-UA Gateway", desc: "PLC tag streaming", icon: Cpu },
+              { name: "MQTT Broker", desc: "Sparkplug B", icon: Activity },
+              { name: "CMMS / EAM", desc: "Asset + PM history", icon: Wrench },
+            ]} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --------------------------- CONTRACTS ---------------------------------- */
+function ContractsPage({ tier, setTier }) {
+  const [sel, setSel] = useState(CONTRACTS[1]);
+  const [analysis, setAnalysis] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const analyze = async (c) => {
+    setBusy(true); setAnalysis(null);
+    const sys = "You are a contract analyst for a manufacturing company. Given a contract record, return a tight review: 3 key obligations, 1-2 risk flags, and the single most important date. Be concise and use short bullet lines.";
+    const text = `Contract: ${c.name}\nType: ${c.type}\nCounterparty: ${c.party}\nStatus: ${c.status}\nValue: ${c.value ? "$" + c.value.toLocaleString() : "n/a"}\nExpiry: ${c.expiry}`;
+    const out = await askClaude(sys, text);
+    setAnalysis(out || `Review · ${c.name}\n\nKey obligations:\n• Maintain confidentiality of disclosed technical data\n• Deliver per agreed lead times and quality spec\n• Provide change notification ahead of any substitution\n\nRisk flags:\n• ${c.risk === "high" ? "Uncapped liability language in scope clause" : c.risk === "med" ? "Auto-renewal with short opt-out window" : "Standard terms — low residual risk"}\n\nWatch date: ${c.expiry} (${c.status})`);
+    setBusy(false);
+  };
+
+  const statusTone = { Active: "green", Expiring: "yellow", "In Review": "blue", Draft: "muted", Expired: "red" };
+  const riskTone = { low: "green", med: "yellow", high: "red" };
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={ScrollText} eyebrow="Module · Contracts Lifecycle Management" title="Contracts lifecycle management"
+        sub="Author, review and track NDAs, MSAs, SOWs and supply agreements end to end. Let AI extract obligations, flag risky clauses and surface renewal dates."
+        tier={tier} setTier={setTier} />
+
+      {/* summary stats */}
+      <div className="tf-stagger" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 14, marginBottom: 22 }}>
+        {[["Active", CONTRACTS.filter((c) => c.status === "Active").length, "green"],
+          ["Expiring ≤90d", 1, "yellow"], ["In review", 1, "blue"],
+          ["Total value", fmtUSD(CONTRACTS.reduce((s, c) => s + c.value, 0)), "amber"]].map(([l, v, t]) => (
+          <div key={l} className="tf-panel" style={{ padding: 16 }}>
+            <div className="tf-disp" style={{ fontSize: 26, fontWeight: 800, color: `var(--${t})` }}>{v}</div>
+            <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 2 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18 }} className="tf-cols">
+        <div className="tf-panel tf-fade" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--line)", fontWeight: 600, fontSize: 14 }}>Repository</div>
+          <div className="tf-scroll" style={{ maxHeight: 440, overflowY: "auto" }}>
+            {CONTRACTS.map((c) => (
+              <div key={c.id} className="tf-row" onClick={() => { setSel(c); setAnalysis(null); }} style={{
+                padding: "13px 16px", cursor: "pointer", borderBottom: "1px solid var(--line)",
+                background: sel.id === c.id ? "var(--panel2)" : "transparent",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>{c.name}</span>
+                  <Tag tone={statusTone[c.status]}>{c.status}</Tag>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 6 }}>
+                  <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{c.id} · {c.type} · {c.party}</span>
+                  <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginLeft: "auto" }}>risk</span>
+                  <Tag tone={riskTone[c.risk]}>{c.risk}</Tag>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="tf-fade" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{sel.name}</div>
+            <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)", marginBottom: 14 }}>{sel.id} · {sel.party}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+              {[["Type", sel.type], ["Value", sel.value ? "$" + sel.value.toLocaleString() : "—"], ["Status", sel.status], ["Expiry", sel.expiry]].map(([l, v]) => (
+                <div key={l} style={{ background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 10, padding: "9px 11px" }}>
+                  <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{l}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <button className="tf-btn tf-btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => analyze(sel)} disabled={busy}>
+              <Sparkles size={15} /> {busy ? "Analyzing…" : "AI clause & obligation review"}
+            </button>
+          </div>
+
+          {(analysis || busy) && (
+            <div className="tf-panel tf-fade" style={{ padding: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <ShieldCheck size={16} color="var(--thread)" /><span style={{ fontWeight: 600, fontSize: 14 }}>AI review</span>
+              </div>
+              {busy ? <div className="tf-mono" style={{ color: "var(--faint)", fontSize: 13 }}>reading the agreement…</div>
+                : <div style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--muted)", whiteSpace: "pre-wrap" }}>{analysis}</div>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {tier === "paid" && (
+        <div style={{ marginTop: 22 }}>
+          <ConnectGate title="Bring in your real contracts"
+            lines={[
+              "Import an export from your CLM, or drop PDFs/DOCX for OCR + clause extraction.",
+              "Sync counterparties and renewal calendars to Outlook / Google Calendar.",
+              "Route approvals and e-signature through your existing workflow.",
+            ]}
+            connectors={[
+              { name: "DocuSign", desc: "E-signature status", icon: FileText },
+              { name: "SharePoint", desc: "Contract repository", icon: Database },
+              { name: "Salesforce CLM", desc: "Records + renewals", icon: ScrollText },
+            ]} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --------------------------- REQUIREMENTS ------------------------------- */
+function RequirementsPage({ tier, setTier }) {
+  const [connected, setConnected] = useState(false);
+  const [connecting, setConnecting] = useState(null);
+  const [sel, setSel] = useState(null);
+
+  const connect = (src) => {
+    setConnecting(src);
+    setTimeout(() => { setConnected(true); setConnecting(null); }, 1200);
+  };
+
+  const statusTone = { Verified: "green", "In Review": "blue", Open: "yellow" };
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={FileText} eyebrow="Module · Requirements" title="Requirements intelligence"
+        sub="Connect Jama Connect or IBM DOORS, then chat with your requirements in natural language. Trace each requirement to test cases, design artifacts and Jira issues."
+        tier={tier} setTier={setTier} />
+
+      {!connected ? (
+        <div className="tf-fade">
+          <div className="tf-eyebrow" style={{ marginBottom: 14 }}>Step 1 · Connect a requirements source</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 16, marginBottom: 24 }}>
+            {[
+              { src: "JAMA", name: "Jama Connect", desc: tier === "paid" ? "OAuth + REST API · live sync of items, relationships and test runs" : "Loads a sample requirement set so you can try everything", icon: GitBranch },
+              { src: "DOORS", name: "IBM DOORS / DOORS Next", desc: tier === "paid" ? "OSLC connector · modules, links and attributes" : "Loads a sample module to explore the features", icon: FileText },
+            ].map((c) => (
+              <div key={c.src} className="tf-panel" style={{ padding: 22 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 11, background: "var(--bg2)", border: "1px solid var(--line2)", display: "grid", placeItems: "center" }}>
+                    <c.icon size={20} color="var(--blue)" />
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>{c.name}</div>
+                  {tier === "free" && <span style={{ marginLeft: "auto" }}><Tag tone="green">SAMPLE</Tag></span>}
+                </div>
+                <p style={{ color: "var(--muted)", fontSize: 13.5, lineHeight: 1.55, margin: "0 0 16px" }}>{c.desc}</p>
+                {tier === "paid" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+                    <input className="tf-input" placeholder="Instance URL (https://…)" />
+                    <input className="tf-input" placeholder="Project / module ID" />
+                    <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>
+                      <Lock size={10} style={{ verticalAlign: "-1px" }} /> OAuth runs in a secure popup — credentials are never typed here.
+                    </div>
+                  </div>
+                )}
+                <button className="tf-btn tf-btn-primary" style={{ width: "100%", justifyContent: "center" }}
+                  onClick={() => connect(c.src)} disabled={connecting}>
+                  {connecting === c.src ? "Connecting…" : tier === "paid" ? "Authorize & sync" : "Load sample & connect"}
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="tf-panel" style={{ padding: 16, display: "flex", alignItems: "center", gap: 10, background: "var(--bg2)" }}>
+            <Sparkles size={16} color="var(--amber)" />
+            <span style={{ fontSize: 13.5, color: "var(--muted)" }}>Once connected you can <b style={{ color: "var(--ink)" }}>chat with your requirements</b>, ask for coverage gaps, and auto-trace to test cases & Jira.</span>
+          </div>
+        </div>
+      ) : (
+        <div className="tf-fade">
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <CheckCircle2 size={17} color="var(--green)" />
+            <span style={{ fontSize: 14 }}>Connected · {REQUIREMENTS.length} requirements imported</span>
+            <Tag tone="blue">Jama</Tag><Tag tone="thread">DOORS</Tag><Tag tone="amber">Jira linked</Tag>
+            <button className="tf-link" style={{ marginLeft: "auto" }} onClick={() => { setConnected(false); setSel(null); }}>↻ Reconnect</button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1.55fr 1fr", gap: 18 }} className="tf-cols">
+            {/* requirements + traceability */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div className="tf-panel" style={{ overflow: "hidden" }}>
+                <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", fontWeight: 600, fontSize: 14 }}>Requirements & traceability</div>
+                <div className="tf-scroll" style={{ maxHeight: 460, overflowY: "auto" }}>
+                  {REQUIREMENTS.map((r) => (
+                    <div key={r.id} className="tf-row" onClick={() => setSel(r)} style={{
+                      padding: "12px 16px", cursor: "pointer", borderBottom: "1px solid var(--line)",
+                      background: sel?.id === r.id ? "var(--panel2)" : "transparent",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                        <span className="tf-mono" style={{ fontSize: 12, color: "var(--amber)" }}>{r.id}</span>
+                        <Tag tone={statusTone[r.status]}>{r.status}</Tag>
+                        <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginLeft: "auto" }}>{r.src}</span>
+                      </div>
+                      <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--muted)" }}>{r.text}</div>
+                      <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                        {r.tests.length ? r.tests.map((t) => <Tag key={t} tone="green"><Link2 size={9} style={{ verticalAlign: "-1px" }} /> {t}</Tag>)
+                          : <Tag tone="red"><AlertTriangle size={9} style={{ verticalAlign: "-1px" }} /> no test coverage</Tag>}
+                        <Tag tone="blue">{r.jira}</Tag>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* trace + coverage */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {sel ? (
+                <div className="tf-panel tf-fade" style={{ padding: 16 }}>
+                  <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Trace · {sel.id}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                    {[["Source", sel.src, "var(--ink)"], ["Design", sel.design, "var(--blue)"],
+                      ["Tests", sel.tests.join(", ") || "— coverage gap", sel.tests.length ? "var(--green)" : "var(--red)"],
+                      ["Jira", sel.jira, "var(--amber)"]].map(([l, v, c]) => (
+                      <div key={l} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", width: 54 }}>{l}</span>
+                        <ArrowRight size={12} color="var(--faint)" />
+                        <span className="tf-tag" style={{ borderColor: "var(--line2)", color: c }}>{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="tf-panel" style={{ padding: 18, textAlign: "center", color: "var(--faint)" }}>
+                  <Link2 size={20} style={{ marginBottom: 8 }} />
+                  <div style={{ fontSize: 13 }}>Select a requirement to see its trace chain.</div>
+                </div>
+              )}
+              <div className="tf-panel" style={{ padding: 16 }}>
+                <div className="tf-eyebrow" style={{ marginBottom: 12 }}>Coverage summary</div>
+                {[["Verified", REQUIREMENTS.filter((r) => r.status === "Verified").length, "green"],
+                  ["In review", REQUIREMENTS.filter((r) => r.status === "In Review").length, "blue"],
+                  ["Open", REQUIREMENTS.filter((r) => r.status === "Open").length, "yellow"],
+                  ["Coverage gaps", REQUIREMENTS.filter((r) => !r.tests.length).length, "red"]].map(([l, v, t]) => (
+                  <div key={l} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--line)" }}>
+                    <StatusDot tone={t} />
+                    <span style={{ fontSize: 13, color: "var(--muted)" }}>{l}</span>
+                    <span className="tf-mono" style={{ marginLeft: "auto", fontSize: 14, fontWeight: 600, color: `var(--${t})` }}>{v}</span>
+                  </div>
+                ))}
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 12 }}>
+                  Ask the assistant (bottom-right) to explain gaps or push them to Jira.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {tier === "paid" && (
+            <div style={{ marginTop: 22 }}>
+              <ConnectGate title="Keep requirements in sync"
+                lines={[
+                  "Two-way sync of items, relationships and verification status with Jama / DOORS.",
+                  "Push coverage gaps and review actions to Jira as issues automatically.",
+                  "Re-baseline and diff requirement versions on each release.",
+                ]}
+                connectors={[
+                  { name: "Jama Connect API", desc: "REST + webhooks", icon: GitBranch },
+                  { name: "DOORS OSLC", desc: "Modules + links", icon: FileText },
+                  { name: "Jira", desc: "Issues + plans", icon: Workflow },
+                ]} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* --------------------------- QUOTE-TO-ORDER ----------------------------- */
+/* Delivery Desk pipeline for shops without a full ERP/MES: quotes move
+   open → quoted → won → converted; converting creates a single-line sales
+   order that lands on the Delivery calendar. Enabled per-org from Admin. */
+const SAMPLE_QUOTES = [
+  { quote_number: "Q-2451", customer: "MedTech Systems", product_family: "Actuator Assy", quantity: 24, value: 186000, required_date: "2026-07-24", promised_date: null, owner: "S. Ortiz", status: "open", blocker: "", next_action: "Send revised pricing", site: "BOS", converted_so: "" },
+  { quote_number: "Q-2447", customer: "Aerospace OEM", product_family: "Spindle Assy", quantity: 48, value: 402000, required_date: "2026-08-10", promised_date: "2026-08-14", owner: "S. Ortiz", status: "quoted", blocker: "Awaiting export review", next_action: "Follow up on ITAR screen", site: "BOS", converted_so: "" },
+  { quote_number: "Q-2440", customer: "Northbridge Automation", product_family: "Servo Bracket", quantity: 120, value: 96000, required_date: "2026-07-18", promised_date: "2026-07-18", owner: "A. Kidd", status: "won", blocker: "", next_action: "Convert to order", site: "ATL", converted_so: "" },
+  { quote_number: "Q-2433", customer: "Helix Alloys", product_family: "Precision Shaft", quantity: 500, value: 61000, required_date: "2026-07-09", promised_date: "2026-07-09", owner: "A. Kidd", status: "converted", blocker: "", next_action: "", site: "ATL", converted_so: "SO-Q-2433" },
+];
+const QSTAGES = [["open", "Open", "var(--blue)"], ["quoted", "Quoted", "var(--yellow)"], ["won", "Won", "var(--green)"], ["converted", "Converted", "var(--thread)"]];
+
+function QuotesPage() {
+  const [rows, setRows] = useState(SAMPLE_QUOTES);
+  const [note, setNote] = useState("Demo data shown until live quotes are imported.");
+  const [busy, setBusy] = useState("");
+  const [live, setLive] = useState(false);
+
+  const load = async () => {
+    try {
+      const r = await getQuotes();
+      if (Array.isArray(r) && r.length) { setRows(r); setLive(true); setNote("Live quotes loaded — convert a won quote to put it on the delivery calendar."); }
+      else { setLive(true); setNote("No quotes yet — import quotes (Admin → Sample datasets or CSV) to fill the pipeline."); setRows([]); }
+    } catch (e) { setLive(false); setRows(SAMPLE_QUOTES); setNote("Demo data shown until live quotes are imported."); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const doConvert = async (q) => {
+    if (!live) { setNote("Converting works on live data only — this is the demo pipeline."); return; }
+    setBusy(q.quote_number);
+    try { const r = await convertQuote(q.quote_number); setNote(`${q.quote_number} → ${r.so_number}${r.already ? " (already converted)" : " created on the delivery calendar."}`); await load(); }
+    catch (e) { setNote(String(e.message || e)); }
+    finally { setBusy(""); }
+  };
+
+  const byStage = (s) => rows.filter((q) => (q.status || "open") === s);
+  const stageVal = (s) => byStage(s).reduce((a, q) => a + (q.value || 0), 0);
+  const fmtD = (d) => (d ? d.slice(5) : "—");
+
+  return (
+    <div style={{ maxWidth: 1240, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={ClipboardList} eyebrow="Manufacturing Delivery Control · Delivery desk" title="Quote-to-order pipeline"
+        sub="Track quotes from open to converted. Converting a won quote creates the sales order and puts it on the Delivery calendar with its promise date — so commitments are protected from the first customer conversation." />
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <span className="tf-chip">{note}</span>
+        <span className="tf-chip" style={{ marginLeft: "auto" }}>Pipeline (open+quoted+won): {fmtMoney(stageVal("open") + stageVal("quoted") + stageVal("won"))}</span>
+      </div>
+
+      <div className="tf-cols" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, alignItems: "start" }}>
+        {QSTAGES.map(([key, label, color]) => (
+          <div key={key} className="tf-panel" style={{ overflow: "hidden" }}>
+            <div style={{ padding: "11px 14px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
+              <b style={{ fontSize: 13 }}>{label}</b>
+              <span className="tf-mono" style={{ marginLeft: "auto", fontSize: 10.5, color: "var(--faint)" }}>{byStage(key).length} · {fmtMoney(stageVal(key))}</span>
+            </div>
+            <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 8, minHeight: 90 }}>
+              {byStage(key).map((q) => (
+                <div key={q.quote_number} className="tf-panel" style={{ padding: 11, border: "1px solid var(--line2)" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--amber)" }}>{q.quote_number}</span>
+                    <span className="tf-mono" style={{ marginLeft: "auto", fontSize: 10, color: "var(--faint)" }}>{q.site}</span>
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginTop: 3 }}>{q.customer}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{q.product_family}{q.quantity ? ` · qty ${q.quantity}` : ""}</div>
+                  <div className="tf-disp" style={{ fontSize: 15, fontWeight: 800, margin: "5px 0 2px" }}>{fmtMoney(q.value || 0)}</div>
+                  <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>need {fmtD(q.required_date)}{q.promised_date ? ` · promised ${fmtD(q.promised_date)}` : ""}{q.owner ? ` · ${q.owner}` : ""}</div>
+                  {q.blocker && <div className="tf-mono" style={{ fontSize: 10, color: "var(--red)", marginTop: 4 }}>⚠ {q.blocker}</div>}
+                  {q.next_action && key !== "converted" && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Next: {q.next_action}</div>}
+                  {key === "converted" && q.converted_so && <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--thread)", marginTop: 4 }}>→ {q.converted_so}</div>}
+                  {key !== "converted" && (
+                    <button className={`tf-btn ${key === "won" ? "tf-btn-primary" : "tf-btn-ghost"}`} disabled={busy === q.quote_number}
+                      style={{ marginTop: 8, padding: "5px 11px", fontSize: 11 }} onClick={() => doConvert(q)}>
+                      {busy === q.quote_number ? "Converting…" : "Convert to order"}
+                    </button>
+                  )}
+                </div>
+              ))}
+              {!byStage(key).length && <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", padding: 6 }}>No quotes in {label.toLowerCase()}.</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------- DIGITAL THREAD ----------------------------- */
+/* Two sub-tabs (Supply Chain Pegging Explorer + ECO Impact Analyzer) live in
+   src/thread/DigitalThreadPro.jsx. Both start from a search, try the live
+   /api/thread endpoints and fall back to rich Falcon-LRU demo data. The
+   docked page assistant (bottom-right) reads the on-screen analysis via
+   window.__twDigitalThreadCtx, so ECO / supply-chain questions are answered
+   in context — no separate copilot pane needed. */
+function ThreadPage({ tier, setTier }) {
+  const [tab, setTab] = useState("supply");
+  return (
+    <div style={{ maxWidth: 1440, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={GitBranch} eyebrow="Manufacturing Delivery Control · Digital thread" title="Supply chain + ECO impact intelligence"
+        sub="Search a BOM / part for the multi-level pegging explorer — weekly demand, supply, hard/soft pegs and gaps down the tree — or search an ECO for affected items, orphan-inventory exposure and schedule-slip risk. Ask the page assistant about whatever is on screen."
+        tier={tier} setTier={setTier} />
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <button className={`tf-btn ${tab === "supply" ? "tf-btn-primary" : "tf-btn-ghost"}`} onClick={() => setTab("supply")}><Layers size={15} /> Supply Chain Pegging</button>
+        <button className={`tf-btn ${tab === "eco" ? "tf-btn-primary" : "tf-btn-ghost"}`} onClick={() => setTab("eco")}><GitBranch size={15} /> ECO Impact Analysis</button>
+      </div>
+
+      {tab === "supply" ? <PeggingExplorerPro /> : <EcoImpactAnalyzerPro />}
+
+      {tier === "paid" && <div style={{ marginTop: 22 }}><ConnectGate title="Wire up live BOM, inventory, PO and ECO data" lines={["Pull BOMs and ECOs from PLM; inventory, SO and PO supply from ERP/MRP.", "Expose hard allocations vs soft planned supply, then let AI explain delivery exposure.", "Use the sample fallback for demos while customers import real CSV/API data."]} connectors={[{ name: "SAP / ERP", desc: "SO, PO, inventory", icon: Database }, { name: "PLM", desc: "BOM, ECO, drawings", icon: Layers }, { name: "MES / IMS", desc: "tasks + WIP", icon: Workflow }]} /></div>}
+    </div>
+  );
+}
+
+/* ============================ ROI CALCULATOR ============================= */
+/* Methodology: a value-driver tree mapped to the ThreadWire modules, with
+   hard (P&L) vs soft (productivity / risk-avoidance) savings separated, a
+   risk-adjustment haircut applied the way Deloitte / Gartner / TEI business
+   cases are built, then payback, 3-year NPV and ROI. Improvement ranges are
+   editable, conservative benchmark defaults — adjust to your own baseline. */
+
+const num = (v) => {
+  const n = parseFloat(v);
+  return isNaN(n) ? 0 : n;
+};
+const has = (v) => v !== "" && v !== null && v !== undefined;
+const fmtMoney = (n) => {
+  const a = Math.abs(n), s = n < 0 ? "-" : "";
+  if (a >= 1e6) return s + "$" + (a / 1e6).toFixed(a >= 1e7 ? 1 : 2) + "M";
+  if (a >= 1e3) return s + "$" + Math.round(a / 1e3) + "k";
+  return s + "$" + Math.round(a);
+};
+
+// Per-industry profile: dominant value drivers, baseline ratios, and which
+// engineering effort the sector carries. These reshape the form + defaults.
+const IND = {
+  discrete:   { label: "Discrete / Industrial Equipment", margin: 30, downtime: 10, copq: 6,  warranty: 1.5, engReq: 18, designRework: 15, carrying: 20, invRatio: 0.15, primary: ["downtime", "quality", "inventory", "mes"],          note: "Line uptime, scrap and inventory turns drive most of the value." },
+  automotive: { label: "Automotive / Tier-1 Supplier",    margin: 22, downtime: 8,  copq: 5,  warranty: 2.5, engReq: 20, designRework: 15, carrying: 18, invRatio: 0.13, primary: ["downtime", "quality", "warranty", "inventory"],     note: "High volume — uptime, PPAP quality and warranty dominate the case." },
+  aerospace:  { label: "Aerospace & Defense",             margin: 28, downtime: 6,  copq: 8,  warranty: 1,   engReq: 38, designRework: 22, carrying: 22, invRatio: 0.22, primary: ["requirements", "quality", "eco", "contracts"],     note: "Low-volume / high-mix — requirements traceability & AS9100 compliance lead." },
+  medical:    { label: "Medical Devices",                 margin: 35, downtime: 6,  copq: 9,  warranty: 1,   engReq: 35, designRework: 22, carrying: 20, invRatio: 0.18, primary: ["requirements", "quality", "eco", "contracts"],     note: "FDA design-history-file traceability and validation effort are the biggest levers." },
+  pharma:     { label: "Pharma / Life Sciences",          margin: 40, downtime: 7,  copq: 7,  warranty: 0.5, engReq: 25, designRework: 15, carrying: 20, invRatio: 0.20, primary: ["quality", "requirements", "downtime", "inventory"], note: "Batch release time, deviations and GMP documentation drive value." },
+  electronics:{ label: "Electronics / Semiconductor",     margin: 30, downtime: 7,  copq: 10, warranty: 2,   engReq: 22, designRework: 18, carrying: 16, invRatio: 0.14, primary: ["quality", "inventory", "downtime", "eco"],         note: "Yield, expensive scrap, fast ECO velocity and component supply risk." },
+  food:       { label: "Food & Beverage",                 margin: 25, downtime: 9,  copq: 5,  warranty: 0.5, engReq: 8,  designRework: 10, carrying: 15, invRatio: 0.10, primary: ["downtime", "quality", "inventory", "mes"],         note: "OEE, yield / giveaway and short-shelf-life inventory are the key levers." },
+  chemicals:  { label: "Chemicals / Process",             margin: 30, downtime: 8,  copq: 6,  warranty: 0.5, engReq: 12, designRework: 10, carrying: 18, invRatio: 0.16, primary: ["downtime", "quality", "inventory"],               note: "Asset reliability, yield and energy dominate a continuous-process plant." },
+  cpg:        { label: "Consumer Packaged Goods",         margin: 28, downtime: 9,  copq: 5,  warranty: 0.8, engReq: 10, designRework: 12, carrying: 17, invRatio: 0.12, primary: ["downtime", "inventory", "quality", "mes"],         note: "Throughput, changeover losses and inventory turns drive the case." },
+  heavy:      { label: "Heavy Machinery / ETO Equipment",  margin: 25, downtime: 7,  copq: 7,  warranty: 3,   engReq: 30, designRework: 20, carrying: 22, invRatio: 0.22, primary: ["requirements", "warranty", "quality", "contracts"], note: "Engineered-to-order — configuration control, warranty and contracts lead." },
+};
+
+const SCEN = { conservative: "c", likely: "l", aggressive: "a" };
+// Editable benchmark improvement ranges (fraction reduction / recovery).
+const IMP = {
+  downtime:     { c: 0.15,  l: 0.25, a: 0.40 },
+  quality:      { c: 0.10,  l: 0.20, a: 0.30 },
+  warranty:     { c: 0.08,  l: 0.15, a: 0.25 },
+  designRework: { c: 0.10,  l: 0.20, a: 0.30 },
+  inventory:    { c: 0.08,  l: 0.15, a: 0.22 },
+  expedite:     { c: 0.15,  l: 0.30, a: 0.45 },
+  contractLeak: { c: 0.005, l: 0.01, a: 0.02 },
+  requirements: { c: 0.25,  l: 0.40, a: 0.55 },
+  contractAdmin:{ c: 0.25,  l: 0.40, a: 0.50 },
+  eco:          { c: 0.25,  l: 0.40, a: 0.50 },
+  mes:          { c: 0.03,  l: 0.06, a: 0.10 },
+  sourcing:     { c: 0.02,  l: 0.035, a: 0.05 },
+};
+const LEVER_META = {
+  downtime:     { label: "Predictive maintenance — recovered throughput", cat: "hard", module: "Assets" },
+  quality:      { label: "SPC & quality — scrap / rework reduction",       cat: "hard", module: "Assets" },
+  warranty:     { label: "Quality — warranty & returns reduction",         cat: "hard", module: "Assets" },
+  designRework: { label: "Requirements — design rework avoided",           cat: "hard", module: "Requirements" },
+  inventory:    { label: "Material forecasting — inventory carrying",      cat: "hard", module: "Digital Thread" },
+  expedite:     { label: "Material forecasting — expedite freight",        cat: "hard", module: "Digital Thread" },
+  contractLeak: { label: "Contracts — value leakage recovered",            cat: "hard", module: "Contracts" },
+  requirements: { label: "Requirements analysis — engineering effort",     cat: "soft", module: "Requirements" },
+  contractAdmin:{ label: "Contracts — admin & cycle-time",                 cat: "soft", module: "Contracts" },
+  eco:          { label: "ECO — change-impact effort",                     cat: "soft", module: "Digital Thread" },
+  mes:          { label: "MES — labor productivity",                       cat: "soft", module: "Digital Thread" },
+  sourcing:     { label: "Direct spend — sourcing & should-cost savings",  cat: "hard", module: "Direct Spend" },
+};
+const HARD_CONF = 0.9; // risk-adjustment: hard savings are highly realizable
+const SOFT_CONF = 0.5; // soft savings discounted (productivity / avoidance)
+
+function computeROI(inp, scenario, ov) {
+  const ind = IND[inp.industry] || IND.discrete;
+  const sk = SCEN[scenario];
+  const imp = (k) => (ov[k] != null ? ov[k] : IMP[k][sk]);
+
+  const rev = num(inp.revenueM) * 1e6;
+  const margin = num(inp.margin) / 100;
+  const lines = Math.max(1, num(inp.lines));
+  const opHours = 6000; // effective run-hours per line per year
+  const salary = num(inp.loadedSalary);
+  const hourly = salary > 0 ? salary / 2080 : 0;
+  const engCost = num(inp.engFte) * salary;
+
+  // derived dollar magnitudes (auto from revenue+industry unless overridden)
+  const invValue = has(inp.inventoryM) ? num(inp.inventoryM) * 1e6 : rev * ind.invRatio;
+  const expedite = has(inp.expediteK) ? num(inp.expediteK) * 1e3 : rev * 0.005;
+  const cspend = has(inp.contractSpendM) ? num(inp.contractSpendM) * 1e6 : rev * 0.45;
+  const contracts = has(inp.contractsPerYr) ? num(inp.contractsPerYr) : Math.round(num(inp.revenueM) * 2);
+  const ecos = has(inp.ecosPerYr) ? num(inp.ecosPerYr) : Math.round(num(inp.revenueM) * 1.5);
+  const carrying = (has(inp.carrying) ? num(inp.carrying) : ind.carrying) / 100;
+  const labor = rev * 0.12;
+
+  const revPerHour = rev / (lines * opHours);
+  const downtimeHrs = lines * opHours * (num(inp.downtimePct) / 100);
+
+  const amt = {
+    downtime: downtimeHrs * imp("downtime") * revPerHour * margin,
+    quality: rev * (num(inp.copq) / 100) * imp("quality"),
+    warranty: rev * (num(inp.warranty) / 100) * imp("warranty"),
+    designRework: engCost * (ind.designRework / 100) * imp("designRework"),
+    inventory: invValue * carrying * imp("inventory"),
+    expedite: expedite * imp("expedite"),
+    contractLeak: cspend * imp("contractLeak"),
+    requirements: engCost * (ind.engReq / 100) * imp("requirements"),
+    contractAdmin: contracts * 8 * hourly * imp("contractAdmin"),
+    eco: ecos * 24 * hourly * imp("eco"),
+    mes: labor * imp("mes"),
+    sourcing: rev * 0.35 * imp("sourcing"),  // direct material ≈ 35% of revenue
+  };
+
+  const levers = Object.keys(LEVER_META).map((k) => ({ key: k, ...LEVER_META[k], amount: amt[k] }));
+  const hard = levers.filter((l) => l.cat === "hard").reduce((s, l) => s + l.amount, 0);
+  const soft = levers.filter((l) => l.cat === "soft").reduce((s, l) => s + l.amount, 0);
+  const gross = hard + soft;
+  const riskAdj = hard * HARD_CONF + soft * SOFT_CONF;
+
+  const plants = Math.max(1, num(inp.plants));
+  const platform = has(inp.platformCostK) ? num(inp.platformCostK) * 1e3 : (plants <= 1 ? 24000 : plants <= 3 ? 48000 : 90000); // Core/Pro/Enterprise
+  const impl = has(inp.implCostK) ? num(inp.implCostK) * 1e3 : (plants <= 1 ? 7500 : 15000); // GTM onboarding fees
+
+  const annual = riskAdj;
+  const monthlyNet = annual / 12 - platform / 12;
+  const payback = monthlyNet > 0 ? impl / monthlyNet : Infinity;
+
+  const d = num(inp.discountPct) / 100 || 0.1;
+  let npv = -impl;
+  for (let y = 1; y <= 3; y++) npv += (annual - platform) / Math.pow(1 + d, y);
+  const totalCost = platform * 3 + impl;
+  const net3 = (annual - platform) * 3 - impl;
+  const roi3 = totalCost > 0 ? net3 / totalCost : 0;
+
+  const cashflow = [];
+  let cum = -impl;
+  for (let m = 1; m <= 36; m++) { cum += monthlyNet; cashflow.push({ m, cum: Math.round(cum) }); }
+
+  return { levers, hard, soft, gross, riskAdj, annual, platform, impl, payback, npv, net3, roi3, totalCost, cashflow };
+}
+
+function ROIField({ label, sub, value, onChange, suffix, placeholder, select, children }) {
+  return (
+    <label style={{ display: "block" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{label}</span>
+        {sub && <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{sub}</span>}
+      </div>
+      {select ? (
+        <select className="tf-input" value={value} onChange={(e) => onChange(e.target.value)}
+          style={{ appearance: "none", cursor: "pointer" }}>{children}</select>
+      ) : (
+        <div style={{ position: "relative" }}>
+          <input className="tf-input" type="number" value={value} placeholder={placeholder} step="any"
+            onChange={(e) => onChange(e.target.value)} />
+          {suffix && <span className="tf-mono" style={{ position: "absolute", right: 12, top: 11, fontSize: 11, color: "var(--faint)" }}>{suffix}</span>}
+        </div>
+      )}
+    </label>
+  );
+}
+
+function ROIPage() {
+  const baseFor = (key) => ({
+    industry: key, margin: IND[key].margin, downtimePct: IND[key].downtime,
+    copq: IND[key].copq, warranty: IND[key].warranty,
+    revenueM: 500, plants: 3, lines: 12, engFte: 40, loadedSalary: 145000,
+    inventoryM: "", expediteK: "", contractSpendM: "", contractsPerYr: "", ecosPerYr: "",
+    carrying: "", platformCostK: "", implCostK: "", discountPct: 10,
+  });
+  const [inp, setInp] = useState(baseFor("discrete"));
+  const [scenario, setScenario] = useState("likely");
+  const [ov, setOv] = useState({});
+  const [adv, setAdv] = useState(false);
+
+  const set = (k) => (v) => setInp((s) => ({ ...s, [k]: v }));
+  const setIndustry = (key) =>
+    setInp((s) => ({ ...s, industry: key, margin: IND[key].margin, downtimePct: IND[key].downtime, copq: IND[key].copq, warranty: IND[key].warranty, carrying: "", inventoryM: "", expediteK: "", contractSpendM: "", contractsPerYr: "", ecosPerYr: "" }));
+  const setScen = (sc) => { setScenario(sc); setOv({}); };
+
+  const r = useMemo(() => computeROI(inp, scenario, ov), [inp, scenario, ov]);
+  const ind = IND[inp.industry];
+  const maxLever = Math.max(...r.levers.map((l) => l.amount), 1);
+  const sortedLevers = [...r.levers].sort((a, b) => b.amount - a.amount);
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={Calculator} eyebrow="Manufacturing Delivery Control · Business case"
+        title="Build your ROI case"
+        sub="Anchored to protected shipment value and planning time saved — the two levers Threadwire moves most directly. Hard and soft savings are separated and risk-adjusted, then turned into payback, 3-year NPV and ROI." />
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }} className="tf-cols">
+        {/* ------------------------------- FORM ------------------------------ */}
+        <div className="tf-fade" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 14 }}>1 · Your operation</div>
+            <div style={{ display: "grid", gap: 14 }}>
+              <ROIField label="Industry" select value={inp.industry} onChange={setIndustry}>
+                {Object.keys(IND).map((k) => <option key={k} value={k}>{IND[k].label}</option>)}
+              </ROIField>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: "10px 12px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 10 }}>
+                <Factory size={15} color="var(--amber)" style={{ marginTop: 2, flexShrink: 0 }} />
+                <span style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5 }}>{ind.note}</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <ROIField label="Annual revenue" suffix="$M" value={inp.revenueM} onChange={set("revenueM")} />
+                <ROIField label="Sites" value={inp.plants} onChange={set("plants")} />
+                <ROIField label="Production lines" value={inp.lines} onChange={set("lines")} />
+              </div>
+            </div>
+          </div>
+
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 14 }}>2 · Operations & quality baseline</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <ROIField label="Contribution margin" suffix="%" value={inp.margin} onChange={set("margin")} />
+              <ROIField label="Unplanned downtime" sub="of run time" suffix="%" value={inp.downtimePct} onChange={set("downtimePct")} />
+              <ROIField label="Scrap & rework (COPQ)" sub="of revenue" suffix="%" value={inp.copq} onChange={set("copq")} />
+              <ROIField label="Warranty & returns" sub="of revenue" suffix="%" value={inp.warranty} onChange={set("warranty")} />
+            </div>
+          </div>
+
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 14 }}>3 · Engineering & compliance</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <ROIField label="Engineering + quality FTEs" value={inp.engFte} onChange={set("engFte")} />
+              <ROIField label="Avg fully-loaded salary" suffix="$/yr" value={inp.loadedSalary} onChange={set("loadedSalary")} />
+            </div>
+            <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 10 }}>
+              For {ind.label}, ~{ind.engReq}% of engineering time is modeled on requirements/verification and ~{ind.designRework}% on design rework.
+            </div>
+          </div>
+
+          {/* advanced */}
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <button onClick={() => setAdv((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "transparent", border: "none", cursor: "pointer", color: "var(--ink)", padding: 0 }}>
+              <SlidersHorizontal size={15} color="var(--amber)" />
+              <span style={{ fontWeight: 600, fontSize: 14 }}>Supply chain, contracts & assumptions</span>
+              <ChevronDown size={16} color="var(--muted)" style={{ marginLeft: "auto", transform: adv ? "rotate(180deg)" : "none", transition: ".2s" }} />
+            </button>
+            {adv && (
+              <div className="tf-fade" style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                  <ROIField label="Avg inventory value" suffix="$M" placeholder={(num(inp.revenueM) * ind.invRatio).toFixed(0) + " (auto)"} value={inp.inventoryM} onChange={set("inventoryM")} />
+                  <ROIField label="Expedite / premium freight" suffix="$k" placeholder={(num(inp.revenueM) * 5).toFixed(0) + " (auto)"} value={inp.expediteK} onChange={set("expediteK")} />
+                  <ROIField label="Supplier spend under mgmt" suffix="$M" placeholder={(num(inp.revenueM) * 0.45).toFixed(0) + " (auto)"} value={inp.contractSpendM} onChange={set("contractSpendM")} />
+                  <ROIField label="Inventory carrying cost" suffix="%" placeholder={ind.carrying + " (auto)"} value={inp.carrying} onChange={set("carrying")} />
+                  <ROIField label="Contracts / year" placeholder={Math.round(num(inp.revenueM) * 2) + " (auto)"} value={inp.contractsPerYr} onChange={set("contractsPerYr")} />
+                  <ROIField label="ECOs / year" placeholder={Math.round(num(inp.revenueM) * 1.5) + " (auto)"} value={inp.ecosPerYr} onChange={set("ecosPerYr")} />
+                </div>
+                <div>
+                  <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Improvement assumptions ({scenario})</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {Object.keys(IMP).map((k) => (
+                      <ROIField key={k} label={LEVER_META[k].label.split("—")[1]?.trim() || k} suffix="%"
+                        value={ov[k] != null ? +(ov[k] * 100).toFixed(2) : +(IMP[k][SCEN[scenario]] * 100).toFixed(2)}
+                        onChange={(v) => setOv((s) => ({ ...s, [k]: num(v) / 100 }))} />
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="tf-eyebrow" style={{ marginBottom: 10 }}>Investment</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <ROIField label="Platform / yr" suffix="$k" placeholder={((Math.max(1, num(inp.plants)) <= 1 ? 24 : Math.max(1, num(inp.plants)) <= 3 ? 48 : 90)) + " (auto, Core/Pro/Ent)"} value={inp.platformCostK} onChange={set("platformCostK")} />
+                    <ROIField label="Onboarding fee" suffix="$k" placeholder={(Math.max(1, num(inp.plants)) <= 1 ? "7.5" : "15") + " (auto)"} value={inp.implCostK} onChange={set("implCostK")} />
+                    <ROIField label="Discount rate" suffix="%" value={inp.discountPct} onChange={set("discountPct")} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ------------------------------ RESULTS ---------------------------- */}
+        <div className="tf-fade" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* scenario toggle */}
+          <div style={{ display: "inline-flex", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 12, padding: 4, alignSelf: "flex-start" }}>
+            {["conservative", "likely", "aggressive"].map((sc) => (
+              <button key={sc} onClick={() => setScen(sc)} className="tf-mono"
+                style={{ fontSize: 12, fontWeight: 600, textTransform: "capitalize", cursor: "pointer", border: "none", borderRadius: 9, padding: "8px 14px",
+                  background: scenario === sc ? "var(--panel2)" : "transparent", color: scenario === sc ? "var(--amber)" : "var(--faint)" }}>
+                {sc}
+              </button>
+            ))}
+          </div>
+
+          {/* headline KPIs */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[
+              ["Annual benefit", fmtMoney(r.riskAdj), "risk-adjusted", "var(--amber)"],
+              ["Payback", r.payback === Infinity ? ">36 mo" : r.payback.toFixed(1) + " mo", "to break-even", "var(--thread)"],
+              ["3-yr ROI", Math.round(r.roi3 * 100) + "%", "net / total cost", "var(--green)"],
+              ["3-yr NPV", fmtMoney(r.npv), "disc. " + (num(inp.discountPct) || 10) + "%", "var(--blue)"],
+            ].map(([l, v, s, c]) => (
+              <div key={l} className="tf-panel" style={{ padding: 16 }}>
+                <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", textTransform: "uppercase", letterSpacing: ".06em" }}>{l}</div>
+                <div className="tf-disp" style={{ fontSize: 30, fontWeight: 800, color: c, marginTop: 4, lineHeight: 1 }}>{v}</div>
+                <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>{s}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* hard vs soft */}
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>Hard vs soft savings</span>
+              <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>gross {fmtMoney(r.gross)}/yr</span>
+            </div>
+            {[["Hard", r.hard, "var(--green)", "directly hits the P&L — applied at " + Math.round(HARD_CONF * 100) + "% confidence"],
+              ["Soft", r.soft, "var(--blue)", "productivity & risk-avoidance — discounted to " + Math.round(SOFT_CONF * 100) + "%"]].map(([l, val, c, d]) => (
+              <div key={l} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+                  <span style={{ color: c, fontWeight: 600 }}>{l}</span>
+                  <span className="tf-mono">{fmtMoney(val)}/yr</span>
+                </div>
+                <div style={{ height: 8, background: "var(--bg2)", borderRadius: 99, overflow: "hidden" }}>
+                  <div style={{ width: (r.gross ? (val / r.gross) * 100 : 0) + "%", height: "100%", background: c, borderRadius: 99 }} />
+                </div>
+                <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginTop: 4 }}>{d}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* cashflow / payback */}
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>Cumulative net cash flow</span>
+              <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>36 months</span>
+            </div>
+            <ResponsiveContainer width="100%" height={170}>
+              <AreaChart data={r.cashflow} margin={{ top: 6, right: 8, bottom: 0, left: -4 }}>
+                <defs>
+                  <linearGradient id="cf" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--thread)" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="var(--thread)" stopOpacity={0.04} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="var(--line)" strokeDasharray="2 4" vertical={false} />
+                <XAxis dataKey="m" tick={{ fill: "var(--faint)", fontSize: 10, fontFamily: "var(--mono)" }} ticks={[6, 12, 18, 24, 30, 36]} />
+                <YAxis tickFormatter={fmtMoney} tick={{ fill: "var(--faint)", fontSize: 10, fontFamily: "var(--mono)" }} width={52} />
+                <Tooltip formatter={(v) => fmtMoney(v)} labelFormatter={(m) => "Month " + m}
+                  contentStyle={{ background: "var(--panel)", border: "1px solid var(--line2)", borderRadius: 8, fontSize: 12 }} />
+                <ReferenceLine y={0} stroke="var(--faint)" />
+                <Area type="monotone" dataKey="cum" stroke="var(--thread)" strokeWidth={2} fill="url(#cf)" isAnimationActive={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+            <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>
+              Break-even at {r.payback === Infinity ? "—" : "month " + Math.ceil(r.payback)} · 3-yr net {fmtMoney(r.net3)} on {fmtMoney(r.totalCost)} total cost.
+            </div>
+          </div>
+
+          {/* lever breakdown */}
+          <div className="tf-panel" style={{ padding: 18 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 14 }}>Value-driver breakdown</div>
+            {sortedLevers.map((l) => (
+              <div key={l.key} style={{ marginBottom: 11 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <Tag tone={l.cat === "hard" ? "green" : "blue"}>{l.cat}</Tag>
+                  <span style={{ fontSize: 12.5, color: "var(--muted)", flex: 1 }}>{l.label}</span>
+                  <span className="tf-mono" style={{ fontSize: 12.5, fontWeight: 600 }}>{fmtMoney(l.amount)}</span>
+                </div>
+                <div style={{ height: 5, background: "var(--bg2)", borderRadius: 99, overflow: "hidden" }}>
+                  <div style={{ width: (l.amount / maxLever) * 100 + "%", height: "100%", background: l.cat === "hard" ? "var(--green)" : "var(--blue)", borderRadius: 99 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* methodology */}
+          <div className="tf-panel" style={{ padding: 16, background: "var(--bg2)" }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Methodology</div>
+            <p style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.6, margin: 0 }}>
+              A value-driver tree maps each lever to a ThreadWire module, following the smart-factory benefit
+              categories used in Deloitte / Gartner business cases. Hard savings hit the P&L and are applied at
+              {" "}{Math.round(HARD_CONF * 100)}% confidence; soft savings (productivity, risk-avoidance) are discounted to
+              {" "}{Math.round(SOFT_CONF * 100)}%. The risk-adjusted benefit drives payback, 3-year NPV (discounted) and ROI.
+              Improvement ranges are editable benchmark defaults — replace them with your own measured baseline before
+              presenting. Figures are illustrative, not a guarantee.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ DIRECT SPEND =============================== */
+/* Procurement of direct materials, embedded in the digital thread: sourcing
+   events triggered by BOM/ECO changes, a weighted-RFQ builder, and a
+   bottom-up should-cost model that gives negotiation headroom. */
+
+const DS_EVENTS = [
+  { id: "SE-1042", part: "PN-3321", desc: "Bearing, angular contact", commodity: "Bearing steel", trigger: "ECO-220 supplier change", link: "ECO-220", linkId: "ECO-220", annualQty: 26000, status: "Open RFQ", tone: "yellow" },
+  { id: "SE-1048", part: "PN-3322", desc: "Shaft, hardened 4140", commodity: "Alloy steel 4140", trigger: "BOM rev — demand +18%", link: "PN-3320 BOM", linkId: "BOM:PN-3320", annualQty: 65000, status: "Sourcing", tone: "blue" },
+  { id: "SE-1051", part: "PN-3323", desc: "Collet nut", commodity: "Aluminium 6061", trigger: "PO-9920 delayed — re-source", link: "PO-9920", linkId: "PO-9920", annualQty: 65000, status: "Awarding", tone: "green" },
+];
+const DS_DETAIL = {
+  "PN-3321": {
+    sc: { commodity: "Bearing steel", massKg: 0.35, pricePerKg: 2.10, scrapPct: 8, machiningHrs: 0.18, laborRate: 42, overheadPct: 60, marginPct: 14 },
+    suppliers: [
+      { name: "Helix Alloys", quote: 3.95, quality: 4, lead: 4, risk: 3, sustain: 3, region: "DE" },
+      { name: "NTN-Lite", quote: 3.60, quality: 3, lead: 3, risk: 3, sustain: 3, region: "JP" },
+      { name: "Apex Precision", quote: 4.30, quality: 5, lead: 5, risk: 5, sustain: 4, region: "US-MI" },
+    ],
+  },
+  "PN-3322": {
+    sc: { commodity: "Alloy steel 4140", massKg: 1.8, pricePerKg: 1.35, scrapPct: 12, machiningHrs: 0.42, laborRate: 38, overheadPct: 55, marginPct: 12 },
+    suppliers: [
+      { name: "Midwest Forge", quote: 8.90, quality: 3, lead: 3, risk: 4, sustain: 4, region: "US-OH" },
+      { name: "Helix Alloys", quote: 9.85, quality: 4, lead: 4, risk: 3, sustain: 3, region: "DE" },
+      { name: "Apex Precision", quote: 10.40, quality: 5, lead: 5, risk: 5, sustain: 4, region: "US-MI" },
+    ],
+  },
+  "PN-3323": {
+    sc: { commodity: "Aluminium 6061", massKg: 0.22, pricePerKg: 2.95, scrapPct: 15, machiningHrs: 0.12, laborRate: 35, overheadPct: 50, marginPct: 13 },
+    suppliers: [
+      { name: "Sundown Components", quote: 2.45, quality: 3, lead: 2, risk: 2, sustain: 3, region: "US-TX" },
+      { name: "Cyclone Machining", quote: 2.20, quality: 4, lead: 4, risk: 4, sustain: 3, region: "US-IL" },
+      { name: "Apex Precision", quote: 2.75, quality: 5, lead: 5, risk: 5, sustain: 4, region: "US-MI" },
+    ],
+  },
+};
+const DS_CRITERIA = [
+  ["price", "Price"], ["quality", "Quality"], ["lead", "Lead time"], ["risk", "Supply risk"], ["sustain", "Sustainability"],
+];
+
+function shouldCost(sc) {
+  const material = sc.massKg * sc.pricePerKg * (1 + sc.scrapPct / 100);
+  const labor = sc.machiningHrs * sc.laborRate;
+  const overhead = (material + labor) * (sc.overheadPct / 100);
+  const sub = material + labor + overhead;
+  const total = sub * (1 + sc.marginPct / 100);
+  return { material, labor, overhead, margin: total - sub, total };
+}
+
+/* ---- Phase 2: commodity prices ---- */
+const DS_COMMODITIES = [
+  { key: "steel", label: "Steel HRC", unit: "$/t", forward: 772, color: "var(--blue)", series: [690, 700, 685, 710, 725, 718, 730, 742, 735, 748, 755, 760] },
+  { key: "copper", label: "LME Copper", unit: "$/t", forward: 9480, color: "var(--amber)", series: [8600, 8720, 8900, 8810, 9050, 9180, 9090, 9240, 9300, 9210, 9350, 9420] },
+  { key: "alu", label: "LME Aluminium", unit: "$/t", forward: 2495, color: "var(--thread)", series: [2540, 2510, 2495, 2530, 2560, 2520, 2505, 2490, 2475, 2500, 2510, 2480] },
+  { key: "poly", label: "Polymer (PP)", unit: "$/kg", forward: 1.30, color: "var(--green)", series: [1.45, 1.42, 1.40, 1.41, 1.38, 1.36, 1.37, 1.35, 1.34, 1.33, 1.34, 1.32] },
+];
+const DS_EXPOSURE = [
+  { commodity: "Steel HRC", parts: "PN-3322 shaft", annual: 585000, hedged: 40, ckey: "steel" },
+  { commodity: "Bearing steel", parts: "PN-3321 bearing", annual: 102000, hedged: 0, ckey: "steel" },
+  { commodity: "Aluminium 6061", parts: "PN-3323 collet", annual: 159000, hedged: 25, ckey: "alu" },
+];
+const dsChg = (s) => { const a = s[s.length - 1], b = s[s.length - 5]; return ((a - b) / b) * 100; };
+
+/* ---- Phase 3: Kraljic + supplier tiers ---- */
+const DS_KRALJIC = [
+  { part: "PN-3321", name: "Bearing", risk: 4.2, impact: 2.8 },
+  { part: "PN-3322", name: "Shaft", risk: 2.5, impact: 4.4 },
+  { part: "PN-3323", name: "Collet nut", risk: 3.6, impact: 3.8 },
+  { part: "PN-1188", name: "Fasteners", risk: 1.6, impact: 1.4 },
+];
+const dsQuad = (risk, impact) => (impact > 3 ? (risk > 3 ? "strategic" : "leverage") : (risk > 3 ? "bottleneck" : "noncritical"));
+const QUAD = {
+  strategic: { label: "Strategic", color: "var(--red)", strat: "Partner & dual-source. Joint supplier development, long-term agreements, and shared risk." },
+  leverage: { label: "Leverage", color: "var(--green)", strat: "Competitive bidding & reverse auctions. Consolidate volume and press price — supply is plentiful." },
+  bottleneck: { label: "Bottleneck", color: "var(--yellow)", strat: "Secure supply. Safety stock, qualify alternates, reduce single-source exposure." },
+  noncritical: { label: "Non-critical", color: "var(--muted)", strat: "Automate & catalog. Standardize and cut transaction cost — low risk, low impact." },
+};
+const DS_TIERS = {
+  "PN-3321": { score: 74, t1: [{ name: "Helix Alloys", role: "Bearing assembly", lead: "8 wk", cap: "68%", risk: "med", region: "DE" }, { name: "NTN-Lite", role: "Bearing assembly", lead: "7 wk", cap: "75%", risk: "med", region: "JP" }], t2: [{ name: "Precision Race Grinding", role: "Races", lead: "5 wk", cap: "60%", risk: "med", region: "DE" }], t3: [{ name: "Bearing-steel mill", role: "100Cr6 steel", lead: "12 wk", cap: "—", risk: "high", region: "Global" }] },
+  "PN-3322": { score: 62, t1: [{ name: "Midwest Forge", role: "Forge & machine", lead: "6 wk", cap: "82%", risk: "med", region: "US-OH" }], t2: [{ name: "Granite Bar Stock", role: "4140 bar", lead: "4 wk", cap: "71%", risk: "low", region: "US-IN" }], t3: [{ name: "Integrated steel mill", role: "Raw 4140", lead: "10 wk", cap: "—", risk: "high", region: "Global" }] },
+  "PN-3323": { score: 48, t1: [{ name: "Cyclone Machining", role: "Machined nut", lead: "3 wk", cap: "80%", risk: "low", region: "US-IL" }, { name: "Sundown Components", role: "Machined nut", lead: "4 wk", cap: "66%", risk: "med", region: "US-TX" }], t2: [{ name: "Gulf Extrusions", role: "6061 bar", lead: "3 wk", cap: "78%", risk: "low", region: "US-TX" }], t3: [{ name: "Aluminium smelter", role: "Ingot", lead: "8 wk", cap: "—", risk: "med", region: "Global" }] },
+  "PN-1188": { score: 22, t1: [{ name: "FastenAll Co", role: "Fasteners", lead: "1 wk", cap: "90%", risk: "low", region: "US" }], t2: [{ name: "Wire mill", role: "Wire", lead: "2 wk", cap: "85%", risk: "low", region: "US" }], t3: [{ name: "Steel mill", role: "Rod", lead: "—", cap: "—", risk: "low", region: "Global" }] },
+};
+
+function CommoditiesTab() {
+  const [cKey, setCKey] = useState("steel");
+  const sel = DS_COMMODITIES.find((c) => c.key === cKey);
+  const selData = sel.series.map((v, i) => ({ m: i + 1, v }));
+  const volatile = [...DS_COMMODITIES].sort((a, b) => Math.abs(dsChg(b.series)) - Math.abs(dsChg(a.series)))[0];
+
+  return (
+    <div className="tf-fade">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14, marginBottom: 18 }}>
+        {DS_COMMODITIES.map((c) => {
+          const ch = dsChg(c.series), up = ch >= 0;
+          return (
+            <div key={c.key} className="tf-panel" onClick={() => setCKey(c.key)} style={{ padding: 14, cursor: "pointer", border: cKey === c.key ? "1px solid var(--line2)" : "1px solid var(--line)" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontWeight: 600, fontSize: 13.5 }}>{c.label}</span>
+                <span className="tf-mono" style={{ marginLeft: "auto", fontSize: 11, color: up ? "var(--red)" : "var(--green)" }}>{up ? "▲" : "▼"} {Math.abs(ch).toFixed(1)}%</span>
+              </div>
+              <div className="tf-disp" style={{ fontSize: 20, fontWeight: 700, marginTop: 2 }}>{c.series[c.series.length - 1].toLocaleString()}<span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}> {c.unit}</span></div>
+              <ResponsiveContainer width="100%" height={36}>
+                <AreaChart data={c.series.map((v, i) => ({ i, v }))} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                  <Area type="monotone" dataKey="v" stroke={c.color} strokeWidth={1.5} fill={c.color} fillOpacity={0.12} isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 18 }} className="tf-cols">
+        <div className="tf-panel" style={{ padding: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <TrendingUp size={16} color={sel.color} /><span style={{ fontWeight: 600, fontSize: 14 }}>{sel.label} · 12-month</span>
+            <span className="tf-chip" style={{ marginLeft: "auto" }}>spot vs forward</span>
+          </div>
+          <ResponsiveContainer width="100%" height={190}>
+            <AreaChart data={selData} margin={{ top: 6, right: 8, bottom: 0, left: -8 }}>
+              <CartesianGrid stroke="var(--line)" strokeDasharray="2 4" vertical={false} />
+              <XAxis dataKey="m" tick={{ fill: "var(--faint)", fontSize: 10, fontFamily: "var(--mono)" }} />
+              <YAxis domain={["auto", "auto"]} tick={{ fill: "var(--faint)", fontSize: 10, fontFamily: "var(--mono)" }} width={48} />
+              <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line2)", borderRadius: 8, fontSize: 12 }} labelFormatter={(m) => "Month " + m} />
+              <ReferenceLine y={sel.forward} stroke="var(--amber)" strokeDasharray="5 4" label={{ value: "12-mo fwd", fill: "var(--amber)", fontSize: 10, position: "right" }} />
+              <Area type="monotone" dataKey="v" stroke={sel.color} strokeWidth={2} fill={sel.color} fillOpacity={0.14} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div className="tf-panel" style={{ padding: 16 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 12 }}>Commodity exposure</div>
+            {DS_EXPOSURE.map((e) => (
+              <div key={e.commodity} style={{ marginBottom: 11 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 4 }}>
+                  <span style={{ color: "var(--muted)" }}>{e.commodity} <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>· {e.parts}</span></span>
+                  <span className="tf-mono">{fmtMoney(e.annual)}/yr</span>
+                </div>
+                <div style={{ display: "flex", height: 7, background: "var(--bg2)", borderRadius: 99, overflow: "hidden" }}>
+                  <div style={{ width: e.hedged + "%", background: "var(--green)" }} />
+                  <div style={{ width: (100 - e.hedged) + "%", background: "var(--red)", opacity: 0.5 }} />
+                </div>
+                <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginTop: 3 }}>{e.hedged}% hedged · {100 - e.hedged}% exposed to spot</div>
+              </div>
+            ))}
+          </div>
+          <div className="tf-panel" style={{ padding: 16, borderColor: "var(--yellow)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <AlertTriangle size={15} color="var(--yellow)" /><span style={{ fontWeight: 600, fontSize: 13.5, color: "var(--yellow)" }}>Hedging alert</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.55 }}>
+              {volatile.label} moved {dsChg(volatile.series) >= 0 ? "+" : ""}{dsChg(volatile.series).toFixed(1)}% over 90 days. Largely-unhedged exposure on linked parts — consider forward cover or an index-linked clause.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StrategyTab() {
+  const [part, setPart] = useState("PN-3322");
+  const item = DS_KRALJIC.find((k) => k.part === part);
+  const q = dsQuad(item.risk, item.impact);
+  const meta = QUAD[q];
+  const tiers = DS_TIERS[part];
+  const scoreTone = tiers.score > 60 ? "var(--red)" : tiers.score > 40 ? "var(--yellow)" : "var(--green)";
+  const riskTone = { low: "green", med: "yellow", high: "red" };
+
+  return (
+    <div className="tf-fade" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+      <div className="tf-cols-full">
+        <div className="tf-panel" style={{ padding: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <Scale size={16} color="var(--amber)" /><span style={{ fontWeight: 600, fontSize: 14 }}>Kraljic matrix</span>
+            <span className="tf-chip" style={{ marginLeft: "auto" }}>tap a category</span>
+          </div>
+          {/* 2x2 */}
+          <div style={{ position: "relative", paddingLeft: 22, paddingBottom: 22 }}>
+            <div style={{ position: "relative", aspectRatio: "1 / 1", display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", borderRadius: 10, overflow: "hidden", border: "1px solid var(--line)" }}>
+              {[["bottleneck", 0], ["strategic", 1], ["noncritical", 2], ["leverage", 3]].map(([qq]) => (
+                <div key={qq} style={{ background: QUAD[qq].color, opacity: 0.07, display: "flex", alignItems: "flex-start", justifyContent: "flex-start" }} />
+              ))}
+              {/* quadrant labels */}
+              <span style={{ position: "absolute", top: 8, left: 10, fontFamily: "var(--mono)", fontSize: 10, color: "var(--yellow)" }}>Bottleneck</span>
+              <span style={{ position: "absolute", top: 8, right: 10, fontFamily: "var(--mono)", fontSize: 10, color: "var(--red)" }}>Strategic</span>
+              <span style={{ position: "absolute", bottom: 8, left: 10, fontFamily: "var(--mono)", fontSize: 10, color: "var(--muted)" }}>Non-critical</span>
+              <span style={{ position: "absolute", bottom: 8, right: 10, fontFamily: "var(--mono)", fontSize: 10, color: "var(--green)" }}>Leverage</span>
+              {/* dots */}
+              {DS_KRALJIC.map((k) => (
+                <button key={k.part} onClick={() => setPart(k.part)} title={k.name}
+                  style={{ position: "absolute", left: `calc(${(k.impact / 5) * 100}% - 7px)`, bottom: `calc(${(k.risk / 5) * 100}% - 7px)`,
+                    width: 14, height: 14, borderRadius: 99, cursor: "pointer", border: part === k.part ? "2px solid #fff" : "2px solid var(--bg)",
+                    background: QUAD[dsQuad(k.risk, k.impact)].color, boxShadow: part === k.part ? "0 0 0 4px rgba(255,255,255,.12)" : "none" }} />
+              ))}
+            </div>
+            <span style={{ position: "absolute", left: -4, top: "50%", transform: "rotate(-90deg) translateX(50%)", transformOrigin: "left", fontFamily: "var(--mono)", fontSize: 9.5, color: "var(--faint)" }}>Supply risk →</span>
+            <span style={{ position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)", fontFamily: "var(--mono)", fontSize: 9.5, color: "var(--faint)" }}>Profit impact →</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="tf-panel" style={{ padding: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>{item.name}</span>
+            <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}><ThreadLink id={item.part} style={{ color: "var(--green)" }}>{item.part}</ThreadLink></span>
+            <span style={{ marginLeft: "auto" }}><Tag tone={q === "strategic" ? "red" : q === "leverage" ? "green" : q === "bottleneck" ? "yellow" : "muted"}>{meta.label}</Tag></span>
+          </div>
+          <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.55, margin: "10px 0 0" }}>{meta.strat}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+            <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Supply-risk score</span>
+            <span className="tf-mono" style={{ marginLeft: "auto", fontSize: 18, fontWeight: 700, color: scoreTone }}>{tiers.score}</span>
+            <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>/100</span>
+          </div>
+        </div>
+
+        <div className="tf-panel" style={{ padding: 16 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 12 }}>Supplier tiers · {item.part}</div>
+          {[["Tier 1", tiers.t1], ["Tier 2", tiers.t2], ["Tier 3", tiers.t3]].map(([tl, arr]) => (
+            <div key={tl} style={{ marginBottom: 12 }}>
+              <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--amber)", marginBottom: 6 }}>{tl}{tl === "Tier 1" && arr.length === 1 ? " · ⚠ single-source" : ""}</div>
+              {arr.map((s) => (
+                <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600 }}><ThreadLink id={s.name}>{s.name}</ThreadLink></div>
+                    <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{s.role} · {s.region} · lead {s.lead} · cap {s.cap}</div>
+                  </div>
+                  <Tag tone={riskTone[s.risk]}>{s.risk}</Tag>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DirectSpendPage({ tier, setTier }) {
+  const [tab, setTab] = useState("sourcing");
+  const [sel, setSel] = useState(DS_EVENTS[1]);
+  const [w, setW] = useState({ price: 35, quality: 25, lead: 20, risk: 15, sustain: 5 });
+  const detail = DS_DETAIL[sel.part] || DS_DETAIL["PN-3322"];
+
+  const sc = useMemo(() => shouldCost(detail.sc), [detail]);
+
+  const ranked = useMemo(() => {
+    const quotes = detail.suppliers.map((s) => s.quote);
+    const mn = Math.min(...quotes), mx = Math.max(...quotes);
+    const sumW = DS_CRITERIA.reduce((a, [k]) => a + (w[k] || 0), 0) || 1;
+    return detail.suppliers
+      .map((s) => {
+        const priceScore = mx === mn ? 5 : 1 + 4 * (mx - s.quote) / (mx - mn);
+        const scores = { price: priceScore, quality: s.quality, lead: s.lead, risk: s.risk, sustain: s.sustain };
+        const total = DS_CRITERIA.reduce((a, [k]) => a + (scores[k] / 5) * (w[k] || 0), 0) / sumW * 5;
+        return { ...s, priceScore, total };
+      })
+      .sort((a, b) => b.total - a.total);
+  }, [detail, w]);
+
+  const bestQuote = Math.min(...detail.suppliers.map((s) => s.quote));
+  const headroom = bestQuote - sc.total;
+  const headroomPct = (headroom / bestQuote) * 100;
+  const usd = (n) => "$" + n.toFixed(2);
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={Coins} eyebrow="Module · Direct Spend" title="Direct material sourcing"
+        sub="Procurement embedded in the digital thread. Sourcing events fire from BOM and ECO changes; build weighted RFQs and bottom-up should-cost models to negotiate from strength."
+        tier={tier} setTier={setTier} />
+
+      {tier === "free" && (
+        <div className="tf-panel tf-fade" style={{ padding: "12px 16px", marginBottom: 18, display: "flex", alignItems: "center", gap: 10, background: "var(--bg2)" }}>
+          <Database size={16} color="var(--green)" />
+          <span style={{ fontSize: 13.5, color: "var(--muted)" }}>Sample sourcing events derived from the <b style={{ color: "var(--ink)" }}>PN-3320 BOM</b>. Switch to <b style={{ color: "var(--amber)" }}>Connected</b> to pull demand from SAP/Oracle and live commodity indices.</span>
+        </div>
+      )}
+
+      {/* tab nav */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 18, borderBottom: "1px solid var(--line)" }}>
+        {[["sourcing", "Sourcing", Coins], ["commodities", "Commodities", TrendingUp], ["strategy", "Category strategy", Scale]].map(([k, label, Ic]) => (
+          <button key={k} onClick={() => setTab(k)} style={{
+            display: "flex", alignItems: "center", gap: 7, padding: "10px 14px", border: "none", cursor: "pointer", background: "transparent",
+            fontFamily: "var(--mono)", fontSize: 12.5, fontWeight: 600, color: tab === k ? "var(--ink)" : "var(--faint)",
+            borderBottom: tab === k ? "2px solid var(--amber)" : "2px solid transparent", marginBottom: -1,
+          }}><Ic size={14} color={tab === k ? "var(--amber)" : "var(--faint)"} />{label}</button>
+        ))}
+      </div>
+
+      {tab === "sourcing" && (<>
+      {/* sourcing events */}
+      <div className="tf-panel tf-fade" style={{ overflow: "hidden", marginBottom: 18 }}>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center" }}>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>BOM-linked sourcing events</span>
+          <span className="tf-chip" style={{ marginLeft: "auto" }}>auto-generated from thread changes</span>
+        </div>
+        {DS_EVENTS.map((e) => (
+          <div key={e.id} className="tf-row" onClick={() => setSel(e)} style={{
+            padding: "13px 16px", cursor: "pointer", borderBottom: "1px solid var(--line)",
+            background: sel.id === e.id ? "var(--panel2)" : "transparent", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+          }}>
+            <StatusDot tone={e.tone} />
+            <div style={{ flex: 1, minWidth: 180 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{e.desc}</div>
+              <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{e.id} · <ThreadLink id={e.part} style={{ color: "var(--green)" }}>{e.part}</ThreadLink> · {e.commodity}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Tag tone="thread"><Link2 size={9} style={{ verticalAlign: "-1px" }} /> <ThreadLink id={e.linkId} style={{ color: "inherit" }}>{e.link}</ThreadLink></Tag>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{(e.annualQty / 1000).toFixed(0)}k/yr</span>
+              <Tag tone={e.tone}>{e.status}</Tag>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 18 }} className="tf-cols">
+        {/* weighted RFQ */}
+        <div className="tf-panel tf-fade" style={{ padding: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Scale size={17} color="var(--amber)" />
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Weighted RFQ · {sel.part}</span>
+          </div>
+          <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginBottom: 12 }}>Adjust the weights — ranking recomputes live.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", marginBottom: 16 }}>
+            {DS_CRITERIA.map(([k, label]) => (
+              <label key={k} style={{ display: "block" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--muted)", marginBottom: 3 }}>
+                  <span>{label}</span><span className="tf-mono" style={{ color: "var(--amber)" }}>{w[k]}</span>
+                </div>
+                <input type="range" min="0" max="50" value={w[k]} onChange={(e) => setW((s) => ({ ...s, [k]: +e.target.value }))}
+                  style={{ width: "100%", accentColor: "var(--amber)" }} />
+              </label>
+            ))}
+          </div>
+          {ranked.map((s, i) => (
+            <div key={s.name} style={{ padding: "10px 12px", borderRadius: 10, marginBottom: 8, border: "1px solid var(--line)", background: i === 0 ? "rgba(67,194,119,.08)" : "var(--bg2)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {i === 0 && <Tag tone="green">recommend</Tag>}
+                <span style={{ fontWeight: 600, fontSize: 13.5 }}><ThreadLink id={s.name}>{s.name}</ThreadLink></span>
+                <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{s.region} · ${s.quote.toFixed(2)}/ea</span>
+                <span className="tf-mono" style={{ marginLeft: "auto", fontSize: 14, fontWeight: 700, color: i === 0 ? "var(--green)" : "var(--ink)" }}>{s.total.toFixed(2)}</span>
+              </div>
+              <div style={{ height: 5, background: "var(--panel)", borderRadius: 99, marginTop: 7, overflow: "hidden" }}>
+                <div style={{ width: (s.total / 5) * 100 + "%", height: "100%", background: i === 0 ? "var(--green)" : "var(--line2)", borderRadius: 99 }} />
+              </div>
+            </div>
+          ))}
+          <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 4 }}>Weighted score out of 5 · price scored relative to quotes.</div>
+        </div>
+
+        {/* should-cost */}
+        <div className="tf-panel tf-fade" style={{ padding: 18 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Factory size={16} color="var(--thread)" />
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Should-cost · {detail.sc.commodity}</span>
+          </div>
+          {[["Material", sc.material, "var(--thread)"], ["Labor / process", sc.labor, "var(--blue)"], ["Overhead", sc.overhead, "var(--yellow)"], ["Margin", sc.margin, "var(--faint)"]].map(([l, v, c]) => (
+            <div key={l} style={{ marginBottom: 9 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 3 }}>
+                <span style={{ color: "var(--muted)" }}>{l}</span><span className="tf-mono">{usd(v)}</span>
+              </div>
+              <div style={{ height: 6, background: "var(--bg2)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{ width: (v / sc.total) * 100 + "%", height: "100%", background: c, borderRadius: 99 }} />
+              </div>
+            </div>
+          ))}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+            <span style={{ fontSize: 13, color: "var(--muted)" }}>Should-cost / unit</span>
+            <span className="tf-disp" style={{ fontSize: 24, fontWeight: 800, color: "var(--thread)" }}>{usd(sc.total)}</span>
+          </div>
+
+          <div style={{ marginTop: 14, padding: 13, borderRadius: 11, background: "var(--bg2)", border: "1px solid var(--line)" }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Negotiation headroom</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div>
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>best quote</div>
+                <div className="tf-disp" style={{ fontSize: 18, fontWeight: 700 }}>{usd(bestQuote)}</div>
+              </div>
+              <ArrowRight size={14} color="var(--faint)" />
+              <div>
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>vs should-cost</div>
+                <div className="tf-disp" style={{ fontSize: 18, fontWeight: 700, color: headroom > 0 ? "var(--amber)" : "var(--green)" }}>
+                  {headroom > 0 ? usd(headroom) + " · " + headroomPct.toFixed(0) + "%" : "at target"}
+                </div>
+              </div>
+              <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>annual</div>
+                <div className="tf-disp" style={{ fontSize: 18, fontWeight: 700, color: "var(--amber)" }}>{fmtMoney(Math.max(0, headroom) * sel.annualQty)}</div>
+              </div>
+            </div>
+            <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 8 }}>
+              Headroom × {(sel.annualQty / 1000).toFixed(0)}k units/yr = potential savings on this line.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      </>)}
+
+      {tab === "commodities" && <CommoditiesTab />}
+      {tab === "strategy" && <StrategyTab />}
+
+      {tier === "paid" && (
+        <div style={{ marginTop: 22 }}>
+          <ConnectGate title="Wire up direct-spend data"
+            lines={[
+              "Pull MRP/MPS demand and BOM explosions from SAP or Oracle ERP for live sourcing events.",
+              "Feed should-cost with live commodity indices (LME copper/aluminium, steel HRC, polymer).",
+              "Sync awarded events back to PO creation and the digital thread.",
+            ]}
+            connectors={[
+              { name: "SAP ERP", desc: "MRP/MPS, BOM, PO", icon: Database },
+              { name: "Oracle ERP", desc: "Demand + financials", icon: Database },
+              { name: "Commodity indices", desc: "LME / steel / polymer", icon: TrendingUp },
+            ]} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ========================= CONTACT MODAL ================================ */
+function ContactModal({ onClose, product }) {
+  const productLabel = product && PRODUCTS[product] ? PRODUCTS[product].name : "All three products";
+  const [f, setF] = useState({ company: "", name: "", email: "", phone: "", preferred: "Email", website: "", product: productLabel });
+  const [errors, setErrors] = useState({});
+  const [status, setStatus] = useState("idle"); // idle | sending | done | error
+  // honeypot: JS sets this to "ok"; bots that don't run JS leave it empty
+  const [captcha] = useState("ok");
+
+  const set = (k) => (e) => { setF((s) => ({ ...s, [k]: e.target.value })); setErrors((s) => ({ ...s, [k]: "" })); };
+
+  const validate = () => {
+    const e = {};
+    if (!f.company.trim()) e.company = "Company name is required";
+    if (!f.name.trim()) e.name = "Your name is required";
+    if (!f.email.trim()) e.email = "Email address is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) e.email = "Please enter a valid email address";
+    return e;
+  };
+
+  const submit = async () => {
+    const e = validate();
+    if (Object.keys(e).length) { setErrors(e); return; }
+    setStatus("sending");
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company: f.company, name: f.name, email: f.email, phone: f.phone, preferred_contact: f.preferred, product_interest: f.product, website: f.website, captcha_token: captcha }),
+      });
+      if (res.ok) { setStatus("done"); }
+      else { setStatus("error"); }
+    } catch (_) { setStatus("error"); }
+  };
+
+  const inp = (label, key, type = "text", required = false, placeholder = "") => (
+    <label style={{ display: "block" }}>
+      <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 5 }}>
+        {label}{required && <span style={{ color: "var(--red)", marginLeft: 3 }}>*</span>}
+      </div>
+      <input
+        className="tf-input"
+        type={type}
+        value={f[key]}
+        placeholder={placeholder}
+        onChange={set(key)}
+        style={{ borderColor: errors[key] ? "var(--red)" : undefined }}
+      />
+      {errors[key] && <div style={{ fontSize: 11.5, color: "var(--red)", marginTop: 4 }}>{errors[key]}</div>}
+    </label>
+  );
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 250, background: "rgba(21,34,45,.5)", backdropFilter: "blur(5px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 520, maxHeight: "92vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 18, padding: 28 }}>
+
+        {status === "done" ? (
+          <div style={{ textAlign: "center", padding: "32px 0" }}>
+            <CheckCircle2 size={48} color="var(--green)" style={{ marginBottom: 16 }} />
+            <h2 className="tf-disp" style={{ fontSize: 24, fontWeight: 800, margin: "0 0 10px" }}>Thanks — we'll be in touch</h2>
+            <p style={{ color: "var(--muted)", fontSize: 14.5, lineHeight: 1.6, margin: "0 0 24px" }}>Your message has been sent. Someone from the Threadwire team will reach out shortly.</p>
+            <button className="tf-btn tf-btn-primary" onClick={onClose}>Close</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 11, background: "linear-gradient(135deg,var(--amber),var(--thread))", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                <Workflow size={20} color="#0a0e15" />
+              </div>
+              <div>
+                <div className="tf-disp" style={{ fontWeight: 800, fontSize: 20 }}>Get in touch</div>
+                <div style={{ fontSize: 13, color: "var(--muted)" }}>We'll respond within one business day</div>
+              </div>
+              <button onClick={onClose} style={{ marginLeft: "auto", background: "transparent", border: "none", cursor: "pointer", color: "var(--faint)", fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {inp("Company name", "company", "text", true, "Acme Manufacturing")}
+              {inp("Your name", "name", "text", true, "Jane Smith")}
+              {inp("Work email", "email", "email", true, "jane@acme.com")}
+              {inp("Phone number", "phone", "tel", false, "+1 (555) 000-0000")}
+
+              <label style={{ display: "block" }}>
+                <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 5 }}>Which product are you interested in?</div>
+                <select className="tf-input" value={f.product} onChange={set("product")} style={{ appearance: "none", cursor: "pointer" }}>
+                  {[...PRODUCT_ORDER.map((k) => PRODUCTS[k].name), "All three products"].map((o) => <option key={o}>{o}</option>)}
+                </select>
+              </label>
+
+              <label style={{ display: "block" }}>
+                <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 5 }}>Preferred way to contact</div>
+                <select className="tf-input" value={f.preferred} onChange={set("preferred")} style={{ appearance: "none", cursor: "pointer" }}>
+                  {["Email", "Phone call", "Video call", "No preference"].map((o) => <option key={o}>{o}</option>)}
+                </select>
+              </label>
+
+              {inp("Company website", "website", "url", false, "https://acme.com")}
+
+              {status === "error" && (
+                <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(240,86,58,.12)", border: "1px solid rgba(240,86,58,.3)", fontSize: 13, color: "var(--red)" }}>
+                  Something went wrong sending your message. Please try again or email us directly at <a href="mailto:anu@threadwire.ai" style={{ color: "var(--amber)" }}>anu@threadwire.ai</a>.
+                </div>
+              )}
+
+              <button className="tf-btn tf-btn-primary" onClick={submit} disabled={status === "sending"} style={{ width: "100%", justifyContent: "center", padding: "13px", fontSize: 14 }}>
+                {status === "sending" ? "Sending…" : "Send message"}
+              </button>
+
+              <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", textAlign: "center" }}>
+                Fields marked <span style={{ color: "var(--red)" }}>*</span> are required. We will not share your information with third parties.
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------- ROOT ------------------------------------- */
+const EMPTY_CHATS = { home: { msgs: [], hist: [] }, quotes: { msgs: [], hist: [] }, compliance: { msgs: [], hist: [] }, assets: { msgs: [], hist: [] }, contracts: { msgs: [], hist: [] }, requirements: { msgs: [], hist: [] }, thread: { msgs: [], hist: [] }, roi: { msgs: [], hist: [] }, directspend: { msgs: [], hist: [] }, blockers: { msgs: [], hist: [] }, visibility: { msgs: [], hist: [] }, finance: { msgs: [], hist: [] }, workforce: { msgs: [], hist: [] } };
+
+/* ===================== DIGITAL THREAD — object explorer =================
+   Click any part / BOM / work order / ECO / PO / supplier anywhere in the app
+   to open a metadata dialog with clickable links to related objects, so the
+   whole thread is navigable from any starting tile. */
+
+const PART_META = {
+  "PN-3320": { desc: "Spindle Assembly", rev: "C", src: "Make", lifecycle: "Production", commodity: "—", spec: "Assembly dwg 3320-C", mass: "4.6 kg", owner: "M. Reyes" },
+  "PN-3321": { desc: "Bearing, angular contact", rev: "B", src: "Buy", lifecycle: "Production", commodity: "Bearing steel", spec: "ISO 7206 P4", mass: "0.35 kg", owner: "Procurement" },
+  "PN-3322": { desc: "Shaft, hardened 4140", rev: "D", src: "Make", lifecycle: "Production", commodity: "Alloy steel 4140", spec: "HRC 48–52", mass: "1.8 kg", owner: "Eng · A. Kidd" },
+  "PN-3323": { desc: "Collet nut", rev: "A", src: "Buy", lifecycle: "Production", commodity: "Aluminium 6061", spec: "6061-T6", mass: "0.22 kg", owner: "Procurement" },
+  "PN-1188": { desc: "Control Cabinet", rev: "F", src: "Make", lifecycle: "Production", commodity: "—", spec: "UL508A", mass: "—", owner: "Electrical" },
+  "PN-4501": { desc: "Servo Bracket", rev: "A", src: "Make", lifecycle: "NPI", commodity: "Aluminium 6061", spec: "Bracket dwg 4501-A", mass: "0.9 kg", owner: "Eng" },
+};
+const WO_ROUTING = {
+  "WO-7781": [["10", "CNC turn shaft", "CNC-04", "Done"], ["20", "Heat treat 48–52 HRC", "HT-1", "Done"], ["30", "OD grind", "GR-02", "WIP"], ["40", "Press bearings", "Assy-1", "Queued"], ["50", "Runout test", "Test-A", "Queued"]],
+  "WO-7782": [["10", "Sheet metal", "Punch-2", "Done"], ["20", "Wire panel", "Panel-3", "Done"], ["30", "FAT", "Test-B", "Done"]],
+  "WO-7790": [["10", "Saw blank", "Saw-1", "Done"], ["20", "CNC mill bracket", "CNC-07", "Blocked — fixture"], ["30", "Anodize", "Out-1", "Queued"], ["40", "Inspect", "CMM-1", "Queued"]],
+  "WO-7795": [["10", "Kit components", "Kit-1", "Queued"], ["20", "CNC turn shaft", "CNC-04", "Queued"], ["30", "Assemble", "Assy-1", "Queued"]],
+};
+const SUPPLIER_META = {
+  "Helix Alloys": { region: "Germany", tier: "Tier 1", scope: "Bearings, forgings", lead: "8 wk", risk: "Medium", certs: "ISO 9001, IATF 16949", parts: ["PN-3321"] },
+  "NTN-Lite": { region: "Japan", tier: "Tier 1", scope: "Bearings", lead: "7 wk", risk: "Medium", certs: "ISO 9001", parts: ["PN-3321"] },
+  "Apex Precision": { region: "US-MI", tier: "Tier 1", scope: "Precision machining", lead: "5 wk", risk: "Low", certs: "AS9100, ISO 9001", parts: ["PN-3321", "PN-3322", "PN-3323"] },
+  "Midwest Forge": { region: "US-OH", tier: "Tier 1", scope: "Forging & machining", lead: "6 wk", risk: "Medium", certs: "IATF 16949", parts: ["PN-3322"] },
+  "Cyclone Machining": { region: "US-IL", tier: "Tier 1", scope: "Machining", lead: "3 wk", risk: "Low", certs: "ISO 9001", parts: ["PN-3323"] },
+  "Sundown Components": { region: "US-TX", tier: "Tier 1", scope: "Machined components", lead: "4 wk", risk: "Medium", certs: "ISO 9001", parts: ["PN-3323"] },
+  "Sundown Elec.": { region: "US-TX", tier: "Tier 1", scope: "Electro-mech components", lead: "4 wk", risk: "Medium", certs: "ISO 9001", parts: ["PN-3323"] },
+};
+
+function buildThread() {
+  const T = {};
+  for (const [pn, m] of Object.entries(PART_META)) {
+    const usedWOs = WORKORDERS.filter((w) => w.part === pn).map((w) => w.id);
+    const parentAsm = BOM.find((b) => b.pn === pn && b.level > 0) ? "PN-3320" : "";
+    const wu = [parentAsm, ...usedWOs].filter(Boolean).join(" · ") || "—";
+    T[pn] = { type: "Part", title: pn + " · " + m.desc,
+      attrs: [["Description", m.desc], ["Revision", m.rev], ["Source", m.src], ["Lifecycle", m.lifecycle], ["Commodity", m.commodity], ["Spec", m.spec], ["Mass", m.mass], ["Owner", m.owner], ["Where used", wu]], links: [] };
+  }
+  T["BOM:PN-3320"] = { type: "BOM", title: "BOM · PN-3320 Spindle Assembly",
+    attrs: [["Top part", "PN-3320"], ["Levels", "2"], ["Lines", String(BOM.length)], ["Make / Buy", "1 make · " + BOM.filter((b) => b.src === "Buy").length + " buy"]],
+    table: BOM.map((b) => ({ pn: b.pn, desc: b.desc, qty: b.qty, src: b.src, onhand: b.onhand, demand: b.demand })),
+    links: BOM.map((b) => b.pn) };
+  if (T["PN-3320"]) T["PN-3320"].links.push("BOM:PN-3320", ...BOM.filter((b) => b.level > 0).map((b) => b.pn));
+  for (const w of WORKORDERS) {
+    T[w.id] = { type: "Work Order", title: w.id + " · " + w.desc,
+      attrs: [["Part", w.part], ["Qty", String(w.qty)], ["Completed", w.done + " / " + w.qty], ["Status", w.status], ["Due", w.due]],
+      routing: WO_ROUTING[w.id] || null, links: [w.part] };
+    if (T[w.part]) T[w.part].links.push(w.id);
+  }
+  for (const e of ECO) {
+    T[e.id] = { type: "ECO", title: e.id + " · " + e.title,
+      attrs: [["Status", e.status], ["Affects", e.affects.join(", ")], ["Jira", e.jira]], links: [...e.affects] };
+    e.affects.forEach((pn) => { if (T[pn]) T[pn].links.push(e.id); });
+  }
+  for (const p of POs) {
+    T[p.id] = { type: "Purchase Order", title: p.id + " · " + p.part,
+      attrs: [["Part", p.part], ["Supplier", p.supplier], ["Qty", String(p.qty)], ["ETA", p.eta], ["Status", p.status]], links: [p.part, p.supplier] };
+    if (T[p.part]) T[p.part].links.push(p.id);
+  }
+  for (const [name, m] of Object.entries(SUPPLIER_META)) {
+    T[name] = { type: "Supplier", title: name,
+      attrs: [["Region", m.region], ["Tier", m.tier], ["Scope", m.scope], ["Lead time", m.lead], ["Risk", m.risk], ["Certs", m.certs]], links: m.parts || [] };
+  }
+  T["REQ-001"] = { type: "Requirement", title: "REQ-001 · Spindle runout ≤ 5µm",
+    attrs: [["Source", "Jama"], ["Verification", "Test-A"], ["Status", "Verified"], ["Traces to", "PN-3320, WO-7781"]], links: ["PN-3320", "WO-7781"] };
+  for (const k in T) T[k].links = [...new Set(T[k].links)].filter((id) => id !== k && T[id]);
+  return T;
+}
+const THREAD = buildThread();
+const TYPE_TONE = { Part: "green", "Work Order": "amber", BOM: "thread", ECO: "blue", "Purchase Order": "yellow", Supplier: "thread", Requirement: "blue" };
+
+const ThreadCtx = React.createContext({ open: () => {} });
+function useThread() { return useContext(ThreadCtx); }
+
+function ThreadLink({ id, children, style }) {
+  const { open } = useThread();
+  if (!THREAD[id]) return <>{children ?? id}</>;
+  return (
+    <span onClick={(e) => { e.stopPropagation(); open(id); }} title={"View " + id}
+      style={{ cursor: "pointer", borderBottom: "1px dotted currentColor", ...style }}>{children ?? id}</span>
+  );
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(p) { super(p); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { try { console.error("ThreadWire view error:", err, info); } catch (e) {} }
+  componentDidUpdate(prev) { if (prev.resetKey !== this.props.resetKey && this.state.err) this.setState({ err: null }); }
+  render() {
+    if (this.state.err) return this.props.fallback ? this.props.fallback(this.state.err) : null;
+    return this.props.children;
+  }
+}
+
+function ThreadModal({ stack, setStack }) {
+  const id = stack[stack.length - 1];
+  if (!id || !THREAD[id]) return null;
+  const o = THREAD[id];
+  const open = (nid) => setStack((s) => [...s, nid]);
+  const back = () => setStack((s) => s.slice(0, -1));
+  const close = () => setStack([]);
+  const val = (v) => (THREAD[v] ? <ThreadLink id={v} style={{ color: "var(--thread)" }}>{v}</ThreadLink> : v);
+
+  return (
+    <div onClick={close} style={{ position: "fixed", inset: 0, zIndex: 220, background: "rgba(21,34,45,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 540, maxHeight: "82vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          {stack.length > 1 && <span onClick={back} style={{ cursor: "pointer", color: "var(--faint)", fontSize: 13 }}>←</span>}
+          <Tag tone={TYPE_TONE[o.type] || "muted"}>{o.type}</Tag>
+          <span style={{ fontWeight: 700, fontSize: 15.5, flex: 1 }}>{o.title}</span>
+          <span onClick={close} style={{ cursor: "pointer", color: "var(--faint)", fontSize: 18, lineHeight: 1 }}>✕</span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", marginBottom: o.routing || o.table ? 16 : 4 }}>
+          {o.attrs.map(([k, v]) => (
+            <React.Fragment key={k}>
+              <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>{k}</span>
+              <span style={{ fontSize: 13 }}>{val(v)}</span>
+            </React.Fragment>
+          ))}
+        </div>
+
+        {o.routing && (
+          <div style={{ marginBottom: 16 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Routing</div>
+            {o.routing.map(([op, desc, wc, st]) => (
+              <div key={op} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 8, marginBottom: 5 }}>
+                <span className="tf-mono" style={{ fontSize: 11, color: "var(--amber)" }}>{op}</span>
+                <span style={{ fontSize: 12.5, flex: 1 }}>{desc}</span>
+                <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>{wc}</span>
+                <Tag tone={/done|complete/i.test(st) ? "green" : /block/i.test(st) ? "red" : /wip|progress/i.test(st) ? "yellow" : "blue"}>{st}</Tag>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {o.table && (
+          <div style={{ marginBottom: 16 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Bill of materials</div>
+            {o.table.map((r) => (
+              <div key={r.pn} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 8, marginBottom: 5 }}>
+                <ThreadLink id={r.pn} style={{ color: "var(--green)", fontFamily: "var(--mono)", fontSize: 11.5 }}>{r.pn}</ThreadLink>
+                <span style={{ fontSize: 12.5, flex: 1 }}>{r.desc}</span>
+                <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>×{r.qty} · {r.src}</span>
+                <span className="tf-mono" style={{ fontSize: 10.5, color: r.onhand < r.demand ? "var(--red)" : "var(--green)" }}>{r.onhand}/{r.demand}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {o.links.length > 0 && (
+          <div>
+            <div className="tf-eyebrow" style={{ marginBottom: 8 }}>Linked in the thread</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {o.links.map((lid) => (
+                <span key={lid} onClick={() => open(lid)} style={{ cursor: "pointer", fontFamily: "var(--mono)", fontSize: 11.5, padding: "5px 10px", borderRadius: 8, border: "1px solid var(--line2)", background: "var(--bg2)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Tag tone={TYPE_TONE[THREAD[lid].type] || "muted"}>{THREAD[lid].type}</Tag>{lid}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== SALES ORDERS · BLOCKERS · DELIVERY ===============
+   Blockers are shop-floor issues (like project issues) tied to sales orders.
+   One blocker can impact many sales orders, references parts and a work order,
+   is assigned to a person, and carries $ at risk = sum of its orders' value.
+   Sales orders render on a point-in-time delivery calendar by promise date. */
+
+const PEOPLE = ["Anu Mishra", "M. Reyes", "A. Kidd", "J. Cole", "Floor Lead", "Procurement Desk"];
+const SITES = ["Lawrence, MA", "Greenville, SC", "Monterrey, MX"];
+// Sales orders are multi-line. Each line carries its own end-item part (SOEI),
+// quantity, value and promise date. Cards and blockers operate at the line level.
+const SO_DEF = [
+  ["SO-5001", "Vertex Aerospace", "Lawrence, MA", [["PN-3320", 40, 128000, "2026-06-22"], ["PN-3321", 100, 40000, "2026-06-24"]]],
+  ["SO-5002", "Helios Robotics", "Lawrence, MA", [["PN-3322", 120, 54000, "2026-06-22"], ["PN-3323", 200, 18000, "2026-06-26"]]],
+  ["SO-5003", "Northwind Motors", "Greenville, SC", [["PN-1188", 12, 38000, "2026-06-23"]]],
+  ["SO-5004", "Apex Defense", "Greenville, SC", [["PN-4501", 200, 96000, "2026-06-24"], ["PN-1188", 50, 24000, "2026-06-27"]]],
+  ["SO-5005", "Cascade Pumps", "Monterrey, MX", [["PN-3320", 25, 81000, "2026-06-25"]]],
+  ["SO-5006", "Vertex Aerospace", "Lawrence, MA", [["PN-3321", 300, 42000, "2026-06-26"]]],
+  ["SO-5007", "Orion Systems", "Greenville, SC", [["PN-3322", 65, 33000, "2026-06-20"]]],
+  ["SO-5008", "Helios Robotics", "Lawrence, MA", [["PN-3320", 18, 59000, "2026-06-19"]]],
+  ["SO-5009", "Apex Defense", "Greenville, SC", [["PN-4501", 150, 120000, "2026-06-27"]]],
+  ["SO-5010", "Cascade Pumps", "Monterrey, MX", [["PN-3323", 65, 28000, "2026-07-01"]]],
+  ["SO-5011", "Northwind Motors", "Greenville, SC", [["PN-3320", 30, 99000, "2026-07-02"]]],
+  ["SO-5012", "Orion Systems", "Lawrence, MA", [["PN-3321", 90, 47000, "2026-06-29"], ["PN-3322", 60, 26000, "2026-07-03"]]],
+  ["SO-5013", "Vertex Aerospace", "Lawrence, MA", [["PN-3320", 35, 112000, "2026-07-10"]]],
+  ["SO-5014", "Apex Defense", "Greenville, SC", [["PN-4501", 180, 88000, "2026-07-18"]]],
+  ["SO-5015", "Cascade Pumps", "Monterrey, MX", [["PN-3320", 28, 90000, "2026-08-05"]]],
+  ["SO-5016", "Helios Robotics", "Lawrence, MA", [["PN-3322", 140, 63000, "2026-08-21"]]],
+  ["SO-5017", "Northwind Motors", "Greenville, SC", [["PN-1188", 16, 51000, "2026-09-09"]]],
+  ["SO-5018", "Orion Systems", "Lawrence, MA", [["PN-3321", 260, 39000, "2026-09-24"]]],
+  ["SO-5019", "Vertex Aerospace", "Lawrence, MA", [["PN-3320", 50, 158000, "2026-10-08"]]],
+  ["SO-5020", "Apex Defense", "Greenville, SC", [["PN-4501", 160, 131000, "2026-10-22"]]],
+  ["SO-5021", "Cascade Pumps", "Monterrey, MX", [["PN-3323", 70, 30000, "2026-11-12"]]],
+  ["SO-5022", "Northwind Motors", "Greenville, SC", [["PN-3320", 33, 104000, "2026-11-26"]]],
+  ["SO-5023", "Helios Robotics", "Lawrence, MA", [["PN-3322", 80, 44000, "2026-12-10"]]],
+  ["SO-5024", "Orion Systems", "Greenville, SC", [["PN-4501", 120, 97000, "2026-12-18"]]],
+];
+const SALES_ORDERS = SO_DEF.flatMap(([so, customer, site, lines]) =>
+  lines.map((ln, i) => ({ id: so + "-L" + (i + 1) * 10, so, line: (i + 1) * 10, customer, site, part: ln[0], parts: [ln[0]], qty: ln[1], value: ln[2], promise: ln[3] }))
+);
+const SEED_BLOCKERS = [
+  { id: "BLK-2001", title: "CNC-07 fixture failure halting servo bracket", status: "assigned", assignee: "Floor Lead", openedBy: "Floor Lead", action: "Replace fixture and re-qualify first article before resuming WO-7790.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5004-L10", "SO-5009-L10"], created: "2026-06-18T13:10:00Z", closedAt: null, closedBy: null, newPromise: "2026-07-01", comments: [{ ts: "2026-06-18T14:20:00Z", who: "Floor Lead", text: "Replacement fixture ordered, ETA Jun 26. Re-qual ~2 days after." }, { ts: "2026-06-19T09:05:00Z", who: "A. Kidd", text: "Maintenance confirmed spindle is fine; isolated to fixture." }] },
+  { id: "BLK-2002", title: "PN-3323 collet-nut shortage — PO-9920 delayed", status: "open", assignee: null, openedBy: "Procurement Desk", action: "Expedite PO-9920 or re-source PN-3323 to an alternate supplier.", wo: "WO-7781", parts: ["PN-3323"], sos: ["SO-5002-L10"], created: "2026-06-19T08:40:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
+  { id: "BLK-2003", title: "Anodize capacity risk on Q3 servo brackets", status: "open", assignee: null, openedBy: "Anu Mishra", action: "Qualify a second anodize vendor before the July build.", wo: "WO-7790", parts: ["PN-4501"], sos: ["SO-5014-L10"], created: "2026-06-20T11:15:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
+  { id: "BLK-2004", title: "Long-lead casting risk on Q4 spindle housings", status: "assigned", assignee: "Procurement Desk", openedBy: "Anu Mishra", action: "Place long-lead PO for PN-3320 castings now to protect Q4.", wo: null, parts: ["PN-3320"], sos: ["SO-5019-L10", "SO-5022-L10"], created: "2026-06-20T15:30:00Z", closedAt: null, closedBy: null, newPromise: null, comments: [] },
+];
+
+// Active datasets: sample by default (demo / signed-out), swapped to backend rows for signed-in members.
+let ACTIVE_ORDERS = SALES_ORDERS;
+let ACTIVE_WOS = WORKORDERS;
+let ACTIVE_PART_NUMBERS = Object.keys(PART_META);
+let ACTIVE_PART_DESC = Object.fromEntries(Object.entries(PART_META).map(([k, v]) => [k, v.desc || ""]));
+const soById = (id) => ACTIVE_ORDERS.find((s) => s.id === id);
+const linesOfSO = (soNum) => ACTIVE_ORDERS.filter((s) => s.so === soNum);
+const blockerValue = (b) => b.sos.reduce((a, id) => a + (soById(id)?.value || 0), 0);
+const openBlockerForSO = (blockers, soId) => blockers.find((b) => b.status !== "closed" && b.sos.includes(soId));
+const BLK_TONE = { open: "red", assigned: "yellow", closed: "green" };
+const CURRENT_USER = "Anu Mishra";
+let ACTIVE_USER = CURRENT_USER;
+// backend → app shape mappers (members)
+const mapSO = (r) => ({ id: r.so_number + "-L" + (r.line_number || 10), so: r.so_number, line: r.line_number || 10, customer: r.customer, site: r.site || "", promise: r.promise_date, revisedPromise: r.revised_promise_date || null, part: r.part_number || "", parts: r.part_number ? [r.part_number] : [], qty: Number(r.quantity) || 0, value: Number(r.value) || 0, status: r.status || "", shipDate: r.ship_date || null, qtyShipped: Number(r.qty_shipped) || 0, promiseChangedBy: r.promise_changed_by || null, promiseChangedAt: r.promise_changed_at || null, statusChangedBy: r.status_changed_by || null, statusChangedAt: r.status_changed_at || null });
+const mapWO = (r) => ({ id: r.wo_number, part: r.part_number || "", desc: r.description || "" });
+// Legacy blockers referenced bare SO numbers; expand them to line ids so older
+// blockers keep their relationship to (now line-level) sales orders.
+const normalizeSos = (arr) => [...new Set((arr || []).flatMap((e) => {
+  if (typeof e !== "string") return [];
+  if (e.includes("-L")) return [e];
+  const ls = linesOfSO(e).map((l) => l.id);
+  return ls.length ? ls : [e + "-L10"];
+}))];
+const mapBlk = (r) => ({ id: r.id, title: r.title, status: r.status, reviewStatus: r.review_status || "confirmed", assignee: r.assignee || null, openedBy: r.opened_by || null, created: r.created_at, closedAt: r.closed_at || null, closedBy: r.closed_by || null, newPromise: r.new_promise || null, action: r.action || "", wo: r.wo || null, sos: normalizeSos(r.sos), parts: r.parts || [], comments: r.comments || [] });
+// effective promise = revised date from an open blocker (if any), else the original committed date
+const revisedForSO = (blockers, soId) => { const b = blockers.find((x) => x.status !== "closed" && x.newPromise && x.sos.includes(soId)); return b ? b.newPromise : null; };
+const effPromise = (blockers, o) => o.revisedPromise || revisedForSO(blockers, o.id) || o.promise;
+const isClosedLine = (o) => (o.qty > 0 && (o.qtyShipped || 0) >= o.qty) || ["shipped", "closed", "complete", "completed", "delivered"].includes((o.status || "").toLowerCase());
+const fmtDateTime = (iso) => { try { return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }); } catch (_) { return String(iso); } };
+
+/* date helpers (local, no TZ surprises) */
+const D = (iso) => { if (!iso) return new Date(); const [y, m, d] = iso.split("-").map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+const isoOf = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+const addDays = (dt, n) => { const x = new Date(dt); x.setDate(x.getDate() + n); return x; };
+const mondayOf = (dt) => addDays(dt, -((dt.getDay() + 6) % 7));
+const fmtDow = (dt) => dt.toLocaleDateString(undefined, { weekday: "short" });
+const fmtMD = (dt) => dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+const DataCtx = React.createContext(null);
+function useData() { return useContext(DataCtx); }
+
+/* ---------- blocker create form ---------- */
+function BlockerForm({ pre }) {
+  const { sos, people, addBlocker, closeForm, openSOLines } = useData();
+  const preLines = pre.sos || [];
+  // the SO this card belongs to (card flow pre-selects exactly one line)
+  const primarySO = preLines.length ? soById(preLines[0])?.so : null;
+  const sameSO = primarySO && preLines.every((id) => soById(id)?.so === primarySO);
+  const cardMode = preLines.length === 1 && sameSO;
+  const soLines = primarySO ? linesOfSO(primarySO) : [];
+
+  const [applyAll, setApplyAll] = useState(false);
+  const [f, setF] = useState({ title: "", sos: preLines, wo: "", assignee: "", action: "" });
+  const tog = (key, v) => setF((s) => ({ ...s, [key]: s[key].includes(v) ? s[key].filter((x) => x !== v) : [...s[key], v] }));
+
+  // effective scope: card mode + applyAll => every line of the SO
+  const scopeIds = cardMode && applyAll ? soLines.map((l) => l.id) : f.sos;
+  const scopeLines = scopeIds.map((id) => soById(id)).filter(Boolean);
+  const parts = [...new Set(scopeLines.map((l) => l.part).filter(Boolean))];
+  const val = scopeLines.reduce((a, l) => a + (l.value || 0), 0);
+  const canSave = f.title.trim() && scopeIds.length > 0;
+  const save = () => addBlocker({ title: f.title.trim(), sos: scopeIds, parts, wo: f.wo || null, assignee: f.assignee || null, action: f.action.trim(), status: f.assignee ? "assigned" : "open" });
+
+  const box = { fontFamily: "var(--mono)", fontSize: 12.5, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "9px 11px", color: "var(--ink)", width: "100%", outline: "none", boxSizing: "border-box" };
+  const chk = (on) => ({ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${on ? "var(--amber)" : "var(--line)"}`, background: on ? "var(--panel2)" : "var(--bg2)", color: on ? "var(--ink)" : "var(--muted)" });
+
+  return (
+    <div onClick={closeForm} style={{ position: "fixed", inset: 0, zIndex: 230, background: "rgba(21,34,45,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 560, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+          <ClipboardList size={18} color="var(--amber)" />
+          <span style={{ fontWeight: 700, fontSize: 16, flex: 1 }}>New blocker</span>
+          <span onClick={closeForm} style={{ cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
+        </div>
+
+        <label style={{ fontSize: 12, color: "var(--muted)" }}>Summary</label>
+        <input style={{ ...box, margin: "5px 0 14px" }} placeholder="What's blocking delivery?" value={f.title} onChange={(e) => setF((s) => ({ ...s, title: e.target.value }))} />
+
+        {cardMode ? (
+          <>
+            <label style={{ fontSize: 12, color: "var(--muted)" }}>Sales order line</label>
+            <div style={{ background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 10, padding: "11px 13px", margin: "6px 0 10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span onClick={() => openSOLines(primarySO)} className="tf-mono" style={{ fontSize: 12.5, color: "var(--amber)", cursor: "pointer", textDecoration: "underline dotted" }} title={`View all lines of ${primarySO}`}>{primarySO}</span>
+                {!applyAll && <span className="tf-mono" style={{ fontSize: 12.5, color: "var(--faint)" }}>· Line {soById(preLines[0])?.line}</span>}
+                <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--thread)" }}>{applyAll ? `${soLines.length} lines` : soById(preLines[0])?.part}</span>
+                <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--muted)", marginLeft: "auto" }}>{soById(preLines[0])?.customer}</span>
+              </div>
+            </div>
+            {soLines.length > 1 ? (
+              <label style={{ ...chk(applyAll), marginBottom: 14 }}>
+                <input type="checkbox" checked={applyAll} onChange={(e) => setApplyAll(e.target.checked)} style={{ accentColor: "var(--amber)" }} />
+                Apply to all {soLines.length} lines of {primarySO}
+              </label>
+            ) : (
+              <div style={{ fontSize: 11.5, color: "var(--faint)", marginBottom: 14 }}>{primarySO} has a single line — this blocker covers the whole order.</div>
+            )}
+          </>
+        ) : (
+          <>
+            <label style={{ fontSize: 12, color: "var(--muted)" }}>Sales order lines impacted</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "6px 0 14px" }}>
+              {sos.map((o) => (
+                <span key={o.id} onClick={() => tog("sos", o.id)} style={chk(f.sos.includes(o.id))}>{o.so} · L{o.line} · {o.part || "—"} · {fmtMoney(o.value)}</span>
+              ))}
+            </div>
+          </>
+        )}
+
+        {parts.length > 0 && (
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 14 }}>End item{parts.length > 1 ? "s" : ""}: {parts.map((pn, i) => <React.Fragment key={pn}>{i ? ", " : ""}<PartLink pn={pn}>{pn}</PartLink></React.Fragment>)}</div>
+        )}
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+          <div style={{ flex: "1 1 200px" }}>
+            <label style={{ fontSize: 12, color: "var(--muted)" }}>Work order</label>
+            <select style={{ ...box, marginTop: 5 }} value={f.wo} onChange={(e) => setF((s) => ({ ...s, wo: e.target.value }))}>
+              <option value="">— none —</option>
+              {ACTIVE_WOS.map((w) => <option key={w.id} value={w.id}>{w.id} · {w.desc}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: "1 1 200px" }}>
+            <label style={{ fontSize: 12, color: "var(--muted)" }}>Assign to</label>
+            <select style={{ ...box, marginTop: 5 }} value={f.assignee} onChange={(e) => setF((s) => ({ ...s, assignee: e.target.value }))}>
+              <option value="">— unassigned —</option>
+              {people.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <label style={{ fontSize: 12, color: "var(--muted)" }}>Action item</label>
+        <textarea style={{ ...box, margin: "5px 0 14px", minHeight: 64, resize: "vertical" }} placeholder="Detailed action to clear the blocker…" value={f.action} onChange={(e) => setF((s) => ({ ...s, action: e.target.value }))} />
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 10, marginBottom: 16 }}>
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>$ at risk ({scopeIds.length} line{scopeIds.length === 1 ? "" : "s"})</span>
+          <span className="tf-disp" style={{ marginLeft: "auto", fontSize: 20, fontWeight: 800, color: "var(--red)" }}>{fmtMoney(val)}</span>
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="tf-btn tf-btn-primary" onClick={save} disabled={!canSave} style={{ opacity: canSave ? 1 : 0.5 }}>Create blocker</button>
+          <button className="tf-btn" onClick={closeForm}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- blocker detail / close ---------- */
+function BlockerModal({ id }) {
+  const { blockers, closeBlocker, assignBlocker, setBlockerStatus, setNewPromise, addComment, closeView, people, openSOLines } = useData();
+  const [draft, setDraft] = useState("");
+  const b = blockers.find((x) => x.id === id);
+  if (!b) return null;
+  const val = blockerValue(b);
+
+  return (
+    <div onClick={closeView} style={{ position: "fixed", inset: 0, zIndex: 215, background: "rgba(21,34,45,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 560, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <Tag tone={BLK_TONE[b.status]}>{b.status}</Tag>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--amber)" }}>{b.id}</span>
+          <span onClick={closeView} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
+        </div>
+        <h3 className="tf-disp" style={{ fontSize: 19, fontWeight: 800, margin: "0 0 14px" }}>{b.title}</h3>
+
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", marginBottom: 16 }}>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>$ at risk</span>
+          <span className="tf-disp" style={{ fontSize: 16, fontWeight: 800, color: "var(--red)" }}>{fmtMoney(val)}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Opened</span>
+          <span style={{ fontSize: 13 }}>{fmtDateTime(b.created)}{b.openedBy ? <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}> · by {b.openedBy}</span> : null}</span>
+          {b.status === "closed" && b.closedAt && <>
+            <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Closed</span>
+            <span style={{ fontSize: 13, color: "var(--green)" }}>{fmtDateTime(b.closedAt)}{b.closedBy ? <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}> · by {b.closedBy}</span> : null}</span>
+          </>}
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Work order</span>
+          <span style={{ fontSize: 13 }}>{b.wo ? <ThreadLink id={b.wo} style={{ color: "var(--amber)" }}>{b.wo}</ThreadLink> : "—"}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Action item</span>
+          <span style={{ fontSize: 13, lineHeight: 1.5 }}>{b.action || "—"}</span>
+        </div>
+
+        {b.parts.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Parts</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {b.parts.map((pn) => <PartLink key={pn} pn={pn} style={{ fontSize: 12, padding: "4px 9px", border: "1px solid var(--line2)", borderRadius: 8 }}>{pn}</PartLink>)}
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 16 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Impacted sales order lines ({b.sos.length})</div>
+          {b.sos.map((sid) => { const o = soById(sid); if (!o) return null; return (
+            <div key={sid} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{o.customer} <span onClick={() => openSOLines(o.so)} className="tf-mono" style={{ fontSize: 10.5, color: "var(--amber)", cursor: "pointer", textDecoration: "underline dotted" }} title={`View all lines of ${o.so}`}>{o.so}</span><span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}> · L{o.line}</span></div>
+                <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>promise {o.promise} · qty {o.qty} · {o.parts.map((pn, i) => <React.Fragment key={pn}>{i ? ", " : ""}<PartLink pn={pn} style={{ color: "var(--green)" }}>{pn}</PartLink></React.Fragment>)}</div>
+              </div>
+              <span className="tf-mono" style={{ fontSize: 12, color: "var(--ink)" }}>{fmtMoney(o.value)}</span>
+            </div>
+          ); })}
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Revised promise date</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <input type="date" value={b.newPromise || ""} onChange={(e) => setNewPromise(b.id, e.target.value)}
+              style={{ fontFamily: "var(--mono)", fontSize: 12.5, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)", colorScheme: "dark" }} />
+            {b.newPromise
+              ? <span className="tf-mono" style={{ fontSize: 11, color: "var(--amber)" }}>most-probable ship date for impacted orders</span>
+              : <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>set a most-probable date based on this blocker</span>}
+            {b.newPromise && <button className="tf-btn tf-btn-ghost" disabled title="ERP integration — coming soon" style={{ marginLeft: "auto", fontSize: 11, opacity: 0.55, cursor: "not-allowed" }}>Push to ERP ↗</button>}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Updates ({(b.comments || []).length})</div>
+          {(b.comments || []).map((c, i) => (
+            <div key={i} style={{ padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
+              <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginBottom: 3 }}>{c.who ? c.who + " · " : ""}{new Date(c.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>{c.text}</div>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 7, marginTop: 4 }}>
+            <input className="tf-input" value={draft} placeholder="Add an update…" style={{ flex: 1 }}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) { addComment(b.id, draft.trim()); setDraft(""); } }} />
+            <button className="tf-btn tf-btn-primary" disabled={!draft.trim()} onClick={() => { if (draft.trim()) { addComment(b.id, draft.trim()); setDraft(""); } }} style={{ padding: "9px 12px", opacity: draft.trim() ? 1 : 0.5 }}>Post</button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+          <label className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>status</label>
+          <select value={b.status} onChange={(e) => setBlockerStatus(b.id, e.target.value)}
+            style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
+            <option value="open">open</option>
+            <option value="assigned">assigned</option>
+            <option value="closed">closed</option>
+          </select>
+          <select value={b.assignee || ""} onChange={(e) => assignBlocker(b.id, e.target.value || null)} disabled={b.status === "closed"}
+            style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
+            <option value="">Unassigned</option>
+            {people.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          {b.status !== "closed"
+            ? <button className="tf-btn tf-btn-primary" onClick={() => closeBlocker(b.id)} style={{ marginLeft: "auto" }}>Close blocker</button>
+            : <span style={{ marginLeft: "auto", color: "var(--green)", fontSize: 13, fontWeight: 600 }}>✓ Closed</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- sales order detail ---------- */
+function SOLinesModal({ so }) {
+  const { blockers, openSO, closeSOLines } = useData();
+  const soNum = String(so).includes("-L") ? String(so).split("-L")[0] : so;
+  const lines = linesOfSO(soNum);
+  const customer = lines[0]?.customer || "";
+  const total = lines.reduce((a, l) => a + (l.value || 0), 0);
+  const reqDateOf = (promise) => { try { return isoOf(addDays(D(promise), -14)); } catch (e) { return "—"; } };
+  const cols = "44px 1.4fr 52px 100px 100px 86px";
+  return (
+    <div onClick={closeSOLines} style={{ position: "fixed", inset: 0, zIndex: 212, background: "rgba(21,34,45,.46)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 680, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--amber)" }}>{soNum}</span>
+          <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>· {lines.length} line{lines.length === 1 ? "" : "s"}</span>
+          <span onClick={closeSOLines} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
+        </div>
+        <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{customer || soNum}</h3>
+
+        {lines.length === 0 ? (
+          <div style={{ fontSize: 13, color: "var(--muted)", padding: "10px 0" }}>No lines found for {soNum}.</div>
+        ) : (
+          <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--line)", background: "var(--panel2)" }} className="tf-mono">
+              <span style={{ fontSize: 10, color: "var(--faint)" }}>LINE</span>
+              <span style={{ fontSize: 10, color: "var(--faint)" }}>PART #</span>
+              <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>QTY</span>
+              <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>REQUEST</span>
+              <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>PROMISE</span>
+              <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>COST</span>
+            </div>
+            {lines.map((l) => {
+              const blk = openBlockerForSO(blockers, l.id);
+              const revised = revisedForSO(blockers, l.id);
+              return (
+                <div key={l.id} onClick={() => { closeSOLines(); openSO(l.id); }} style={{ display: "grid", gridTemplateColumns: cols, gap: 8, padding: "10px 12px", borderBottom: "1px solid var(--line)", cursor: "pointer", alignItems: "center", background: blk ? "rgba(240,86,58,.07)" : "transparent" }}>
+                  <span className="tf-mono" style={{ fontSize: 12, color: "var(--ink)" }}>{l.line}</span>
+                  <span style={{ fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {l.part ? <PartLink pn={l.part}>{l.part}</PartLink> : <span className="tf-mono" style={{ color: "var(--faint)" }}>—</span>}
+                    {l.part && ACTIVE_PART_DESC[l.part] ? <span style={{ color: "var(--faint)" }}> · {ACTIVE_PART_DESC[l.part]}</span> : null}
+                    {blk && <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--red)", marginLeft: 6 }}>● blocked</span>}
+                  </span>
+                  <span className="tf-mono" style={{ fontSize: 12, textAlign: "right" }}>{l.qty}</span>
+                  <span className="tf-mono" style={{ fontSize: 11, textAlign: "right", color: "var(--muted)" }}>{reqDateOf(l.promise)}</span>
+                  <span className="tf-mono" style={{ fontSize: 11, textAlign: "right", color: revised ? "var(--amber)" : "var(--muted)" }}>{revised || l.promise}</span>
+                  <span className="tf-disp" style={{ fontSize: 13, fontWeight: 700, textAlign: "right" }}>{fmtMoney(l.value)}</span>
+                </div>
+              );
+            })}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 86px", gap: 8, padding: "10px 12px", background: "var(--panel2)" }}>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>ORDER TOTAL ({lines.length} line{lines.length === 1 ? "" : "s"})</span>
+              <span className="tf-disp" style={{ fontSize: 15, fontWeight: 800, textAlign: "right" }}>{fmtMoney(total)}</span>
+            </div>
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: "var(--faint)", marginTop: 10 }}>Request date shown is the typical lead-time target (promise − 14 days). Tap a line to open it.</div>
+      </div>
+    </div>
+  );
+}
+
+function PartLink({ pn, children, style }) {
+  const { openPart } = useData();
+  if (!pn) return <>{children}</>;
+  return <span onClick={(e) => { e.stopPropagation(); openPart(pn); }} title={"View " + pn}
+    style={{ cursor: "pointer", borderBottom: "1px dotted currentColor", color: "var(--thread)", fontFamily: "var(--mono)", ...style }}>{children ?? pn}</span>;
+}
+
+function PartModal({ pn }) {
+  const { closePart, getPartDetail } = useData();
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    let alive = true; setD(null);
+    (async () => { const r = await getPartDetail(pn); if (alive) setD(r); })();
+    return () => { alive = false; };
+  }, [pn]);
+  const p = d?.part;
+  const clsLabel = p && (p.classification === "SOEI" || p.classification === "end_item") ? "sales order end item" : (p?.classification || "");
+  const cell = { padding: "9px 11px", fontSize: 12, borderTop: "1px solid var(--line)" };
+
+  return (
+    <div onClick={closePart} style={{ position: "fixed", inset: 0, zIndex: 224, background: "rgba(21,34,45,.48)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 640, maxHeight: "88vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+          <span className="tf-mono" style={{ fontSize: 13, color: "var(--thread)" }}>{pn}</span>
+          {clsLabel && <Tag tone="amber">{clsLabel}</Tag>}
+          <span onClick={closePart} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
+        </div>
+        <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{p?.description || (d ? "—" : "Loading…")}</h3>
+
+        {!d ? (
+          <div style={{ fontSize: 13, color: "var(--muted)", padding: "8px 0" }}>Loading part…</div>
+        ) : (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: "8px 14px", marginBottom: 18 }}>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>Commodity</span><span style={{ fontSize: 12.5 }}>{p.commodity || "—"}</span>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>Revision</span><span style={{ fontSize: 12.5 }}>{p.revision || "—"}</span>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>Lifecycle</span><span style={{ fontSize: 12.5 }}>{p.lifecycle || "—"}</span>
+              <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>UoM</span><span style={{ fontSize: 12.5 }}>{p.uom || "—"}</span>
+              {p.unit_cost != null && <><span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>Unit cost</span><span style={{ fontSize: 12.5 }}>${Number(p.unit_cost).toLocaleString()}</span></>}
+            </div>
+
+            <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Bill of material ({d.bom.length})</div>
+            {d.bom.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "var(--faint)", marginBottom: 18 }}>No bill of material on file for this part.</div>
+            ) : (
+              <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden", marginBottom: 18 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "54px 1.5fr 48px 1fr", gap: 8, padding: "8px 11px", background: "var(--panel2)" }} className="tf-mono">
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>BOM LN</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>COMPONENT</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>QTY</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>REF DES</span>
+                </div>
+                {d.bom.map((c, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "54px 1.5fr 48px 1fr", gap: 8, ...cell, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ color: "var(--muted)" }}>{c.find_number || "—"}</span>
+                    <span style={{ minWidth: 0 }}>
+                      <PartLink pn={c.child_part_number} style={{ color: "var(--green)" }}>{c.child_part_number}</PartLink>
+                      {c.child_description ? <span style={{ color: "var(--faint)" }}> · {c.child_description}</span> : null}
+                    </span>
+                    <span className="tf-mono" style={{ textAlign: "right" }}>{c.quantity ?? "—"}</span>
+                    <span className="tf-mono" style={{ color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.ref_designators || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Vendors / vendor parts ({d.vendors.length})</div>
+            {d.vendors.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: "var(--faint)" }}>No vendor parts on file for this part.</div>
+            ) : (
+              <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 80px 70px", gap: 8, padding: "8px 11px", background: "var(--panel2)" }} className="tf-mono">
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>VENDOR</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)" }}>VENDOR PART #</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>UNIT $</span>
+                  <span style={{ fontSize: 10, color: "var(--faint)", textAlign: "right" }}>LEAD</span>
+                </div>
+                {d.vendors.map((v, i) => (
+                  <div key={i} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 80px 70px", gap: 8, ...cell, alignItems: "center" }}>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ fontSize: 12.5 }}>{v.vendor_name || "—"}</span>
+                      {v.vendor_code ? <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}> · {v.vendor_code}</span> : null}
+                    </span>
+                    <span className="tf-mono" style={{ color: "var(--thread)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vendor_part_number}</span>
+                    <span className="tf-mono" style={{ textAlign: "right" }}>{v.unit_cost != null ? "$" + Number(v.unit_cost).toLocaleString() : "—"}</span>
+                    <span className="tf-mono" style={{ textAlign: "right", color: "var(--muted)" }}>{v.lead_time_days != null ? v.lead_time_days + "d" : "—"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 10 }}>A part can have multiple vendor parts; each is unique by vendor + vendor part number.</div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SalesOrderModal({ id }) {
+  const { blockers, openBlocker, openForm, closeSO, openSOLines, editSOLine, recordShipment, setBlockerStatus } = useData();
+  const o = soById(id);
+  const [edit, setEdit] = useState(false);
+  const [ef, setEf] = useState({ promise: "", status: "", shipDate: "" });
+  const [ship, setShip] = useState({ qty: "", date: new Date().toISOString().slice(0, 10) });
+  const [busy, setBusy] = useState("");
+  const [note, setNote] = useState("");
+  const [pendingShared, setPendingShared] = useState([]);
+  useEffect(() => { if (o) { setEf({ promise: o.revisedPromise || "", status: o.status || "", shipDate: o.shipDate || "" }); setEdit(false); setNote(""); } }, [o && o.id]);
+  if (!o) return null;
+  const blk = openBlockerForSO(blockers, id);
+  const related = blockers.filter((b) => b.sos.includes(id)).sort((a, b) => (a.status === "closed") - (b.status === "closed") || blockerValue(b) - blockerValue(a));
+  const revised = related.find((x) => x.status !== "closed" && x.newPromise)?.newPromise;
+  const wos = ACTIVE_WOS.filter((w) => o.parts.includes(w.part));
+  const siblings = linesOfSO(o.so);
+
+  return (
+    <div onClick={closeSO} style={{ position: "fixed", inset: 0, zIndex: 206, background: "rgba(21,34,45,.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+      <div onClick={(e) => e.stopPropagation()} className="tf-fade" style={{ width: "100%", maxWidth: 540, maxHeight: "86vh", overflowY: "auto", background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 16, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          {(() => { const done = isClosedLine(o); return <Tag tone={done ? "green" : blk ? "red" : "green"}>{done ? "closed" : blk ? "at risk" : "on track"}</Tag>; })()}
+          <span onClick={() => openSOLines(o.so)} className="tf-mono" style={{ fontSize: 12, color: "var(--amber)", cursor: "pointer", textDecoration: "underline dotted" }} title={`View all lines of ${o.so}`}>{o.so}</span>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>· Line {o.line}{siblings.length > 1 ? ` of ${siblings.length}` : ""}</span>
+          <span onClick={closeSO} style={{ marginLeft: "auto", cursor: "pointer", color: "var(--faint)", fontSize: 18 }}>✕</span>
+        </div>
+        <h3 className="tf-disp" style={{ fontSize: 20, fontWeight: 800, margin: "0 0 14px" }}>{o.customer}</h3>
+
+        <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px", marginBottom: 16 }}>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>End item</span><span style={{ fontSize: 13 }}>{o.part ? <PartLink pn={o.part} style={{ color: "var(--thread)" }}>{o.part}</PartLink> : "—"}{o.part && ACTIVE_PART_DESC[o.part] ? <span style={{ color: "var(--muted)" }}> · {ACTIVE_PART_DESC[o.part]}</span> : null}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Site</span><span style={{ fontSize: 13 }}>{o.site}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Promise date</span><span style={{ fontSize: 13, textDecoration: (o.revisedPromise || revised) ? "line-through" : "none", opacity: (o.revisedPromise || revised) ? 0.55 : 1 }}>{o.promise}</span>
+          {o.revisedPromise && <><span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Revised promise</span><span style={{ fontSize: 13, fontWeight: 700, color: "var(--amber)" }}>{o.revisedPromise}{o.promiseChangedBy ? <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", fontWeight: 400 }}> · by {o.promiseChangedBy}</span> : null}</span></>}
+          {!o.revisedPromise && revised && <><span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Revised promise</span><span style={{ fontSize: 13, fontWeight: 700, color: "var(--amber)" }}>{revised} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", fontWeight: 400 }}>· most probable</span></span></>}
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Quantity</span><span style={{ fontSize: 13 }}>{o.qty}</span>
+          <span className="tf-mono" style={{ fontSize: 11.5, color: "var(--faint)" }}>Total value</span><span className="tf-disp" style={{ fontSize: 16, fontWeight: 800 }}>{fmtMoney(o.value)}</span>
+        </div>
+
+        {(() => {
+          const remaining = Math.max(0, o.qty - (o.qtyShipped || 0));
+          const recognized = o.qty > 0 ? o.value * ((o.qtyShipped || 0) / o.qty) : 0;
+          const done = o.shipDate || ["shipped", "closed", "complete", "completed", "delivered"].includes((o.status || "").toLowerCase());
+          const inp = { fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 9px", color: "var(--ink)", outline: "none", colorScheme: "dark" };
+          const okDate = (s) => s === "" || /^\d{4}-\d{2}-\d{2}$/.test(s);
+          const CLOSED_STATUSES = ["shipped", "closed", "complete", "completed", "delivered"];
+          const closeAttached = () => {
+            const relatedOpen = blockers.filter((b) => b.status !== "closed" && b.sos.includes(o.id));
+            if (!relatedOpen.length) return;
+            const otherOpen = (b) => b.sos.filter((sid) => sid !== o.id).filter((sid) => { const oo = soById(sid); return oo && !isClosedLine(oo); });
+            const sole = relatedOpen.filter((b) => otherOpen(b).length === 0);
+            const shared = relatedOpen.filter((b) => otherOpen(b).length > 0);
+            sole.forEach((b) => setBlockerStatus(b.id, "closed"));
+            if (sole.length) setNote((n) => (n ? n + " " : "") + `${sole.length} attached blocker${sole.length > 1 ? "s" : ""} auto-closed.`);
+            if (shared.length) setPendingShared(shared.map((b) => ({ id: b.id, title: b.title, others: otherOpen(b) })));
+          };
+          const save = async () => { if (!okDate(ef.promise) || !okDate(ef.shipDate)) { setNote("Dates must be YYYY-MM-DD."); return; } setBusy("save"); setNote(""); const patch = {}; if (ef.promise !== (o.revisedPromise || "")) patch.revised_promise_date = ef.promise; if (ef.status !== (o.status || "")) patch.status = ef.status; if (ef.shipDate !== (o.shipDate || "")) patch.ship_date = ef.shipDate; if (!Object.keys(patch).length) { setEdit(false); setBusy(""); return; } const r = await editSOLine(o.so, o.line, patch); setBusy(""); if (r && r.offline) { setNote("Editing works on live data only."); return; } setEdit(false); if (patch.status && CLOSED_STATUSES.includes(patch.status.toLowerCase())) closeAttached(); };
+          const doShip = async () => { const q = parseFloat(ship.qty); if (!q || q <= 0) { setNote("Enter a quantity to ship."); return; } if (q > remaining + 1e-9) { setNote(`Only ${remaining} remaining.`); return; } if (!okDate(ship.date) || ship.date === "") { setNote("Ship date must be YYYY-MM-DD."); return; } setBusy("ship"); const r = await recordShipment(o.so, o.line, q, ship.date); setBusy(""); if (r && r.offline) { setNote("Shipping works on live data only."); return; } setShip({ qty: "", date: ship.date }); if (r.closed) { setNote("Fully shipped — order auto-closed."); closeAttached(); } else setNote(`Shipped ${q}. $${(r.recognized || 0).toLocaleString()} recognized.`); };
+          return (
+            <div style={{ marginBottom: 16, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 12, padding: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <div className="tf-eyebrow">Fulfillment</div>
+                <Tag tone={done ? "green" : "yellow"}>{o.status || (done ? "shipped" : "open")}</Tag>
+                <button className="tf-btn" style={{ marginLeft: "auto", padding: "5px 10px" }} onClick={() => setEdit((e) => !e)}>{edit ? "Cancel" : "Edit"}</button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: edit ? 12 : 0 }}>
+                <div><div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>SHIPPED</div><div style={{ fontSize: 14, fontWeight: 700 }}>{o.qtyShipped || 0}<span style={{ color: "var(--faint)", fontWeight: 400 }}> / {o.qty}</span></div></div>
+                <div><div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>REMAINING</div><div style={{ fontSize: 14, fontWeight: 700, color: remaining > 0 ? "var(--amber)" : "var(--green)" }}>{remaining}</div></div>
+                <div><div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>REVENUE RECOGNIZED</div><div className="tf-disp" style={{ fontSize: 14, fontWeight: 800, color: "var(--green)" }}>{fmtMoney(recognized)}</div></div>
+              </div>
+              {o.shipDate && <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 6 }}>Last ship date: {o.shipDate}</div>}
+              {(o.promiseChangedBy || o.statusChangedBy) && (
+                <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginTop: 6, lineHeight: 1.6 }}>
+                  {o.promiseChangedBy && <div>Promise last changed by {o.promiseChangedBy}{o.promiseChangedAt ? " · " + o.promiseChangedAt.slice(0, 10) : ""}</div>}
+                  {o.statusChangedBy && <div>Status last changed by {o.statusChangedBy}{o.statusChangedAt ? " · " + o.statusChangedAt.slice(0, 10) : ""}</div>}
+                </div>
+              )}
+
+              {edit && (
+                <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 12, display: "grid", gap: 9 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 92 }}>Revised promise</span>
+                    <input type="date" style={{ ...inp, flex: 1 }} value={ef.promise || ""} onChange={(e) => setEf({ ...ef, promise: e.target.value })} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 92 }}>Status</span>
+                    <select style={{ ...inp, flex: 1 }} value={ef.status || ""} onChange={(e) => setEf({ ...ef, status: e.target.value })}>
+                      {["", "open", "in_production", "shipped", "closed", "on_hold", "cancelled"].map((s) => <option key={s} value={s}>{s || "—"}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", width: 92 }}>Ship date</span>
+                    <input type="date" style={{ ...inp, flex: 1 }} value={ef.shipDate || ""} onChange={(e) => setEf({ ...ef, shipDate: e.target.value })} />
+                  </div>
+                  <button className="tf-btn tf-btn-primary" style={{ justifySelf: "start", padding: "7px 14px" }} disabled={busy === "save"} onClick={save}>{busy === "save" ? "Saving…" : "Save changes"}</button>
+                </div>
+              )}
+
+              {remaining > 0 && (
+                <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12, marginTop: 12 }}>
+                  <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginBottom: 7 }}>RECORD SHIPMENT</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <input type="number" min="0" step="any" placeholder={`qty (≤ ${remaining})`} style={{ ...inp, width: 120 }} value={ship.qty} onChange={(e) => setShip({ ...ship, qty: e.target.value })} />
+                    <input type="date" style={{ ...inp, width: 150 }} value={ship.date} onChange={(e) => setShip({ ...ship, date: e.target.value })} />
+                    <button className="tf-btn tf-btn-primary" style={{ padding: "7px 14px" }} disabled={busy === "ship"} onClick={doShip}>{busy === "ship" ? "…" : "Ship"}</button>
+                  </div>
+                </div>
+              )}
+              {note && <div className="tf-mono" style={{ fontSize: 11, color: "var(--thread)", marginTop: 9 }}>{note}</div>}
+            </div>
+          );
+        })()}
+
+        {pendingShared.length > 0 && (
+          <div style={{ marginBottom: 16, background: "rgba(255,138,61,.08)", border: "1px solid var(--amber)", borderRadius: 12, padding: 14 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 8 }}>⚠ Shared blockers — confirm before closing</div>
+            <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 10 }}>This order closed, but {pendingShared.length === 1 ? "this blocker also holds up" : "these blockers also hold up"} other open orders. Closing {pendingShared.length === 1 ? "it" : "them"} here clears {pendingShared.length === 1 ? "it" : "them"} on those orders too.</div>
+            {pendingShared.map((b) => (
+              <div key={b.id} style={{ padding: "8px 0", borderTop: "1px solid var(--line)" }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{b.title}</div>
+                <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--amber)" }}>also affects: {b.others.map((sid) => { const oo = soById(sid); return oo ? oo.so + " L" + oo.line : sid; }).join(", ")}</div>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button className="tf-btn tf-btn-primary" onClick={() => { pendingShared.forEach((b) => setBlockerStatus(b.id, "closed")); setNote((n) => (n ? n + " " : "") + `${pendingShared.length} shared blocker${pendingShared.length > 1 ? "s" : ""} closed on all referenced orders.`); setPendingShared([]); }}>Close on all referenced orders</button>
+              <button className="tf-btn" onClick={() => setPendingShared([])}>Keep open</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 14 }}>
+          <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Parts</div>
+          {o.parts.map((pn) => (
+            <div key={pn} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6 }}>
+              <PartLink pn={pn} style={{ color: "var(--green)", fontSize: 12 }}>{pn}</PartLink>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{PART_META[pn]?.desc || ACTIVE_PART_DESC[pn] || ""}</span>
+            </div>
+          ))}
+        </div>
+
+        {wos.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Related work orders</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {wos.map((w) => <ThreadLink key={w.id} id={w.id} style={{ color: "var(--amber)", fontFamily: "var(--mono)", fontSize: 12, padding: "4px 9px", border: "1px solid var(--line2)", borderRadius: 8, borderBottom: "1px solid var(--line2)" }}>{w.id}</ThreadLink>)}
+            </div>
+          </div>
+        )}
+
+        {related.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div className="tf-eyebrow" style={{ marginBottom: 7 }}>Blockers on this order ({related.length})</div>
+            {related.map((b) => (
+              <div key={b.id} onClick={() => openBlocker(b.id)} className="tf-row" style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 11px", background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, marginBottom: 6, cursor: "pointer" }}>
+                <Tag tone={BLK_TONE[b.status]}>{b.status}</Tag>
+                <span style={{ fontSize: 12.5, fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.title}</span>
+                <span className="tf-mono" style={{ fontSize: 11, color: "var(--red)" }}>{fmtMoney(blockerValue(b))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+          {related.length === 0 && <span style={{ fontSize: 12.5, color: "var(--green)" }}>No blocker on this order yet.</span>}
+          <button className="tf-btn tf-btn-primary" onClick={() => openForm([o.id])} style={{ marginLeft: "auto" }}><Plus size={14} /> New blocker</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- blockers list page ---------- */
+function BlockersPage() {
+  const { blockers, openBlocker, openForm, confirmBlocker, dismissBlocker, runDeliveryAgent } = useData();
+  const [filter, setFilter] = useState("all");
+  const [site, setSite] = useState("All");
+  const [agentMsg, setAgentMsg] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const atSite = (b) => site === "All" || b.sos.some((id) => soById(id)?.site === site);
+  const scoped = blockers.filter(atSite);
+  const list = scoped.filter((b) => filter === "all" || (filter === "review" ? b.reviewStatus === "under_review" && b.status !== "closed" : b.status === filter));
+  const openCount = scoped.filter((b) => b.status !== "closed").length;
+  const reviewCount = scoped.filter((b) => b.reviewStatus === "under_review" && b.status !== "closed").length;
+  const atRisk = scoped.filter((b) => b.status !== "closed").reduce((a, b) => a + blockerValue(b), 0);
+
+  const runAgent = async () => {
+    setScanning(true); setAgentMsg("");
+    try { const r = await runDeliveryAgent(); setAgentMsg(r.offline ? "Agent runs against live data only." : r.created > 0 ? `Agent flagged ${r.created} past-due order${r.created > 1 ? "s" : ""} for review.` : "Agent found no new past-due orders."); }
+    catch { setAgentMsg("Could not run the agent (admins only)."); }
+    finally { setScanning(false); }
+  };
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={ClipboardList} eyebrow="Manufacturing Delivery Control · Blocker management" title="Blockers"
+        sub="Shop-floor issues tied to the sales orders they put at risk. Each blocker links parts, a work order and an owner — and carries the $ revenue exposed across its impacted orders. Clear a blocker; the delivery calendar and forecast update live." />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
+        {[["Open / assigned", openCount, "var(--red)"], ["Awaiting review", reviewCount, "var(--amber)"], ["$ revenue at risk", fmtMoney(atRisk), "var(--amber)"], ["Total blockers", scoped.length, "var(--ink)"]].map(([l, v, c]) => (
+          <div key={l} className="tf-panel" style={{ padding: 16 }}>
+            <div className="tf-disp" style={{ fontSize: 24, fontWeight: 800, color: c }}>{v}</div>
+            <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 3 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 4 }}>
+          {["all", "review", "open", "assigned", "closed"].map((s) => (
+            <button key={s} onClick={() => setFilter(s)} className="tf-mono" style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, textTransform: "capitalize", border: `1px solid ${filter === s ? "var(--amber)" : "var(--line)"}`, background: filter === s ? "var(--panel2)" : "transparent", color: filter === s ? "var(--ink)" : "var(--muted)" }}>{s === "review" ? "Under review" : s}</button>
+          ))}
+        </div>
+        <button className="tf-btn" style={{ marginLeft: "auto" }} onClick={runAgent} disabled={scanning} title="Scan open orders whose promise date has passed">
+          <Bot size={15} /> {scanning ? "Scanning…" : "Run delivery check"}
+        </button>
+        <button className="tf-btn tf-btn-primary" onClick={() => openForm([])}><Plus size={15} /> New blocker</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <Building2 size={15} color="var(--faint)" />
+          <select value={site} onChange={(e) => setSite(e.target.value)} style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
+            <option value="All">All sites</option>
+            {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+      {agentMsg && <div className="tf-mono" style={{ fontSize: 12, color: "var(--thread)", marginBottom: 12 }}>{agentMsg}</div>}
+
+      <div className="tf-panel" style={{ overflow: "hidden" }}>
+        {list.length === 0 && <div style={{ padding: 20, color: "var(--faint)", fontSize: 13 }}>No blockers in this view.</div>}
+        {list.map((b) => {
+          const review = b.reviewStatus === "under_review" && b.status !== "closed";
+          const accent = b.status === "closed" ? "var(--faint)" : review ? "var(--amber)" : "var(--red)";
+          return (
+            <div key={b.id} onClick={() => openBlocker(b.id)} className="tf-row" style={{ padding: "13px 16px", borderBottom: "1px solid var(--line)", borderLeft: `3px solid ${accent}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: review ? "rgba(255,138,61,.06)" : undefined }}>
+              {review
+                ? <Tag tone="yellow"><Bot size={11} style={{ verticalAlign: "-1px", marginRight: 3 }} />Under review</Tag>
+                : <Tag tone={BLK_TONE[b.status]}>{b.status}</Tag>}
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{b.title}</div>
+                <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)" }}>{b.id} · {b.sos.length} order{b.sos.length > 1 ? "s" : ""} · {b.wo || "no WO"} · {review ? <span style={{ color: "var(--amber)" }}>flagged by {b.openedBy || "Agent"}</span> : (b.assignee || "unassigned")}</div>
+              </div>
+              {review && (
+                <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                  <button className="tf-btn" style={{ padding: "6px 11px", borderColor: "var(--red)", color: "var(--red)" }} onClick={() => confirmBlocker(b.id)}>Confirm</button>
+                  <button className="tf-btn" style={{ padding: "6px 11px" }} onClick={() => dismissBlocker(b.id)}>Dismiss</button>
+                </div>
+              )}
+              <span className="tf-disp" style={{ fontSize: 17, fontWeight: 800, color: accent }}>{fmtMoney(blockerValue(b))}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- point-in-time delivery calendar ---------- */
+function DeliveryPage() {
+  const { sos, blockers, openBlocker, openForm, openSO, delivSite: site, setDelivSite: setSite, delivWeek: weekStart, setDelivWeek: setWeekStart } = useData();
+  const [view, setView] = useState("week");
+  const [monthRef, setMonthRef] = useState(() => new Date());
+
+  const filtered = site === "All" ? sos : sos.filter((s) => s.site === site);
+  const daySOs = (iso) => filtered.filter((s) => effPromise(blockers, s) === iso);
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekIsos = weekDays.map(isoOf);
+  const weekVal = filtered.filter((s) => weekIsos.includes(effPromise(blockers, s))).reduce((a, s) => a + s.value, 0);
+  const weekOrders = filtered.filter((s) => weekIsos.includes(effPromise(blockers, s)));
+  const weekAtRisk = weekOrders.filter((s) => openBlockerForSO(blockers, s.id)).length;
+
+  const Card = ({ o }) => {
+    const blk = openBlockerForSO(blockers, o.id);
+    const done = isClosedLine(o);
+    return (
+      <div className="tf-panel" onClick={() => openSO(o.id)} style={{ padding: 0, marginBottom: 8, overflow: "hidden", cursor: "pointer", border: done ? "1px solid var(--green)" : blk ? "1px solid var(--red)" : "1px solid var(--line)", background: done ? "rgba(67,194,119,.06)" : undefined }}>
+        {done ? <div style={{ height: 4, background: "var(--green)" }} /> : blk ? <div style={{ height: 4, background: "var(--red)" }} /> : null}
+        <div style={{ padding: "10px 11px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontWeight: 700, fontSize: 13 }}>{o.customer}</span>
+            <span style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+              {blk && <span onClick={(e) => { e.stopPropagation(); openBlocker(blk.id); }} title="Open blocker" style={{ cursor: "pointer", display: "grid", placeItems: "center", width: 22, height: 22, borderRadius: 6, background: "rgba(240,86,58,.15)" }}><AlertTriangle size={13} color="var(--red)" /></span>}
+              <span onClick={(e) => { e.stopPropagation(); openForm([o.id]); }} title="Create blocker" style={{ cursor: "pointer", display: "grid", placeItems: "center", width: 22, height: 22, borderRadius: 6, background: "var(--panel2)" }}><Plus size={14} color="var(--muted)" /></span>
+            </span>
+          </div>
+          <div className="tf-disp" style={{ fontSize: 16, fontWeight: 800, margin: "3px 0 1px" }}>{fmtMoney(o.value)}</div>
+          <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>{o.so} · L{o.line} · qty {o.qty}</div>
+          {(o.revisedPromise || revisedForSO(blockers, o.id)) && <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--amber)", marginTop: 2 }}>↪ revised from <span style={{ textDecoration: "line-through", opacity: 0.7 }}>{o.promise}</span> → {o.revisedPromise || revisedForSO(blockers, o.id)}</div>}
+          <div style={{ marginTop: 5, display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {o.parts.map((pn) => <PartLink key={pn} pn={pn} style={{ fontSize: 10, padding: "1px 6px", border: "1px solid var(--line2)", borderRadius: 6 }}>{pn}</PartLink>)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  /* committed vs blocked split for any subset */
+  const splitFor = (pred) => {
+    const ms = filtered.filter(pred);
+    const blocked = ms.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
+    const committed = ms.reduce((a, s) => a + s.value, 0) - blocked;
+    return { committed, blocked, total: committed + blocked, count: ms.length };
+  };
+  const splitBar = (g, b, h = 9) => (
+    <div style={{ display: "flex", height: h, borderRadius: 99, overflow: "hidden", background: "var(--bg2)" }}>
+      <div style={{ width: (g + b ? (g / (g + b)) * 100 : 0) + "%", background: "var(--green)" }} />
+      <div style={{ width: (g + b ? (b / (g + b)) * 100 : 0) + "%", background: "var(--red)" }} />
+    </div>
+  );
+  const sameMonth = (s, ref) => { const d = D(effPromise(blockers, s)); return d.getMonth() === ref.getMonth() && d.getFullYear() === ref.getFullYear(); };
+  const SummaryBar = ({ title, sp }) => (
+    <div className="tf-panel" style={{ padding: "14px 16px", marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginBottom: 10 }}>
+        {title && <div style={{ fontWeight: 700, fontSize: 15, marginRight: "auto" }}>{title}</div>}
+        <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>committed</div><div className="tf-disp" style={{ fontSize: 20, fontWeight: 800, color: "var(--green)" }}>{fmtMoney(sp.committed)}</div></div>
+        <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>blocked</div><div className="tf-disp" style={{ fontSize: 20, fontWeight: 800, color: "var(--red)" }}>{fmtMoney(sp.blocked)}</div></div>
+        <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>total</div><div className="tf-disp" style={{ fontSize: 20, fontWeight: 800 }}>{fmtMoney(sp.total)}</div></div>
+        <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>orders</div><div className="tf-disp" style={{ fontSize: 20, fontWeight: 800 }}>{sp.count}</div></div>
+      </div>
+      {splitBar(sp.committed, sp.blocked, 10)}
+    </div>
+  );
+
+  /* monthly grid */
+  const monthGrid = () => {
+    const first = new Date(monthRef.getFullYear(), monthRef.getMonth(), 1);
+    const start = mondayOf(first);
+    const cells = Array.from({ length: 42 }, (_, i) => addDays(start, i));
+    const sp = splitFor((s) => sameMonth(s, monthRef));
+    return (
+      <>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+          <button className="tf-btn tf-btn-ghost" onClick={() => setMonthRef(new Date(monthRef.getFullYear(), monthRef.getMonth() - 1, 1))}><ChevronLeft size={15} /></button>
+          <span style={{ fontWeight: 700, fontSize: 16 }}>{monthRef.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
+          <button className="tf-btn tf-btn-ghost" onClick={() => setMonthRef(new Date(monthRef.getFullYear(), monthRef.getMonth() + 1, 1))}><ChevronRight size={15} /></button>
+        </div>
+        <SummaryBar sp={sp} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 6 }}>
+          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d} className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", textAlign: "center", paddingBottom: 4 }}>{d}</div>)}
+          {cells.map((dt, i) => {
+            const inMonth = dt.getMonth() === monthRef.getMonth();
+            const list = daySOs(isoOf(dt));
+            const v = list.reduce((a, s) => a + s.value, 0);
+            const risk = list.some((s) => openBlockerForSO(blockers, s.id));
+            return (
+              <div key={i} onClick={() => { if (list.length === 1) { openSO(list[0].id); } else if (list.length) { setWeekStart(mondayOf(dt)); setView("week"); } }}
+                style={{ minHeight: 64, borderRadius: 9, border: "1px solid var(--line)", background: inMonth ? "var(--panel)" : "transparent", opacity: inMonth ? 1 : 0.4, padding: 7, cursor: list.length ? "pointer" : "default" }}>
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <span className="tf-mono" style={{ fontSize: 11, color: "var(--muted)" }}>{dt.getDate()}</span>
+                  {risk && <span style={{ marginLeft: "auto", width: 7, height: 7, borderRadius: 99, background: "var(--red)" }} />}
+                </div>
+                {list.length > 0 && <>
+                  <div className="tf-mono" style={{ fontSize: 10, color: "var(--ink)", marginTop: 4 }}>{list.length} order{list.length > 1 ? "s" : ""}</div>
+                  <div className="tf-mono" style={{ fontSize: 10, color: "var(--amber)" }}>{fmtMoney(v)}</div>
+                </>}
+              </div>
+            );
+          })}
+        </div>
+      </>
+    );
+  };
+
+  /* quarterly view */
+  const quarterGrid = () => {
+    const y = monthRef.getFullYear();
+    const qIdx = Math.floor(monthRef.getMonth() / 3);
+    const qMonths = [0, 1, 2].map((k) => new Date(y, qIdx * 3 + k, 1));
+    const sp = splitFor((s) => { const d = D(effPromise(blockers, s)); return d.getFullYear() === y && Math.floor(d.getMonth() / 3) === qIdx; });
+    const goQ = (delta) => setMonthRef(new Date(y, qIdx * 3 + delta * 3, 1));
+    return (
+      <>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+          <button className="tf-btn tf-btn-ghost" onClick={() => goQ(-1)}><ChevronLeft size={15} /></button>
+          <span style={{ fontWeight: 700, fontSize: 16 }}>Q{qIdx + 1} {y}</span>
+          <button className="tf-btn tf-btn-ghost" onClick={() => goQ(1)}><ChevronRight size={15} /></button>
+        </div>
+        <SummaryBar sp={sp} />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }} className="tf-cols">
+          {qMonths.map((mref) => {
+            const ms = splitFor((s) => sameMonth(s, mref));
+            return (
+              <div key={mref.getMonth()} className="tf-panel" onClick={() => { setMonthRef(mref); setView("month"); }} style={{ padding: 16, cursor: "pointer" }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>{mref.toLocaleDateString(undefined, { month: "long" })}</span>
+                  <span className="tf-disp" style={{ marginLeft: "auto", fontSize: 19, fontWeight: 800 }}>{fmtMoney(ms.total)}</span>
+                </div>
+                <div style={{ margin: "11px 0 9px" }}>{splitBar(ms.committed, ms.blocked)}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                  <span style={{ color: "var(--green)" }}>{fmtMoney(ms.committed)} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)" }}>clear</span></span>
+                  <span style={{ color: "var(--red)" }}>{fmtMoney(ms.blocked)} <span className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)" }}>blocked</span></span>
+                </div>
+                <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", marginTop: 8 }}>{ms.count} order{ms.count === 1 ? "" : "s"} · tap to open month</div>
+              </div>
+            );
+          })}
+        </div>
+      </>
+    );
+  };
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={CalendarDays} eyebrow="Manufacturing Delivery Control · Point-in-time delivery" title="Delivery calendar"
+        sub="Every sales order on a calendar by promise date. Orders with an open blocker show a red band with the revenue at risk. Create or open a blocker right from a card. Filter by site to see committed vs blocked revenue per location." />
+
+      {/* controls */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[["week", "Weekly"], ["month", "Monthly"], ["quarter", "Quarterly"]].map(([k, label]) => (
+            <button key={k} onClick={() => setView(k)} className="tf-mono" style={{ padding: "7px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${view === k ? "var(--amber)" : "var(--line)"}`, background: view === k ? "var(--panel2)" : "transparent", color: view === k ? "var(--ink)" : "var(--muted)" }}>{label}</button>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginLeft: "auto" }}>
+          <Building2 size={15} color="var(--faint)" />
+          <select value={site} onChange={(e) => setSite(e.target.value)} style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
+            <option value="All">All sites</option>
+            {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {view === "week" ? (
+        <>
+          {/* week summary + nav */}
+          <div className="tf-panel" style={{ padding: "14px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <button className="tf-btn tf-btn-ghost" onClick={() => setWeekStart(addDays(weekStart, -7))}><ChevronLeft size={15} /></button>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>{fmtMD(weekStart)} – {fmtMD(addDays(weekStart, 6))}, {weekStart.getFullYear()}</span>
+            <button className="tf-btn tf-btn-ghost" onClick={() => setWeekStart(addDays(weekStart, 7))}><ChevronRight size={15} /></button>
+            <button className="tf-btn tf-btn-ghost" onClick={() => setWeekStart(mondayOf(new Date()))}>Today</button>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 22, flexWrap: "wrap" }}>
+              <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>week revenue forecast</div><div className="tf-disp" style={{ fontSize: 22, fontWeight: 800, color: "var(--amber)" }}>{fmtMoney(weekVal)}</div></div>
+              <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>orders</div><div className="tf-disp" style={{ fontSize: 22, fontWeight: 800 }}>{weekOrders.length}</div></div>
+              <div><div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>at risk</div><div className="tf-disp" style={{ fontSize: 22, fontWeight: 800, color: weekAtRisk ? "var(--red)" : "var(--green)" }}>{weekAtRisk}</div></div>
+            </div>
+          </div>
+
+          {/* 7-day grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7,minmax(140px,1fr))", gap: 8, overflowX: "auto" }}>
+            {weekDays.map((dt) => {
+              const list = daySOs(isoOf(dt));
+              const isToday = isoOf(dt) === isoOf(new Date());
+              return (
+                <div key={isoOf(dt)} style={{ minWidth: 140 }}>
+                  <div style={{ textAlign: "center", padding: "7px 0", borderRadius: 9, marginBottom: 8, background: isToday ? "var(--panel2)" : "transparent", border: isToday ? "1px solid var(--amber)" : "1px solid var(--line)" }}>
+                    <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)" }}>{fmtDow(dt)}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{fmtMD(dt)}</div>
+                  </div>
+                  {list.length === 0 && <div className="tf-mono" style={{ fontSize: 10, color: "var(--faint)", textAlign: "center", padding: "6px 0" }}>—</div>}
+                  {list.map((o) => <Card key={o.id} o={o} />)}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : view === "month" ? monthGrid() : quarterGrid()}
+    </div>
+  );
+}
+
+/* ---------- point-in-time revenue forecast (finance / GM view) ---------- */
+function RevenueRecognized() {
+  const { backendOn } = useData();
+  const [period, setPeriod] = useState("month");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!backendOn) { setData(null); return; }
+    let alive = true; setLoading(true);
+    fetch("/api/revenue/recognized?period=" + period, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive) setData(d); })
+      .catch(() => {})
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [period, backendOn]);
+
+  if (!backendOn) return null;
+  const buckets = (data && data.buckets) || [];
+  const total = (data && data.total) || 0;
+  const max = Math.max(1, ...buckets.map((b) => b.recognized));
+  const label = (iso) => {
+    const d = new Date(iso + "T00:00:00");
+    if (period === "quarter") return "Q" + (Math.floor(d.getMonth() / 3) + 1) + " '" + String(d.getFullYear()).slice(2);
+    if (period === "week") return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return d.toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+  };
+  return (
+    <div className="tf-panel tf-fade" style={{ padding: 20, marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <div>
+          <div className="tf-eyebrow">Revenue recognized · shipped</div>
+          <div className="tf-disp" style={{ fontSize: 26, fontWeight: 800, color: "var(--green)" }}>{fmtMoney(total)}</div>
+        </div>
+        <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
+          {[["week", "Weekly"], ["month", "Monthly"], ["quarter", "Quarterly"]].map(([k, l]) => (
+            <button key={k} onClick={() => setPeriod(k)} className="tf-mono" style={{ padding: "6px 11px", borderRadius: 8, cursor: "pointer", fontSize: 12, border: `1px solid ${period === k ? "var(--amber)" : "var(--line)"}`, background: period === k ? "var(--panel2)" : "transparent", color: period === k ? "var(--ink)" : "var(--muted)" }}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {loading ? <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>Loading…</div>
+        : buckets.length === 0 ? <div className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>No shipments recognized yet. Record a shipment on a sales order to recognize revenue.</div>
+        : (
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 150, paddingTop: 8 }}>
+            {buckets.map((b) => (
+              <div key={b.bucket} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 0 }} title={`${fmtMoney(b.recognized)} · ${b.qty} units · ${b.shipments} shipment${b.shipments === 1 ? "" : "s"}`}>
+                <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--muted)" }}>{fmtMoney(b.recognized)}</div>
+                <div style={{ width: "100%", maxWidth: 46, height: (b.recognized / max) * 100 + "%", minHeight: 3, background: "linear-gradient(180deg,var(--green),#2a8f5a)", borderRadius: "5px 5px 0 0" }} />
+                <div className="tf-mono" style={{ fontSize: 9.5, color: "var(--faint)", whiteSpace: "nowrap" }}>{label(b.bucket)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+    </div>
+  );
+}
+
+function FinancePage() {
+  const { sos, blockers } = useData();
+  const [site, setSite] = useState("All");
+  const filtered = site === "All" ? sos : sos.filter((s) => s.site === site);
+  const rows = filtered.filter((o) => effPromise(blockers, o)).map((o) => { const eff = effPromise(blockers, o); return { ...o, blk: !!openBlockerForSO(blockers, o.id), eff, ym: eff.slice(0, 7) }; });
+
+  const mLabel = (ym) => { const [y, m] = ym.split("-"); return new Date(+y, +m - 1, 1).toLocaleDateString(undefined, { month: "short" }) + " '" + y.slice(2); };
+  const months = [...new Set(rows.map((r) => r.ym))].sort();
+  const monthData = months.map((ym) => {
+    const ms = rows.filter((r) => r.ym === ym);
+    return { label: mLabel(ym), committed: ms.filter((r) => !r.blk).reduce((a, r) => a + r.value, 0), atrisk: ms.filter((r) => r.blk).reduce((a, r) => a + r.value, 0) };
+  });
+
+  const qmap = {};
+  rows.forEach((r) => { const d = D(r.eff); const q = Math.floor(d.getMonth() / 3) + 1; const k = d.getFullYear() + "-Q" + q; (qmap[k] = qmap[k] || { green: 0, blocked: 0 })[r.blk ? "blocked" : "green"] += r.value; });
+  const quarters = Object.keys(qmap).sort().map((k) => ({ label: "Q" + k.slice(-1) + " " + k.slice(0, 4), green: qmap[k].green, blocked: qmap[k].blocked, total: qmap[k].green + qmap[k].blocked }));
+
+  const totGreen = rows.filter((r) => !r.blk).reduce((a, r) => a + r.value, 0);
+  const totBlocked = rows.filter((r) => r.blk).reduce((a, r) => a + r.value, 0);
+  const totRecognized = filtered.reduce((a, o) => a + (o.qty > 0 ? o.value * ((o.qtyShipped || 0) / o.qty) : 0), 0);
+  const tot = totGreen + totBlocked;
+  const pct = (n) => (tot ? Math.round((n / tot) * 100) : 0);
+
+  const splitBar = (g, b, h = 8) => (
+    <div style={{ display: "flex", height: h, borderRadius: 99, overflow: "hidden", background: "var(--bg2)" }}>
+      <div style={{ width: (g + b ? (g / (g + b)) * 100 : 0) + "%", background: "var(--green)" }} />
+      <div style={{ width: (g + b ? (b / (g + b)) * 100 : 0) + "%", background: "var(--red)" }} />
+    </div>
+  );
+
+  return (
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "34px 22px 70px" }}>
+      <PageHead icon={TrendingUp} eyebrow="Manufacturing Delivery Control · Revenue assurance" title="Revenue forecast"
+        sub="A blocker-aware forecast a GM can trust: committed (clear) revenue versus at-risk (blocked) revenue, by quarter and month — recomputed live as blockers open and close. The formulas are transparent; the data is sourced." />
+
+      <RevenueRecognized />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 16 }}>
+        <Building2 size={15} color="var(--faint)" />
+        <select value={site} onChange={(e) => setSite(e.target.value)} style={{ fontFamily: "var(--mono)", fontSize: 12, background: "var(--bg2)", border: "1px solid var(--line)", borderRadius: 9, padding: "8px 10px", color: "var(--ink)" }}>
+          <option value="All">All sites</option>
+          {SITES.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <span className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginLeft: "auto" }}>horizon: {months.length} months · {quarters.length} quarters</span>
+      </div>
+
+      {/* top summary */}
+      <div className="tf-panel tf-fade" style={{ padding: 20, marginBottom: 22 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 18, marginBottom: 16 }}>
+          {[["Total pipeline", fmtMoney(tot), "var(--ink)"], ["Committed (clear)", fmtMoney(totGreen), "var(--green)"], ["At risk (blocked)", fmtMoney(totBlocked), "var(--red)"], ["Revenue recognized", fmtMoney(totRecognized), "var(--thread)"], ["At-risk share", pct(totBlocked) + "%", "var(--amber)"]].map(([l, v, c]) => (
+            <div key={l}>
+              <div className="tf-disp" style={{ fontSize: 26, fontWeight: 800, color: c }}>{v}</div>
+              <div className="tf-mono" style={{ fontSize: 11, color: "var(--faint)", marginTop: 3 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+        {splitBar(totGreen, totBlocked, 10)}
+        <div className="tf-mono" style={{ fontSize: 10.5, color: "var(--faint)", marginTop: 7 }}>
+          <span style={{ color: "var(--green)" }}>■</span> committed (no open blocker) &nbsp; <span style={{ color: "var(--red)" }}>■</span> at risk (open blocker on the order)
+        </div>
+      </div>
+
+      {/* quarter cards */}
+      <div className="tf-eyebrow" style={{ marginBottom: 14 }}>By quarter — blocked vs clear</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14, marginBottom: 26 }}>
+        {quarters.map((q) => (
+          <div key={q.label} className="tf-panel" style={{ padding: 16 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontWeight: 700, fontSize: 15 }}>{q.label}</span>
+              <span className="tf-disp" style={{ marginLeft: "auto", fontSize: 20, fontWeight: 800 }}>{fmtMoney(q.total)}</span>
+            </div>
+            <div style={{ margin: "12px 0 10px" }}>{splitBar(q.green, q.blocked)}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+              <span style={{ color: "var(--green)" }}>{fmtMoney(q.green)} <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>clear</span></span>
+              <span style={{ color: "var(--red)" }}>{fmtMoney(q.blocked)} <span className="tf-mono" style={{ fontSize: 10, color: "var(--faint)" }}>at risk</span></span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* monthly chart */}
+      <div className="tf-panel tf-fade" style={{ padding: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <CalendarDays size={16} color="var(--amber)" /><span style={{ fontWeight: 600, fontSize: 14 }}>Monthly forecast</span>
+          <span style={{ marginLeft: "auto" }} className="tf-mono">
+            <span style={{ color: "var(--green)", fontSize: 11 }}>■ committed</span> &nbsp; <span style={{ color: "var(--red)", fontSize: 11 }}>■ at risk</span>
+          </span>
+        </div>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={monthData} margin={{ top: 6, right: 8, left: 4, bottom: 0 }}>
+            <CartesianGrid stroke="var(--line)" strokeDasharray="2 4" vertical={false} />
+            <XAxis dataKey="label" tick={{ fill: "var(--faint)", fontSize: 10.5, fontFamily: "var(--mono)" }} />
+            <YAxis tickFormatter={(v) => fmtMoney(v)} tick={{ fill: "var(--faint)", fontSize: 10, fontFamily: "var(--mono)" }} width={52} />
+            <Tooltip contentStyle={{ background: "var(--panel)", border: "1px solid var(--line2)", borderRadius: 8, fontSize: 12 }} formatter={(v, n) => [fmtMoney(v), n === "committed" ? "Committed" : "At risk"]} cursor={{ fill: "rgba(255,255,255,.03)" }} />
+            <Bar dataKey="committed" stackId="a" fill="var(--green)" />
+            <Bar dataKey="atrisk" stackId="a" fill="var(--red)" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
+
+export default function App({ user }) {
+  const backend = !!user;
+  // Active product context comes from the subdomain (delivery/workforce/
+  // requirements.threadwire.ai), with a ?app= override for testing.
+  const productCtx = useMemo(() => detectProductCtx(), []);
+  const initialRoute = (() => {
+    if (!user) return "home";
+    const p = productCtx && PRODUCTS[productCtx];
+    if (p && entitled(user, p.key)) return p.home;
+    const first = PRODUCT_ORDER.find((k) => entitled(user, k));
+    return first ? PRODUCTS[first].home : "home";
+  })();
+  const [route, setRoute] = useState(initialRoute);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [contactProduct, setContactProduct] = useState(productCtx || null);
+  const [assetStage, setAssetStage] = useState("all");
+  const [tier, setTier] = useState({ assets: "free", contracts: "free", requirements: "free", thread: "free", directspend: "free" });
+  const [chats, setChats] = useState(EMPTY_CHATS);
+  const [dockOpen, setDockOpen] = useState(false);
+  const [tStack, setTStack] = useState([]);
+  const [sos, setSos] = useState(SALES_ORDERS);
+  const [blockers, setBlockers] = useState(SEED_BLOCKERS);
+  const [bView, setBView] = useState(null);
+  const [bForm, setBForm] = useState(null);
+  const [soView, setSoView] = useState(null);
+  const [soLinesView, setSoLinesView] = useState(null);
+  const [partView, setPartView] = useState(null);
+  const [delivSite, setDelivSite] = useState("All");
+  const [delivWeek, setDelivWeek] = useState(() => mondayOf(new Date()));
+  const [events, setEvents] = useState([]);
+  const logEvent = (type, detail) => setEvents((e) => [...e, { ts: new Date().toISOString(), who: ACTIVE_USER, type, detail }].slice(-60));
+
+  const apiGet = (u) => fetch(u, { credentials: "include" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const apiSend = (u, method, body) => fetch(u, { method, credentials: "include", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+
+  // Members: load digital-thread data from the backend tables (else keep sample data).
+  useEffect(() => {
+    if (!backend) return;
+    ACTIVE_USER = user.full_name || user.email || CURRENT_USER;
+    let alive = true;
+    (async () => {
+      const [so, wo, parts, blk] = await Promise.all([
+        apiGet("/api/sales_orders"), apiGet("/api/work_orders"), apiGet("/api/parts"), apiGet("/api/blockers"),
+      ]);
+      if (!alive) return;
+      if (Array.isArray(wo)) ACTIVE_WOS = wo.map(mapWO);
+      if (Array.isArray(parts) && parts.length) {
+        ACTIVE_PART_NUMBERS = parts.map((p) => p.part_number);
+        ACTIVE_PART_DESC = Object.fromEntries(parts.map((p) => [p.part_number, p.description || ""]));
+      }
+      if (Array.isArray(so)) {
+        const m = so.map(mapSO);
+        ACTIVE_ORDERS = m; setSos(m);
+      }
+      if (Array.isArray(blk)) setBlockers(blk.map(mapBlk));
+    })();
+    return () => { alive = false; };
+  }, [backend]);
+
+  const dataVal = {
+    sos, blockers, people: PEOPLE, sites: SITES, events, logEvent, backendOn: backend,
+    delivSite, setDelivSite, delivWeek, setDelivWeek,
+    addBlocker: async (p) => {
+      if (backend) {
+        const r = await apiSend("/api/blockers", "POST", { title: p.title, sos: p.sos, parts: p.parts, wo: p.wo || null, assignee: p.assignee || null, action: p.action || "", status: p.status });
+        if (r && r.id) { const b = mapBlk(r); setBlockers((bs) => [...bs, b]); setBForm(null); setBView(b.id); logEvent("blocker.created", b.id + " · " + b.title); return; }
+      }
+      const id = "BLK-" + (2001 + blockers.length);
+      setBlockers((b) => [...b, { id, created: new Date().toISOString(), openedBy: ACTIVE_USER, closedAt: null, closedBy: null, newPromise: null, comments: [], ...p }]);
+      setBForm(null); setBView(id); logEvent("blocker.created", id + " · " + (p.title || ""));
+    },
+    closeBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed", closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || ACTIVE_USER } : x))); logEvent("blocker.closed", id); if (backend) apiSend("/api/blockers/" + id, "PATCH", { status: "closed" }); },
+    assignBlocker: (id, who) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, assignee: who, status: x.status === "closed" ? "closed" : who ? "assigned" : "open" } : x))); logEvent("blocker.assigned", id + " → " + (who || "unassigned")); if (backend) apiSend("/api/blockers/" + id, "PATCH", { assignee: who || "" }); },
+    setBlockerStatus: (id, status) => { setBlockers((b) => b.map((x) => { if (x.id !== id) return x; if (status === "closed") return { ...x, status, closedAt: x.closedAt || new Date().toISOString(), closedBy: x.closedBy || ACTIVE_USER }; return { ...x, status, closedAt: null, closedBy: null }; })); logEvent("blocker.status", id + " → " + status); if (backend) apiSend("/api/blockers/" + id, "PATCH", { status }); },
+    setNewPromise: (id, date) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, newPromise: date || null } : x))); logEvent("blocker.revisedPromise", id + " → " + (date || "cleared")); if (backend) apiSend("/api/blockers/" + id, "PATCH", { new_promise: date || "" }); },
+    addComment: (id, text) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, comments: [...(x.comments || []), { ts: new Date().toISOString(), who: ACTIVE_USER, text }] } : x))); logEvent("blocker.update", id + ": " + text.slice(0, 70)); if (backend) apiSend("/api/blockers/" + id + "/comments", "POST", { text }); },
+    confirmBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, reviewStatus: "confirmed" } : x))); logEvent("blocker.confirmed", id); if (backend) apiSend("/api/blockers/" + id + "/confirm", "POST"); },
+    dismissBlocker: (id) => { setBlockers((b) => b.map((x) => (x.id === id ? { ...x, status: "closed", reviewStatus: "confirmed", closedAt: new Date().toISOString(), closedBy: ACTIVE_USER } : x))); logEvent("blocker.dismissed", id); if (backend) apiSend("/api/blockers/" + id + "/dismiss", "POST"); },
+    runDeliveryAgent: async () => { if (!backend) return { created: 0, offline: true }; const r = await apiSend("/api/agent/scan_delivery_risk", "POST"); const rows = await apiGet("/api/blockers"); if (rows) setBlockers(rows.map(mapBlk)); return r || { created: 0 }; },
+    reloadOrders: async () => { if (!backend) return; const so = await apiGet("/api/sales_orders"); if (Array.isArray(so)) { const m = so.map(mapSO); ACTIVE_ORDERS = m; setSos(m); } },
+    editSOLine: async (so, line, patch) => {
+      if (!backend) return { offline: true };
+      const r = await apiSend("/api/sales_orders/" + encodeURIComponent(so) + "/" + line, "PATCH", patch);
+      const rows = await apiGet("/api/sales_orders"); if (Array.isArray(rows)) { const m = rows.map(mapSO); ACTIVE_ORDERS = m; setSos(m); }
+      logEvent("order.edited", so + " L" + line); return r || {};
+    },
+    recordShipment: async (so, line, qty, shipDate) => {
+      if (!backend) return { offline: true };
+      const r = await apiSend("/api/sales_orders/" + encodeURIComponent(so) + "/" + line + "/ship", "POST", { qty, ship_date: shipDate });
+      const rows = await apiGet("/api/sales_orders"); if (Array.isArray(rows)) { const m = rows.map(mapSO); ACTIVE_ORDERS = m; setSos(m); }
+      logEvent("order.shipped", so + " L" + line + " ×" + qty); return r || {};
+    },
+    openBlocker: (id) => setBView(id), closeView: () => setBView(null),
+    openForm: (pre = []) => setBForm({ sos: pre }), closeForm: () => setBForm(null),
+    openSO: (id) => setSoView(id), closeSO: () => setSoView(null),
+    openSOLines: (so) => setSoLinesView(so), closeSOLines: () => setSoLinesView(null),
+    openPart: (pn) => setPartView(pn), closePart: () => setPartView(null),
+    getPartDetail: async (pn) => {
+      if (backend) { const r = await apiGet("/api/part_detail?part=" + encodeURIComponent(pn)); if (r && r.part) return r; }
+      return sampleDetail(pn);
+    },
+  };
+
+  // live context so the offline assistant can give real numbers
+  const botCtx = (() => {
+    const blkVal = (b) => b.sos.reduce((a, id) => a + (soById(id)?.value || 0), 0);
+    if (route === "visibility") {
+      const f = delivSite === "All" ? sos : sos.filter((s) => s.site === delivSite);
+      const isos = Array.from({ length: 7 }, (_, i) => isoOf(addDays(delivWeek, i)));
+      const wk = f.filter((s) => isos.includes(effPromise(blockers, s)));
+      const blocked = wk.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
+      const total = wk.reduce((a, s) => a + s.value, 0);
+      return { site: delivSite, weekLabel: fmtMD(delivWeek) + "–" + fmtMD(addDays(delivWeek, 6)), committed: total - blocked, blocked, expected: total, orders: wk.length, atRisk: wk.filter((s) => openBlockerForSO(blockers, s.id)).length };
+    }
+    if (route === "finance") {
+      const blocked = sos.filter((s) => openBlockerForSO(blockers, s.id)).reduce((a, s) => a + s.value, 0);
+      const total = sos.reduce((a, s) => a + s.value, 0);
+      return { committed: total - blocked, blocked, expected: total };
+    }
+    if (route === "blockers") {
+      const openB = blockers.filter((b) => b.status !== "closed");
+      const top = [...openB].sort((a, b) => blkVal(b) - blkVal(a))[0];
+      return { open: openB.length, atRisk: openB.reduce((a, b) => a + blkVal(b), 0), top: top ? { title: top.title, val: blkVal(top) } : null };
+    }
+    return null;
+  })();
+
+  // Compact, question-specific context. Calculations use the same functions as
+  // the Delivery page, so the assistant cannot invent week boundaries or omit
+  // sales-order lines that qualify through a revised/effective promise date.
+  const buildAiContext = (question = "") => {
+    const now = new Date();
+    const timezone = (typeof Intl !== "undefined" && Intl.DateTimeFormat().resolvedOptions().timeZone) || "America/New_York";
+    const currentWeekStart = mondayOf(now);
+    const currentWeekEnd = addDays(currentWeekStart, 6);
+    const selectedWeekStart = delivWeek;
+    const selectedWeekEnd = addDays(delivWeek, 6);
+
+    const compactOrder = (o) => {
+      const blocker = openBlockerForSO(blockers, o.id);
+      const blockerRevisedPromise = revisedForSO(blockers, o.id);
+      return {
+        id: o.id,
+        salesOrder: o.so,
+        line: o.line,
+        customer: o.customer,
+        site: o.site,
+        part: o.part,
+        quantity: o.qty,
+        value: o.value,
+        originalPromiseDate: o.promise,
+        salesOrderRevisedPromiseDate: o.revisedPromise || null,
+        blockerRevisedPromiseDate: blockerRevisedPromise || null,
+        effectivePromiseDate: effPromise(blockers, o),
+        status: o.status || "",
+        blocked: !!blocker,
+        blockerId: blocker?.id || null,
+        blockerTitle: blocker?.title || null,
+      };
+    };
+
+    const summarize = (rows) => {
+      const expectedRevenue = rows.reduce((sum, o) => sum + (o.value || 0), 0);
+      const blockedRevenue = rows
+        .filter((o) => !!openBlockerForSO(blockers, o.id))
+        .reduce((sum, o) => sum + (o.value || 0), 0);
+      return {
+        expectedRevenue,
+        committedRevenue: expectedRevenue - blockedRevenue,
+        blockedRevenue,
+        orderLineCount: rows.length,
+      };
+    };
+
+    const inRange = (o, start, end) => {
+      const effective = effPromise(blockers, o);
+      return effective >= isoOf(start) && effective <= isoOf(end);
+    };
+
+    const currentWeekRows = sos.filter((o) => inRange(o, currentWeekStart, currentWeekEnd));
+    const selectedScope = delivSite === "All" ? sos : sos.filter((o) => o.site === delivSite);
+    const selectedWeekRows = selectedScope.filter((o) => inRange(o, selectedWeekStart, selectedWeekEnd));
+
+    const mentioned = [...new Set(
+      (String(question).match(/\b(?:[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*-)?SO-\d+\b/gi) || [])
+        .map((s) => s.toUpperCase())
+    )];
+    const mentionedRows = mentioned.length
+      ? sos.filter((o) => mentioned.includes(String(o.so).toUpperCase()))
+      : [];
+
+    const payload = [
+      "COMPACT LIVE DELIVERY CONTEXT — authoritative and calculated by the application.",
+      `CURRENT LOCAL DATETIME = ${now.toLocaleString()} (${timezone})`,
+      `TODAY = ${isoOf(now)}`,
+      `CURRENT WEEK DEFINITION = Monday ${isoOf(currentWeekStart)} through Sunday ${isoOf(currentWeekEnd)}, inclusive.`,
+      "EFFECTIVE PROMISE RULE = sales-order revised promise date, else open blocker's revised promise date, else original promise date.",
+      "FORECAST RULE = sum every sales-order line whose effective promise date is inside the range. Blocked lines remain in expected revenue and are also reported as blocked/at-risk.",
+      "Do not recalculate or contradict the supplied totals.",
+      "CURRENT_WEEK_ALL_SITES_SUMMARY = " + JSON.stringify({
+        rangeStart: isoOf(currentWeekStart),
+        rangeEnd: isoOf(currentWeekEnd),
+        site: "All",
+        ...summarize(currentWeekRows),
+      }),
+      "CURRENT_WEEK_ALL_SITES_INCLUDED_LINES = " + JSON.stringify(currentWeekRows.map(compactOrder)),
+      "DELIVERY_PAGE_SELECTED_VIEW_SUMMARY = " + JSON.stringify({
+        rangeStart: isoOf(selectedWeekStart),
+        rangeEnd: isoOf(selectedWeekEnd),
+        site: delivSite,
+        ...summarize(selectedWeekRows),
+      }),
+      "DELIVERY_PAGE_SELECTED_VIEW_INCLUDED_LINES = " + JSON.stringify(selectedWeekRows.map(compactOrder)),
+    ];
+
+    if (mentionedRows.length) {
+      payload.push(
+        "EXACT DETAILS FOR SALES ORDERS MENTIONED IN THE QUESTION = "
+        + JSON.stringify(mentionedRows.map(compactOrder))
+      );
+    }
+
+    payload.push(
+      'For "this week", always use CURRENT_WEEK_ALL_SITES_SUMMARY unless the user explicitly asks for the currently selected Delivery-page view or a particular site.'
+    );
+    return payload.join("\n");
+  };
+
+  const go = (r) => { setRoute(r); window.scrollTo?.({ top: 0, behavior: "instant" }); };
+  const openContact = (prod) => { setContactProduct(typeof prod === "string" ? prod : (productCtx || null)); setContactOpen(true); };
+
+  useEffect(() => {
+    if (!user) return;
+    // Gate signed-in app routes: a user must be entitled to the product that
+    // owns the route, and (when on a product subdomain) it must match context.
+    const owner = productForRoute(route);
+    if (owner) {
+      const wrongProduct = productCtx && productCtx !== owner.key;
+      if (!entitled(user, owner.key) || wrongProduct) { setRoute(initialRoute); return; }
+    }
+    const gatedOff = (route === "compliance" && !user.compliance_enabled) || (route === "quotes" && !user.quote_to_order);
+    if (gatedOff) setRoute(initialRoute);
+  }, [user, route, productCtx, initialRoute]);
+  const setT = (page) => (v) => setTier((t) => ({ ...t, [page]: v }));
+  const updateChat = (r, fn) => setChats((c) => ({ ...c, [r]: fn(c[r]) }));
+
+  return (
+    <ThreadCtx.Provider value={{ open: (id) => setTStack((s) => [...s, id]) }}>
+    <DataCtx.Provider value={dataVal}>
+    <div className="tf">
+      <Styles />
+      <style>{`
+        @media(max-width:820px){.tf-cols{grid-template-columns:1fr !important}.hide-sm{display:none !important}.tf-nav{display:none !important}}
+      `}</style>
+      <TopNav route={route} go={go} tier={Object.values(tier).includes("paid") ? "paid" : "free"} onContact={() => openContact()} loggedIn={backend} user={user} productCtx={productCtx} />
+      {route === "home" && <Home go={go} onContact={() => openContact()} />}
+      {route === "product-delivery" && <ProductPage productKey="delivery" go={go} onContact={openContact} />}
+      {route === "product-workforce" && <ProductPage productKey="workforce" go={go} onContact={openContact} />}
+      {route === "product-requirements" && <ProductPage productKey="requirements" go={go} onContact={openContact} />}
+      {route === "assets" && <AssetsPage tier={tier.assets} setTier={setT("assets")} stage={assetStage} setStage={setAssetStage} />}
+      {route === "contracts" && <ContractsPage tier={tier.contracts} setTier={setT("contracts")} />}
+      {route === "requirements" && <RequirementsPage tier={tier.requirements} setTier={setT("requirements")} />}
+      {route === "workforce" && <WorkforceIntelligence user={user} />}
+      {route === "thread" && <ThreadPage tier={tier.thread} setTier={setT("thread")} />}
+      {route === "compliance" && user && user.compliance_enabled && <Compliance user={user} embedded />}
+      {route === "quotes" && user && user.quote_to_order && <QuotesPage />}
+      {route === "roi" && <ROIPage />}
+
+      {route === "workbench" && <AIWorkbench />}
+      {route === "blockers" && <BlockersPage />}
+      {route === "visibility" && <DeliveryPage />}
+      {route === "finance" && <FinancePage />}
+
+      <div style={{ borderTop: "1px solid var(--line)", marginTop: 30, paddingBottom: 70 }}>
+        <div style={{ maxWidth: 1180, margin: "0 auto", padding: "22px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <Workflow size={15} color="var(--amber)" />
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)" }}>{BRAND} — Manufacturing Delivery Control · {TAGLINE}</span>
+          <span className="tf-mono" style={{ fontSize: 12, color: "var(--faint)", marginLeft: "auto" }}>
+            {backend ? "Signed in · organization-scoped data" : "Sample data · Connect your ERP to go live"}
+          </span>
+        </div>
+      </div>
+
+      {/* subject-aware assistant, docked on every page */}
+      <DockedAssistant route={route} chat={chats[route]} update={updateChat} open={dockOpen} setOpen={setDockOpen} botCtx={botCtx} snapshot={buildAiContext} backend={backend} />
+      {contactOpen && <ContactModal onClose={() => setContactOpen(false)} product={contactProduct} />}
+      <ThreadModal stack={tStack} setStack={setTStack} />
+      <ErrorBoundary
+        resetKey={`${bView || ""}|${bForm ? "f" : ""}|${soView || ""}|${soLinesView || ""}|${partView || ""}`}
+        fallback={() => (
+          <div onClick={() => { setBView(null); setBForm(null); setSoView(null); setSoLinesView(null); setPartView(null); }}
+            style={{ position: "fixed", inset: 0, zIndex: 240, background: "rgba(21,34,45,.5)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", padding: 18 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, background: "linear-gradient(180deg,var(--panel),var(--bg2))", border: "1px solid var(--line2)", borderRadius: 14, padding: 22, textAlign: "center" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Couldn't open that view</div>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>Something went wrong rendering this popup. The rest of the app is fine — details are in the browser console.</div>
+              <button className="tf-btn tf-btn-primary" onClick={() => { setBView(null); setBForm(null); setSoView(null); setSoLinesView(null); setPartView(null); }}>Dismiss</button>
+            </div>
+          </div>
+        )}>
+        {bView && <BlockerModal id={bView} />}
+        {bForm && <BlockerForm pre={bForm} />}
+        {soView && <SalesOrderModal id={soView} />}
+        {soLinesView && <SOLinesModal so={soLinesView} />}
+        {partView && <PartModal pn={partView} />}
+      </ErrorBoundary>
+    </div>
+    </DataCtx.Provider>
+    </ThreadCtx.Provider>
+  );
+}

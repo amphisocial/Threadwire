@@ -1,0 +1,19 @@
+{
+  "name": "threadwire",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "build:home": "npm run build -w @threadwire/home",
+    "build:delivery": "npm run build -w @threadwire/delivery",
+    "build:workforce": "npm run build -w @threadwire/workforce",
+    "build:requirements": "npm run build -w @threadwire/requirements",
+    "dev:home": "npm run dev -w @threadwire/home",
+    "dev:delivery": "npm run dev -w @threadwire/delivery",
+    "dev:workforce": "npm run dev -w @threadwire/workforce",
+    "dev:requirements": "npm run dev -w @threadwire/requirements"
+  }
+}
