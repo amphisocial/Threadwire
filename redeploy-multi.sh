@@ -33,18 +33,20 @@ echo "== frontend source (apps + root workspace) =="
 sudo cp -r "$SRC/apps/." "$APP/apps/"
 sudo cp "$SRC/package.json" "$APP/package.json"
 sudo cp "$SRC/ecosystem.config.js" "$APP/ecosystem.config.js"
-sudo chown -R ec2-user:ec2-user "$APP/apps" "$APP/package.json" "$APP/ecosystem.config.js"
+sudo cp "$SRC/static-server.js" "$APP/static-server.js"
+sudo chown -R ec2-user:ec2-user "$APP/apps" "$APP/package.json" "$APP/ecosystem.config.js" "$APP/static-server.js"
 
 cd "$APP"
 export NODE_OPTIONS=--max-old-space-size=900
 npm install --no-audit --no-fund   # workspace-aware; hoists shared deps
 
+# startOrRestart: starts services on first run, restarts them thereafter.
 if [ "$ONLY" = "all" ]; then
   npm run build --workspaces
-  pm2 restart tw-home tw-delivery tw-workforce tw-requirements
+  pm2 startOrRestart "$APP/ecosystem.config.js"
 else
   npm run build -w "@threadwire/$ONLY"
-  pm2 restart "tw-$ONLY"
+  pm2 startOrRestart "$APP/ecosystem.config.js" --only "tw-$ONLY"
 fi
 
 pm2 save

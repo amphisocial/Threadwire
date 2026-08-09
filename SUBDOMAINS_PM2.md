@@ -6,6 +6,10 @@ tied together by **npm workspaces** (one install at the root). Backend is
 untouched — still systemd (`threadwire-api`) at `127.0.0.1:8000`; every
 subdomain proxies `/api/` to it.
 
+**DNS model (same as athenabot.ai):** point a wildcard `*.threadwire.ai` A record
+at the server once. After that, adding a product/subdomain is only an nginx
+server block + a certbot line — no new DNS record each time.
+
 ## Layout
 ```
 /opt/threadwire
@@ -36,9 +40,9 @@ marketing mode and still resolves products at runtime.
 
 ## First-time migration on the box
 
-1. **Install PM2 + serve** (once):
+1. **Install PM2** (once — no `serve` package needed, a bundled static server handles it):
    ```bash
-   sudo npm i -g pm2 serve
+   sudo npm i -g pm2
    ```
 
 2. **Bring the new layout onto the server.** Pull `main` (with `apps/`, root
@@ -54,14 +58,20 @@ marketing mode and still resolves products at runtime.
    npm run build --workspaces   # produces apps/*/dist
    ```
 
-4. **DNS** — four A records to the same EC2 IP as `threadwire.ai`:
+4. **DNS — one wildcard record (same as athenabot.ai).** Instead of adding a
+   record per subdomain, point a wildcard at the same EC2 IP as `threadwire.ai`.
+   Then any new subdomain resolves automatically and you only ever touch nginx +
+   certbot — exactly like `*.athenabot.ai`.
    ```
-   delivery       A   <ec2-ip>
-   workforce      A   <ec2-ip>
-   requirements   A   <ec2-ip>
-   www            A   <ec2-ip>   # if missing
+   *      A   <ec2-ip>     # covers delivery/workforce/requirements + anything future
+   @      A   <ec2-ip>     # apex threadwire.ai (if not already set)
    ```
-   Verify: `dig delivery.threadwire.ai +short` returns the IP.
+   If you'd rather not use a wildcard, individual records work too:
+   ```
+   delivery A <ec2-ip>  ·  workforce A <ec2-ip>  ·  requirements A <ec2-ip>  ·  www A <ec2-ip>
+   ```
+   Verify: `dig delivery.threadwire.ai +short` returns the IP. With a wildcard
+   already in place, this step is a no-op and you go straight to nginx + certbot.
 
 5. **Start PM2 services:**
    ```bash
@@ -72,35 +82,24 @@ marketing mode and still resolves products at runtime.
    ```
    Check: `pm2 ls` shows four `tw-*` online; `curl -s localhost:4001 | head` returns HTML.
 
-6. **nginx** — one server block per host (replace the old static block). Each
-   proxies `/` to its port and `/api/` to the backend:
-   ```nginx
-   server {
-     listen 80; server_name threadwire.ai www.threadwire.ai;
-     location /api/ { proxy_pass http://127.0.0.1:8000; proxy_set_header Host $host; }
-     location /     { proxy_pass http://127.0.0.1:4000; proxy_set_header Host $host; }
-   }
-   server {
-     listen 80; server_name delivery.threadwire.ai;
-     location /api/ { proxy_pass http://127.0.0.1:8000; proxy_set_header Host $host; }
-     location /     { proxy_pass http://127.0.0.1:4001; proxy_set_header Host $host; }
-   }
-   server {
-     listen 80; server_name workforce.threadwire.ai;
-     location /api/ { proxy_pass http://127.0.0.1:8000; proxy_set_header Host $host; }
-     location /     { proxy_pass http://127.0.0.1:4002; proxy_set_header Host $host; }
-   }
-   server {
-     listen 80; server_name requirements.threadwire.ai;
-     location /api/ { proxy_pass http://127.0.0.1:8000; proxy_set_header Host $host; }
-     location /     { proxy_pass http://127.0.0.1:4003; proxy_set_header Host $host; }
-   }
-   ```
+   > First run must be `pm2 start` (not `restart`). `redeploy-multi.sh` uses
+   > `pm2 startOrRestart`, which handles both, so later deploys just work.
+
+6. **nginx** — use the ready file `deploy/nginx-threadwire.conf` (it matches your
+   existing cert path and `/api/` proxy style). It sets apex → `:4000` and each
+   subdomain → its port; the three subdomains start HTTP-only so nginx passes
+   `-t` before their certs exist.
    ```bash
+   sudo cp /opt/threadwire/deploy/nginx-threadwire.conf /etc/nginx/sites-available/threadwire
+   # (ensure it's enabled: on Amazon Linux without sites-enabled, copy to
+   #  /etc/nginx/conf.d/threadwire.conf instead)
    sudo nginx -t && sudo systemctl reload nginx
    ```
 
-7. **TLS** for the new hosts:
+7. **TLS — certbot per subdomain (same as athenabot.ai).** Even with a wildcard
+   A record, you don't need a wildcard cert: certbot's nginx plugin validates
+   each host over HTTP-01 against the server block, so just list the hosts. Do
+   them all at once, or add one at a time as you spin up each product:
    ```bash
    sudo certbot --nginx \
      -d threadwire.ai -d www.threadwire.ai \
@@ -108,7 +107,13 @@ marketing mode and still resolves products at runtime.
      -d workforce.threadwire.ai \
      -d requirements.threadwire.ai
    ```
+   Adding one later is the same one-liner you used before — e.g. a new subdomain:
+   ```bash
+   sudo certbot --nginx -d newthing.threadwire.ai
+   ```
    (Install if needed: `sudo dnf install -y certbot python3-certbot-nginx`.)
+   The wildcard A record means no DNS change is required to add a subdomain —
+   only the nginx server block + this certbot line, exactly your athenabot flow.
 
 ---
 
