@@ -44,7 +44,10 @@ function Root() {
 
   if (state.loading) return <div style={center}>Loading…</div>;
   // Public case-studies / whitepapers library — marketing site only.
-  const isMarketingBuild = ((import.meta.env && import.meta.env.VITE_APP_TARGET) || "home") === "home";
+  const buildTarget = ((import.meta.env && import.meta.env.VITE_APP_TARGET) || "home");
+  const isMarketingBuild = buildTarget === "home";
+  // Operations / Ontology / AI Studio belong to Delivery only — never Workforce or Requirements.
+  const showWorkspaces = buildTarget === "delivery";
   if (isMarketingBuild && /^\/case-studies\/?$/.test(window.location.pathname)) return <CaseStudies user={state.user} />;
   if (showAuth && !state.user) return <Login onAuthed={() => { setShowAuth(false); refresh(); }} onCancel={() => setShowAuth(false)} />;
   if (adminOpen && state.user) return <Admin user={state.user} onClose={() => setAdminOpen(false)} />;
@@ -58,7 +61,7 @@ function Root() {
 
   return (
     <>
-      {state.user && workspace === "operations" && (
+      {state.user && showWorkspaces && workspace === "operations" && (
         <div aria-label="Threadwire workspace tabs" style={{ position: "fixed", bottom: 16, left: "50%", transform: "translateX(-50%)", zIndex: 80, display: "flex", gap: 3, padding: 4, borderRadius: 11, background: "rgba(255,255,255,.94)", border: "1px solid #DCE3EC", boxShadow: "0 8px 30px rgba(21,34,45,.12)", backdropFilter: "blur(10px)" }}>
           <button onClick={() => setWorkspace("operations")} style={workspaceButton(workspace === "operations")}>Operations</button>
           <button onClick={() => setWorkspace("ontology")} style={workspaceButton(workspace === "ontology")}>Ontology</button>
@@ -66,9 +69,9 @@ function Root() {
         </div>
       )}
 
-      {workspace === "ontology" && state.user
+      {showWorkspaces && workspace === "ontology" && state.user
         ? <OntologyStudio user={state.user} onBack={() => setWorkspace("operations")} />
-        : workspace === "studio" && state.user
+        : showWorkspaces && workspace === "studio" && state.user
         ? <AgentStudio user={state.user} onBack={() => setWorkspace("operations")} />
         : <App user={state.user} />}
 
